@@ -104,6 +104,9 @@ const SystemMonitoring = lazyWithRetry(
 const FactorySimulation3D = lazyWithRetry(
   () => import("./pages/FactorySimulation3D"),
 );
+const VirtualWarehouse3D = lazyWithRetry(
+  () => import("./pages/VirtualWarehouse3D"),
+);
 const CompanySetup = lazyWithRetry(() => import("./pages/company-setup"));
 const DisplayScreen = lazyWithRetry(() => import("./pages/DisplayScreen"));
 const DisplayControlPanel = lazyWithRetry(
@@ -420,6 +423,12 @@ function AppRoutes() {
         <Route path="/factory-simulation">
           <ProtectedRoute path="/factory-simulation">
             <FactorySimulation3D />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/virtual-warehouse">
+          <ProtectedRoute path="/virtual-warehouse">
+            <VirtualWarehouse3D />
           </ProtectedRoute>
         </Route>
 

@@ -1089,6 +1089,7 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/maintenance": ["view_maintenance", "manage_maintenance"],
   "/quality": ["view_quality", "manage_quality"],
   "/warehouse": ["view_warehouse", "manage_warehouse"],
+  "/virtual-warehouse": ["view_warehouse", "manage_warehouse"],
   "/inventory": ["view_inventory", "manage_inventory"],
   "/hr": ["view_hr", "manage_hr"],
   "/reports": ["view_reports", "view_production_reports"],

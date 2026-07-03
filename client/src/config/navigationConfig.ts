@@ -186,6 +186,15 @@ export const navigationItems: NavigationItem[] = [
     group: "primary",
   },
   {
+    name: "المستودع الافتراضي",
+    name_ar: "المستودع الافتراضي",
+    name_en: "Virtual Warehouse",
+    icon: Warehouse,
+    path: "/virtual-warehouse",
+    priority: 5,
+    group: "primary",
+  },
+  {
     name: "شاشة العرض",
     name_ar: "شاشة العرض",
     name_en: "Display Control",
