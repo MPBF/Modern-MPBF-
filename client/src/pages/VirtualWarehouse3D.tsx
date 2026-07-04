@@ -1199,14 +1199,14 @@ export default function VirtualWarehouse3D() {
     for (const v of wasteIn) {
       if (v.status === "cancelled") continue;
       const key = (v.waste_type || "").trim() || "—";
-      const entry = byType.get(key) || { totalIn: 0, totalOut: 0, unit: "كجم" };
+      const entry = byType.get(key) || { totalIn: 0, totalOut: 0, unit: t("common.kg") };
       entry.totalIn += num(v.quantity);
       byType.set(key, entry);
     }
     for (const v of wasteOut) {
       if (v.status === "cancelled") continue;
       const key = (v.waste_type || "").trim() || "—";
-      const entry = byType.get(key) || { totalIn: 0, totalOut: 0, unit: "كجم" };
+      const entry = byType.get(key) || { totalIn: 0, totalOut: 0, unit: t("common.kg") };
       entry.totalOut += num(v.quantity);
       byType.set(key, entry);
     }
@@ -1219,7 +1219,7 @@ export default function VirtualWarehouse3D() {
         unit: e.unit,
       }))
       .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
-  }, [wasteIn, wasteOut]);
+  }, [wasteIn, wasteOut, t]);
 
   const isLoading =
     loadingProduction || loadingFinished || loadingInventory || loadingWasteIn || loadingWasteOut;

@@ -14311,7 +14311,11 @@ Input: ${text}`;
   );
 
   // Production hall - get production orders ready for warehouse receipt
-  app.get("/api/warehouse/production-hall", requireAuth, async (req, res) => {
+  app.get(
+    "/api/warehouse/production-hall",
+    requireAuth,
+    requirePermission("view_warehouse", "manage_warehouse"),
+    async (req, res) => {
     try {
       const productionOrders = await storage.getProductionHallOrders();
       res.json(productionOrders);
@@ -16366,7 +16370,11 @@ Input: ${text}`;
   );
 
   // سندات إخراج المواد التامة
-  app.get("/api/warehouse/delivery-hall", requireAuth, async (req, res) => {
+  app.get(
+    "/api/warehouse/delivery-hall",
+    requireAuth,
+    requirePermission("view_warehouse", "manage_warehouse"),
+    async (req, res) => {
     try {
       const orders = await storage.getDeliveryHallOrders();
       res.json(orders);
