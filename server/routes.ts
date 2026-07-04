@@ -350,7 +350,10 @@ import {
 } from "./services/notification-manager";
 import { NotificationService } from "./services/notification-service";
 import { TaqnyatSMSService } from "./services/taqnyat-sms";
-import { translateAnnouncement } from "./services/announcement-translation";
+import {
+  translateAnnouncement,
+  ensureAnnouncementTranslations,
+} from "./services/announcement-translation";
 import { setNotificationManager } from "./storage";
 
 // Initialize notification service
@@ -18070,8 +18073,15 @@ Input: ${text}`;
             errors: parseResult.error.errors,
           });
         }
+        const data = { ...parseResult.data };
+        if (
+          data.slide_type === "announcement" ||
+          data.slide_type === "notification"
+        ) {
+          data.content = await ensureAnnouncementTranslations(data.content);
+        }
         const slide = await storage.createDisplaySlide({
-          ...parseResult.data,
+          ...data,
           created_by: getAuthUserId(req),
         });
         res.json(slide);
@@ -18169,9 +18179,13 @@ Input: ${text}`;
             errors: parseResult.error.errors,
           });
         }
+        const data = { ...parseResult.data };
+        if (data.content && (data.content as any).autoTranslate) {
+          data.content = await ensureAnnouncementTranslations(data.content);
+        }
         const slide = await storage.updateDisplaySlide(
           parseRouteParam(req.params.id, "id"),
-          parseResult.data,
+          data,
         );
         res.json(slide);
       } catch (error) {

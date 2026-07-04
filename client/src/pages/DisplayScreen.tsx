@@ -908,16 +908,37 @@ export default function DisplayScreen() {
     goToSlide((currentSlideIndex - 1 + slides.length) % slides.length);
   }, [currentSlideIndex, slides.length, goToSlide]);
 
+  // Effective slide duration in ms. Announcement/notification slides with
+  // translations are extended so every language version (5s each) is shown
+  // before the slideshow advances to the next slide.
+  const effectiveDurationMs = useMemo(() => {
+    const cs = slides[currentSlideIndex];
+    let duration = (cs?.duration_seconds || 10) * 1000;
+    if (
+      (cs?.slide_type === "announcement" ||
+        cs?.slide_type === "notification") &&
+      cs?.content?.autoTranslate &&
+      cs?.content?.translations
+    ) {
+      const versionCount =
+        1 +
+        Object.values(cs.content.translations).filter(
+          (tr: any) => tr && (tr.title || tr.message || tr.footer),
+        ).length;
+      if (versionCount > 1) {
+        duration = Math.max(duration, versionCount * 5000);
+      }
+    }
+    return duration;
+  }, [slides, currentSlideIndex]);
+
   useEffect(() => {
     if (isPaused || slides.length === 0) return;
-    const cs = slides[currentSlideIndex];
-    const duration = (cs?.duration_seconds || 10) * 1000;
-
-    timerRef.current = setTimeout(nextSlide, duration);
+    timerRef.current = setTimeout(nextSlide, effectiveDurationMs);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [currentSlideIndex, isPaused, slides, nextSlide]);
+  }, [currentSlideIndex, isPaused, slides, nextSlide, effectiveDurationMs]);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -1129,7 +1150,7 @@ export default function DisplayScreen() {
             <div
               className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
               style={{
-                animation: `progressBar ${currentSlide?.duration_seconds || 10}s linear`,
+                animation: `progressBar ${effectiveDurationMs / 1000}s linear`,
                 animationIterationCount: 1,
               }}
               key={`${currentSlideIndex}-${Date.now()}`}

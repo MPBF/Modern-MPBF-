@@ -3,6 +3,10 @@ import OpenAI from "openai";
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  // Explicitly clear the org header. The SDK otherwise auto-sends
+  // OPENAI_ORG_ID from the environment, which does not match the
+  // Replit AI integration key and causes a 401 mismatched_organization.
+  organization: null,
 });
 
 export const SUPPORTED_ANNOUNCEMENT_LANGUAGES: Record<string, string> = {
@@ -106,4 +110,69 @@ Respond with a JSON object of this exact shape, where each key is the language c
   }
 
   return translations;
+}
+
+export function announcementSourceSignature(content: any): string {
+  // Note: separator must NOT be a null byte (\u0000) — PostgreSQL jsonb
+  // rejects null bytes in text. Must stay in sync with the frontend.
+  return `${content?.title || ""}|::SEP::|${content?.message || ""}|::SEP::|${
+    content?.footer || ""
+  }`;
+}
+
+// Ensures an announcement/notification slide's `content.translations` are present
+// and in sync with the current source text whenever auto-translate is enabled.
+// Runs on save so admins only need to enable it and pick languages.
+export async function ensureAnnouncementTranslations(content: any): Promise<any> {
+  if (!content || typeof content !== "object" || !content.autoTranslate) {
+    return content;
+  }
+
+  const langs: string[] = Array.isArray(content.translateLangs)
+    ? content.translateLangs.filter(
+        (l: any): l is string =>
+          typeof l === "string" && l in SUPPORTED_ANNOUNCEMENT_LANGUAGES,
+      )
+    : [];
+
+  if (langs.length === 0) {
+    return { ...content, translations: {}, translatedSource: "" };
+  }
+
+  const hasText = !!(
+    (content.title && String(content.title).trim()) ||
+    (content.message && String(content.message).trim()) ||
+    (content.footer && String(content.footer).trim())
+  );
+  if (!hasText) {
+    return { ...content, translations: {}, translatedSource: "" };
+  }
+
+  const sig = announcementSourceSignature(content);
+  const existing = content.translations || {};
+  const hasAllLangs = langs.every((l) => {
+    const tr = existing[l];
+    return tr && (tr.title || tr.message || tr.footer);
+  });
+
+  // Up to date: source unchanged and all requested languages present.
+  if (content.translatedSource === sig && hasAllLangs) {
+    return content;
+  }
+
+  try {
+    const translations = await translateAnnouncement(
+      {
+        title: content.title,
+        message: content.message,
+        footer: content.footer,
+      },
+      langs,
+    );
+    return { ...content, translations, translatedSource: sig };
+  } catch (err) {
+    console.error("Auto-translate on save failed:", err);
+    // Don't block saving the slide if translation fails.
+    return content;
+  }
 }

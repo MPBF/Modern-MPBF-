@@ -301,7 +301,7 @@ function SlideForm({
     });
   };
 
-  const sourceSignature = `${contentTitle}\u0000${contentMessage}\u0000${contentFooter}`;
+  const sourceSignature = `${contentTitle}|::SEP::|${contentMessage}|::SEP::|${contentFooter}`;
   const translationsStale =
     Object.keys(translations).length > 0 &&
     translatedSource !== "" &&
