@@ -888,29 +888,57 @@ export default function VirtualWarehouse3D() {
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const controlsRef = useRef<any>(null);
 
+  // Live refresh: keep the 3D scene in sync with warehouse transactions
+  // without a manual page reload. Background refetches never toggle
+  // `isLoading`, so the Canvas is not remounted and the camera keeps its
+  // position (no flicker/reset).
+  const LIVE_REFRESH_MS = 30_000;
+
   const { data: productionHall = [], isLoading: loadingProduction } = useQuery<
     ProductionHallRow[]
-  >({ queryKey: ["/api/warehouse/production-hall"] });
+  >({
+    queryKey: ["/api/warehouse/production-hall"],
+    refetchInterval: LIVE_REFRESH_MS,
+    staleTime: LIVE_REFRESH_MS,
+  });
 
   const { data: deliveryHall = [], isLoading: loadingFinished } = useQuery<
     DeliveryHallRow[]
-  >({ queryKey: ["/api/warehouse/delivery-hall"] });
+  >({
+    queryKey: ["/api/warehouse/delivery-hall"],
+    refetchInterval: LIVE_REFRESH_MS,
+    staleTime: LIVE_REFRESH_MS,
+  });
 
   const { data: inventoryRows = [], isLoading: loadingInventory } = useQuery<
     InventoryRow[]
-  >({ queryKey: ["/api/inventory"] });
+  >({
+    queryKey: ["/api/inventory"],
+    refetchInterval: LIVE_REFRESH_MS,
+    staleTime: LIVE_REFRESH_MS,
+  });
 
   const { data: items = [] } = useQuery<ItemRow[]>({
     queryKey: ["/api/items"],
+    refetchInterval: LIVE_REFRESH_MS,
+    staleTime: LIVE_REFRESH_MS,
   });
 
   const { data: wasteIn = [], isLoading: loadingWasteIn } = useQuery<
     WasteVoucherRow[]
-  >({ queryKey: ["/api/warehouse/vouchers/industrial-waste-in"] });
+  >({
+    queryKey: ["/api/warehouse/vouchers/industrial-waste-in"],
+    refetchInterval: LIVE_REFRESH_MS,
+    staleTime: LIVE_REFRESH_MS,
+  });
 
   const { data: wasteOut = [], isLoading: loadingWasteOut } = useQuery<
     WasteVoucherRow[]
-  >({ queryKey: ["/api/warehouse/vouchers/industrial-waste-out"] });
+  >({
+    queryKey: ["/api/warehouse/vouchers/industrial-waste-out"],
+    refetchInterval: LIVE_REFRESH_MS,
+    staleTime: LIVE_REFRESH_MS,
+  });
 
   const itemNames = useMemo(() => {
     const map = new Map<string, { name: string | null; name_ar: string | null }>();
