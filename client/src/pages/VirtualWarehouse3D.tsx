@@ -16,7 +16,7 @@ import {
   Warehouse as WarehouseIcon,
   Loader2,
 } from "lucide-react";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
@@ -107,10 +107,59 @@ function orderColor(orderNumber: string): string {
   return `hsl(${hue}, 62%, 52%)`;
 }
 
-const MAX_PALLETS = 48;
-const MAX_BUNDLES_PER_PALLET = 8;
-const MAX_RAW_ITEMS = 30;
-const MAX_WASTE_TYPES = 18;
+// Instanced rendering keeps draw calls constant, so these caps can be much
+// higher than the old per-mesh limits without hurting frame rate.
+const MAX_PALLETS = 200;
+const MAX_BUNDLES_PER_PALLET = 12;
+const MAX_RAW_ITEMS = 120;
+const MAX_WASTE_TYPES = 60;
+
+// ============================================================
+// Performance profile — lighter rendering on phones / low-end devices
+// ============================================================
+
+interface PerfProfile {
+  lowEnd: boolean;
+  shadows: boolean;
+  dpr: [number, number];
+  shadowMapSize: number;
+  contactShadows: boolean;
+  antialias: boolean;
+}
+
+function detectPerfProfile(): PerfProfile {
+  let lowEnd = false;
+  try {
+    const nav = typeof navigator !== "undefined" ? navigator : undefined;
+    const coarse =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    const cores = nav?.hardwareConcurrency ?? 8;
+    const mem = (nav as unknown as { deviceMemory?: number } | undefined)
+      ?.deviceMemory;
+    lowEnd = Boolean(coarse) || cores <= 4 || (mem !== undefined && mem <= 4);
+  } catch {
+    lowEnd = false;
+  }
+  return lowEnd
+    ? {
+        lowEnd: true,
+        shadows: false,
+        dpr: [1, 1],
+        shadowMapSize: 512,
+        contactShadows: false,
+        antialias: false,
+      }
+    : {
+        lowEnd: false,
+        shadows: true,
+        dpr: [1, 1.5],
+        shadowMapSize: 1024,
+        contactShadows: true,
+        antialias: true,
+      };
+}
 
 // ============================================================
 // Camera rig — smoothly moves camera + controls target per scene
@@ -212,6 +261,273 @@ function HallShell({
       {wall(0.3, depth, [width / 2, h / 2, 0])}
     </group>
   );
+}
+
+// ============================================================
+// Generic instanced units — one draw call per geometry/material pair
+// ============================================================
+
+interface InstanceEntry {
+  pos: [number, number, number];
+  rotY?: number;
+  scale?: [number, number, number];
+  color: string;
+  groupIdx: number;
+}
+
+const _mat4 = new THREE.Matrix4();
+const _quat = new THREE.Quaternion();
+const _pos = new THREE.Vector3();
+const _scl = new THREE.Vector3();
+const _euler = new THREE.Euler();
+const _color = new THREE.Color();
+
+function InstancedUnits({
+  entries,
+  hoveredGroup,
+  onOver,
+  onOut,
+  castShadow,
+  geometry,
+  material,
+}: {
+  entries: InstanceEntry[];
+  hoveredGroup: number;
+  onOver: (groupIdx: number) => void;
+  onOut: () => void;
+  castShadow?: boolean;
+  geometry: React.ReactNode;
+  material: React.ReactNode;
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+
+  // Set matrices once per data change
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      _pos.set(e.pos[0], e.pos[1], e.pos[2]);
+      _euler.set(0, e.rotY ?? 0, 0);
+      _quat.setFromEuler(_euler);
+      if (e.scale) {
+        _scl.set(e.scale[0], e.scale[1], e.scale[2]);
+      } else {
+        _scl.set(1, 1, 1);
+      }
+      _mat4.compose(_pos, _quat, _scl);
+      mesh.setMatrixAt(i, _mat4);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [entries]);
+
+  // (Re)write per-instance colors, brightening the hovered group
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      _color.set(e.color);
+      if (e.groupIdx === hoveredGroup) {
+        _color.lerp(new THREE.Color("#ffffff"), 0.35);
+      }
+      mesh.setColorAt(i, _color);
+    }
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [entries, hoveredGroup]);
+
+  if (entries.length === 0) return null;
+
+  return (
+    <instancedMesh
+      key={entries.length}
+      ref={ref}
+      args={[undefined as any, undefined as any, entries.length]}
+      castShadow={castShadow}
+      frustumCulled={false}
+      onPointerMove={(e) => {
+        e.stopPropagation();
+        if (e.instanceId == null) return;
+        onOver(entries[e.instanceId].groupIdx);
+      }}
+      onPointerOut={() => onOut()}
+    >
+      {geometry}
+      {material}
+    </instancedMesh>
+  );
+}
+
+// Shared hover-group state helper for the instanced scenes
+function useGroupHover(
+  infos: HoverInfo[],
+  setHover: (info: HoverInfo | null) => void,
+) {
+  const [hoveredGroup, setHoveredGroup] = useState(-1);
+  const hoveredRef = useRef(-1);
+  const onOver = (groupIdx: number) => {
+    if (hoveredRef.current === groupIdx) return;
+    hoveredRef.current = groupIdx;
+    setHoveredGroup(groupIdx);
+    setHover(infos[groupIdx] ?? null);
+    document.body.style.cursor = "pointer";
+  };
+  const onOut = () => {
+    if (hoveredRef.current === -1) return;
+    hoveredRef.current = -1;
+    setHoveredGroup(-1);
+    setHover(null);
+    document.body.style.cursor = "auto";
+  };
+  return { hoveredGroup, onOver, onOut };
+}
+
+// ============================================================
+// Instanced pallet field (production hall + finished goods)
+// ============================================================
+
+const WOOD_COLOR = "#8b5a2b";
+const WOOD_DARK = "#6b4423";
+
+// Wooden pallet pieces expressed as unit-box instances (scaled via matrix)
+function palletWoodEntries(
+  center: [number, number, number],
+  groupIdx: number,
+): InstanceEntry[] {
+  const [cx, cy, cz] = center;
+  const out: InstanceEntry[] = [];
+  // deck boards
+  for (const z of [-0.55, 0, 0.55]) {
+    out.push({
+      pos: [cx, cy + 0.14, cz + z],
+      scale: [1.7, 0.06, 0.4],
+      color: WOOD_COLOR,
+      groupIdx,
+    });
+  }
+  // stringers
+  for (const x of [-0.65, 0.65]) {
+    out.push({
+      pos: [cx + x, cy + 0.06, cz],
+      scale: [0.14, 0.12, 1.5],
+      color: WOOD_DARK,
+      groupIdx,
+    });
+  }
+  return out;
+}
+
+// Stacked bundle positions on a pallet (local offsets)
+function bundleOffsets(count: number): [number, number, number][] {
+  const n = Math.max(1, Math.min(count, MAX_BUNDLES_PER_PALLET));
+  const perLayer = 4;
+  const out: [number, number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const layer = Math.floor(i / perLayer);
+    const idx = i % perLayer;
+    const x = (idx % 2 === 0 ? -0.42 : 0.42) * (1 - layer * 0.04);
+    const z = (idx < 2 ? -0.38 : 0.38) * (1 - layer * 0.04);
+    out.push([x, 0.17 + 0.24 + layer * 0.48, z]);
+  }
+  return out;
+}
+
+interface PalletDatum {
+  position: [number, number, number];
+  color: string;
+  bundles: number;
+  glow?: boolean;
+  dull?: boolean;
+  info: HoverInfo;
+}
+
+function InstancedPalletField({
+  pallets,
+  setHover,
+}: {
+  pallets: PalletDatum[];
+  setHover: (info: HoverInfo | null) => void;
+}) {
+  const infos = useMemo(() => pallets.map((p) => p.info), [pallets]);
+  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+
+  const { wood, plain, glow, dull } = useMemo(() => {
+    const wood: InstanceEntry[] = [];
+    const plain: InstanceEntry[] = [];
+    const glow: InstanceEntry[] = [];
+    const dull: InstanceEntry[] = [];
+    pallets.forEach((p, groupIdx) => {
+      wood.push(...palletWoodEntries(p.position, groupIdx));
+      const target = p.glow ? glow : p.dull ? dull : plain;
+      for (const [ox, oy, oz] of bundleOffsets(p.bundles)) {
+        target.push({
+          pos: [p.position[0] + ox, p.position[1] + oy, p.position[2] + oz],
+          color: p.color,
+          groupIdx,
+        });
+      }
+    });
+    return { wood, plain, glow, dull };
+  }, [pallets]);
+
+  return (
+    <group>
+      <InstancedUnits
+        entries={wood}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<boxGeometry args={[1, 1, 1]} />}
+        material={<meshStandardMaterial roughness={0.9} />}
+      />
+      <InstancedUnits
+        entries={plain}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<boxGeometry args={[0.78, 0.46, 0.72]} />}
+        material={<meshStandardMaterial roughness={0.6} />}
+      />
+      <InstancedUnits
+        entries={glow}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<boxGeometry args={[0.78, 0.46, 0.72]} />}
+        material={
+          <meshStandardMaterial
+            roughness={0.6}
+            emissive="#22c55e"
+            emissiveIntensity={0.55}
+          />
+        }
+      />
+      <InstancedUnits
+        entries={dull}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<boxGeometry args={[0.78, 0.46, 0.72]} />}
+        material={<meshStandardMaterial roughness={0.95} />}
+      />
+    </group>
+  );
+}
+
+// Arrange pallets on a grid inside the hall
+function palletGridPosition(index: number, total: number): [number, number, number] {
+  const cols = Math.max(4, Math.ceil(Math.sqrt(total * 1.4)));
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  const spacing = 2.4;
+  const x = (col - (cols - 1) / 2) * spacing;
+  const z = row * spacing - 4;
+  return [x, 0, z];
 }
 
 // ============================================================
@@ -343,104 +659,6 @@ function Building({
 }
 
 // ============================================================
-// Pallet with stacked bundles (production hall + finished goods)
-// ============================================================
-
-function WoodenPallet() {
-  const wood = "#8b5a2b";
-  const woodDark = "#6b4423";
-  return (
-    <group>
-      {/* deck boards */}
-      {[-0.55, 0, 0.55].map((z) => (
-        <mesh key={z} position={[0, 0.14, z]} castShadow>
-          <boxGeometry args={[1.7, 0.06, 0.4]} />
-          <meshStandardMaterial color={wood} roughness={0.9} />
-        </mesh>
-      ))}
-      {/* stringers */}
-      {[-0.65, 0.65].map((x) => (
-        <mesh key={x} position={[x, 0.06, 0]}>
-          <boxGeometry args={[0.14, 0.12, 1.5]} />
-          <meshStandardMaterial color={woodDark} roughness={0.95} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function BundlePallet({
-  position,
-  color,
-  bundles,
-  emissive,
-  dull,
-  onHover,
-  onLeave,
-}: {
-  position: [number, number, number];
-  color: string;
-  bundles: number;
-  emissive?: boolean;
-  dull?: boolean;
-  onHover: () => void;
-  onLeave: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const n = Math.max(1, Math.min(bundles, MAX_BUNDLES_PER_PALLET));
-  const perLayer = 4;
-  const positions: [number, number, number][] = [];
-  for (let i = 0; i < n; i++) {
-    const layer = Math.floor(i / perLayer);
-    const idx = i % perLayer;
-    const x = (idx % 2 === 0 ? -0.42 : 0.42) * (1 - layer * 0.04);
-    const z = (idx < 2 ? -0.38 : 0.38) * (1 - layer * 0.04);
-    positions.push([x, 0.17 + 0.24 + layer * 0.48, z]);
-  }
-  const baseColor = dull ? "#9ca3af" : color;
-  return (
-    <group
-      position={position}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHovered(true);
-        onHover();
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        setHovered(false);
-        onLeave();
-        document.body.style.cursor = "auto";
-      }}
-    >
-      <WoodenPallet />
-      {positions.map((p, i) => (
-        <mesh key={i} position={p} castShadow>
-          <boxGeometry args={[0.78, 0.46, 0.72]} />
-          <meshStandardMaterial
-            color={baseColor}
-            emissive={emissive ? "#22c55e" : hovered ? baseColor : "#000000"}
-            emissiveIntensity={emissive ? 0.55 : hovered ? 0.3 : 0}
-            roughness={dull ? 0.95 : 0.6}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-// Arrange pallets on a grid inside the hall
-function palletGridPosition(index: number, total: number): [number, number, number] {
-  const cols = Math.max(4, Math.ceil(Math.sqrt(total * 1.4)));
-  const row = Math.floor(index / cols);
-  const col = index % cols;
-  const spacing = 2.4;
-  const x = (col - (cols - 1) / 2) * spacing;
-  const z = row * spacing - 4;
-  return [x, 0, z];
-}
-
-// ============================================================
 // Production hall scene
 // ============================================================
 
@@ -465,10 +683,10 @@ function ProductionHallScene({
   const cols = Math.max(4, Math.ceil(Math.sqrt(shown.length * 1.4)));
   const hallW = Math.max(16, cols * 2.4 + 4);
   const hallD = Math.max(14, Math.ceil(shown.length / cols) * 2.4 + 10);
-  return (
-    <group>
-      <HallShell width={hallW} depth={hallD} color="#1e40af" />
-      {shown.map((row, i) => {
+
+  const pallets = useMemo<PalletDatum[]>(
+    () =>
+      shown.map((row, i) => {
         const ready = num(row.total_ready_weight);
         const remaining = Math.max(0, ready - num(row.total_received_weight));
         const bundles = Math.max(1, Math.ceil(remaining / 200));
@@ -480,30 +698,32 @@ function ProductionHallScene({
           (language === "ar" ? row.product_name_ar : row.product_name) ||
           row.product_name ||
           "—";
-        return (
-          <BundlePallet
-            key={row.production_order_id}
-            position={palletGridPosition(i, shown.length)}
-            color={orderColor(row.order_number)}
-            bundles={bundles}
-            onHover={() =>
-              setHover({
-                title: row.production_order_number,
-                lines: [
-                  { label: labels.order, value: row.order_number },
-                  { label: labels.customer, value: customer },
-                  { label: labels.product, value: product },
-                  {
-                    label: labels.readyWeight,
-                    value: `${formatNumber(remaining)} ${labels.kg}`,
-                  },
-                ],
-              })
-            }
-            onLeave={() => setHover(null)}
-          />
-        );
-      })}
+        return {
+          position: palletGridPosition(i, shown.length),
+          color: orderColor(row.order_number),
+          bundles,
+          info: {
+            title: row.production_order_number,
+            lines: [
+              { label: labels.order, value: row.order_number },
+              { label: labels.customer, value: customer },
+              { label: labels.product, value: product },
+              {
+                label: labels.readyWeight,
+                value: `${formatNumber(remaining)} ${labels.kg}`,
+              },
+            ],
+          },
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, language, labels.order, labels.customer, labels.product, labels.readyWeight, labels.kg],
+  );
+
+  return (
+    <group>
+      <HallShell width={hallW} depth={hallD} color="#1e40af" />
+      <InstancedPalletField pallets={pallets} setHover={setHover} />
     </group>
   );
 }
@@ -535,10 +755,10 @@ function FinishedGoodsScene({
   const cols = Math.max(4, Math.ceil(Math.sqrt(shown.length * 1.4)));
   const hallW = Math.max(16, cols * 2.4 + 4);
   const hallD = Math.max(14, Math.ceil(shown.length / cols) * 2.4 + 10);
-  return (
-    <group>
-      <HallShell width={hallW} depth={hallD} color="#047857" />
-      {shown.map((row, i) => {
+
+  const pallets = useMemo<PalletDatum[]>(
+    () =>
+      shown.map((row, i) => {
         const received = num(row.warehouse_received_kg);
         const required = num(row.quantity_required);
         const full = required > 0 && received >= required;
@@ -551,106 +771,48 @@ function FinishedGoodsScene({
           (language === "ar" ? row.product_name_ar : row.product_name) ||
           row.product_name ||
           "—";
-        return (
-          <BundlePallet
-            key={row.production_order_id}
-            position={palletGridPosition(i, shown.length)}
-            color={full ? "#22c55e" : "#9ca3af"}
-            bundles={bundles}
-            emissive={full}
-            dull={!full}
-            onHover={() =>
-              setHover({
-                title: row.production_order_number,
-                lines: [
-                  { label: labels.order, value: row.order_number },
-                  { label: labels.customer, value: customer },
-                  { label: labels.product, value: product },
-                  {
-                    label: labels.receivedWeight,
-                    value: `${formatNumber(received)} ${labels.kg}`,
-                  },
-                  {
-                    label: labels.requiredWeight,
-                    value: `${formatNumber(required)} ${labels.kg}`,
-                  },
-                ],
-                badge: full
-                  ? { text: labels.fullyReceived, variant: "green" }
-                  : { text: labels.partiallyReceived, variant: "gray" },
-              })
-            }
-            onLeave={() => setHover(null)}
-          />
-        );
-      })}
-    </group>
+        return {
+          position: palletGridPosition(i, shown.length),
+          color: full ? "#22c55e" : "#9ca3af",
+          bundles,
+          glow: full,
+          dull: !full,
+          info: {
+            title: row.production_order_number,
+            lines: [
+              { label: labels.order, value: row.order_number },
+              { label: labels.customer, value: customer },
+              { label: labels.product, value: product },
+              {
+                label: labels.receivedWeight,
+                value: `${formatNumber(received)} ${labels.kg}`,
+              },
+              {
+                label: labels.requiredWeight,
+                value: `${formatNumber(required)} ${labels.kg}`,
+              },
+            ],
+            badge: full
+              ? { text: labels.fullyReceived, variant: "green" as const }
+              : { text: labels.partiallyReceived, variant: "gray" as const },
+          },
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, language, labels.order, labels.customer, labels.product, labels.receivedWeight, labels.requiredWeight, labels.fullyReceived, labels.partiallyReceived, labels.kg],
   );
-}
 
-// ============================================================
-// Raw materials scene — bags/sacks sized by stock level
-// ============================================================
-
-function RawMaterialStack({
-  position,
-  scale,
-  color,
-  onHover,
-  onLeave,
-}: {
-  position: [number, number, number];
-  scale: number;
-  color: string;
-  onHover: () => void;
-  onLeave: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const layers = Math.max(1, Math.round(scale * 4));
-  const bags: { pos: [number, number, number]; rot: number }[] = [];
-  for (let l = 0; l < layers; l++) {
-    const across = l % 2 === 0;
-    for (let i = 0; i < 2; i++) {
-      bags.push({
-        pos: [
-          across ? (i - 0.5) * 0.62 : 0,
-          0.19 + l * 0.34,
-          across ? 0 : (i - 0.5) * 0.62,
-        ],
-        rot: across ? 0 : Math.PI / 2,
-      });
-    }
-  }
   return (
-    <group
-      position={position}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHovered(true);
-        onHover();
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        setHovered(false);
-        onLeave();
-        document.body.style.cursor = "auto";
-      }}
-    >
-      <WoodenPallet />
-      {bags.map((b, i) => (
-        <mesh key={i} position={b.pos} rotation={[0, b.rot, 0]} castShadow>
-          <capsuleGeometry args={[0.26, 0.6, 4, 10]} />
-          <meshStandardMaterial
-            color={color}
-            emissive={hovered ? color : "#000000"}
-            emissiveIntensity={hovered ? 0.3 : 0}
-            roughness={0.85}
-          />
-        </mesh>
-      ))}
+    <group>
+      <HallShell width={hallW} depth={hallD} color="#047857" />
+      <InstancedPalletField pallets={pallets} setHover={setHover} />
     </group>
   );
 }
+
+// ============================================================
+// Raw materials scene — bags/sacks sized by stock level (instanced)
+// ============================================================
 
 function RawMaterialsScene({
   rows,
@@ -664,59 +826,96 @@ function RawMaterialsScene({
   setHover: (info: HoverInfo | null) => void;
 }) {
   const { language } = useLanguage();
-  const withStock = rows
-    .filter((r) => num(r.current_stock) > 0)
-    .sort((a, b) => num(b.current_stock) - num(a.current_stock))
-    .slice(0, MAX_RAW_ITEMS);
+  const withStock = useMemo(
+    () =>
+      rows
+        .filter((r) => num(r.current_stock) > 0)
+        .sort((a, b) => num(b.current_stock) - num(a.current_stock))
+        .slice(0, MAX_RAW_ITEMS),
+    [rows],
+  );
   const maxStock = Math.max(1, ...withStock.map((r) => num(r.current_stock)));
   const cols = Math.max(3, Math.ceil(Math.sqrt(withStock.length * 1.3)));
   const hallW = Math.max(14, cols * 2.6 + 4);
   const hallD = Math.max(12, Math.ceil(withStock.length / cols) * 2.6 + 8);
+
+  const { wood, bags, infos } = useMemo(() => {
+    const wood: InstanceEntry[] = [];
+    const bags: InstanceEntry[] = [];
+    const infos: HoverInfo[] = [];
+    withStock.forEach((row, i) => {
+      const stock = num(row.current_stock);
+      const rel = Math.max(0.25, stock / maxStock);
+      const item = itemNames.get(String(row.item_id));
+      const name =
+        (language === "ar" ? item?.name_ar : item?.name) ||
+        item?.name ||
+        String(row.item_id);
+      const col = i % cols;
+      const rowIdx = Math.floor(i / cols);
+      const cx = (col - (cols - 1) / 2) * 2.6;
+      const cz = rowIdx * 2.6 - 3;
+      infos.push({
+        title: name,
+        lines: [
+          {
+            label: labels.stock,
+            value: `${formatNumber(stock)} ${row.unit || ""}`.trim(),
+          },
+        ],
+      });
+      wood.push(...palletWoodEntries([cx, 0, cz], i));
+      const color = orderColor(String(row.item_id));
+      const layers = Math.max(1, Math.round(rel * 4));
+      for (let l = 0; l < layers; l++) {
+        const across = l % 2 === 0;
+        for (let k = 0; k < 2; k++) {
+          bags.push({
+            pos: [
+              cx + (across ? (k - 0.5) * 0.62 : 0),
+              0.19 + l * 0.34,
+              cz + (across ? 0 : (k - 0.5) * 0.62),
+            ],
+            rotY: across ? 0 : Math.PI / 2,
+            color,
+            groupIdx: i,
+          });
+        }
+      }
+    });
+    return { wood, bags, infos };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withStock, itemNames, language, labels.stock, cols, maxStock]);
+
+  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+
   return (
     <group>
       <HallShell width={hallW} depth={hallD} color="#b45309" />
-      {withStock.map((row, i) => {
-        const stock = num(row.current_stock);
-        const rel = Math.max(0.25, stock / maxStock);
-        const item = itemNames.get(String(row.item_id));
-        const name =
-          (language === "ar" ? item?.name_ar : item?.name) ||
-          item?.name ||
-          String(row.item_id);
-        const col = i % cols;
-        const rowIdx = Math.floor(i / cols);
-        const pos: [number, number, number] = [
-          (col - (cols - 1) / 2) * 2.6,
-          0,
-          rowIdx * 2.6 - 3,
-        ];
-        return (
-          <RawMaterialStack
-            key={row.id}
-            position={pos}
-            scale={rel}
-            color={orderColor(String(row.item_id))}
-            onHover={() =>
-              setHover({
-                title: name,
-                lines: [
-                  {
-                    label: labels.stock,
-                    value: `${formatNumber(stock)} ${row.unit || ""}`.trim(),
-                  },
-                ],
-              })
-            }
-            onLeave={() => setHover(null)}
-          />
-        );
-      })}
+      <InstancedUnits
+        entries={wood}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<boxGeometry args={[1, 1, 1]} />}
+        material={<meshStandardMaterial roughness={0.9} />}
+      />
+      <InstancedUnits
+        entries={bags}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<capsuleGeometry args={[0.26, 0.6, 4, 10]} />}
+        material={<meshStandardMaterial roughness={0.85} />}
+      />
     </group>
   );
 }
 
 // ============================================================
-// Waste scene — shapes per waste type
+// Waste scene — shapes per waste type (instanced)
 // ============================================================
 
 type WasteKind = "ink_barrels" | "plastic_blocks" | "general";
@@ -732,93 +931,6 @@ function classifyWaste(type: string): WasteKind {
   return "general";
 }
 
-function WasteCluster({
-  position,
-  kind,
-  scale,
-  onHover,
-  onLeave,
-}: {
-  position: [number, number, number];
-  kind: WasteKind;
-  scale: number;
-  onHover: () => void;
-  onLeave: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const count = Math.max(1, Math.min(6, Math.round(scale * 6)));
-  const emissiveColor =
-    kind === "ink_barrels" ? "#7c3aed" : kind === "plastic_blocks" ? "#0ea5e9" : "#78716c";
-  const items: JSX.Element[] = [];
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2;
-    const r = count > 1 ? 0.75 : 0;
-    const x = Math.cos(angle) * r;
-    const z = Math.sin(angle) * r;
-    if (kind === "ink_barrels") {
-      items.push(
-        <mesh key={i} position={[x, 0.55, z]} castShadow>
-          <cylinderGeometry args={[0.38, 0.38, 1.1, 14]} />
-          <meshStandardMaterial
-            color="#6d28d9"
-            emissive={hovered ? emissiveColor : "#000000"}
-            emissiveIntensity={hovered ? 0.35 : 0}
-            metalness={0.35}
-            roughness={0.5}
-          />
-        </mesh>,
-      );
-    } else if (kind === "plastic_blocks") {
-      items.push(
-        <mesh
-          key={i}
-          position={[x, 0.4, z]}
-          rotation={[0, angle, 0]}
-          castShadow
-        >
-          <boxGeometry args={[0.85, 0.8, 0.85]} />
-          <meshStandardMaterial
-            color="#0284c7"
-            emissive={hovered ? emissiveColor : "#000000"}
-            emissiveIntensity={hovered ? 0.35 : 0}
-            roughness={0.4}
-          />
-        </mesh>,
-      );
-    } else {
-      items.push(
-        <mesh key={i} position={[x, 0.45, z]} rotation={[0, angle, 0]} castShadow>
-          <icosahedronGeometry args={[0.55, 0]} />
-          <meshStandardMaterial
-            color="#57534e"
-            emissive={hovered ? emissiveColor : "#000000"}
-            emissiveIntensity={hovered ? 0.35 : 0}
-            roughness={1}
-          />
-        </mesh>,
-      );
-    }
-  }
-  return (
-    <group
-      position={position}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHovered(true);
-        onHover();
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        setHovered(false);
-        onLeave();
-        document.body.style.cursor = "auto";
-      }}
-    >
-      {items}
-    </group>
-  );
-}
-
 function WasteScene({
   balances,
   labels,
@@ -828,51 +940,105 @@ function WasteScene({
   labels: { balance: string; totalIn: string; totalOut: string };
   setHover: (info: HoverInfo | null) => void;
 }) {
-  const shown = balances.slice(0, MAX_WASTE_TYPES);
+  const shown = useMemo(
+    () => balances.slice(0, MAX_WASTE_TYPES),
+    [balances],
+  );
   const maxBalance = Math.max(1, ...shown.map((b) => Math.abs(b.balance)));
   const cols = Math.max(3, Math.ceil(Math.sqrt(shown.length * 1.3)));
   const hallW = Math.max(14, cols * 3.2 + 4);
   const hallD = Math.max(12, Math.ceil(shown.length / cols) * 3.2 + 8);
+
+  const { barrels, blocks, lumps, infos } = useMemo(() => {
+    const barrels: InstanceEntry[] = [];
+    const blocks: InstanceEntry[] = [];
+    const lumps: InstanceEntry[] = [];
+    const infos: HoverInfo[] = [];
+    shown.forEach((b, i) => {
+      const col = i % cols;
+      const rowIdx = Math.floor(i / cols);
+      const cx = (col - (cols - 1) / 2) * 3.2;
+      const cz = rowIdx * 3.2 - 3;
+      const kind = classifyWaste(b.type);
+      const scale = Math.max(0.2, Math.abs(b.balance) / maxBalance);
+      const count = Math.max(1, Math.min(6, Math.round(scale * 6)));
+      infos.push({
+        title: b.type,
+        lines: [
+          {
+            label: labels.balance,
+            value: `${formatNumber(b.balance)} ${b.unit}`.trim(),
+          },
+          {
+            label: labels.totalIn,
+            value: `${formatNumber(b.totalIn)} ${b.unit}`.trim(),
+          },
+          {
+            label: labels.totalOut,
+            value: `${formatNumber(b.totalOut)} ${b.unit}`.trim(),
+          },
+        ],
+      });
+      for (let k = 0; k < count; k++) {
+        const angle = (k / count) * Math.PI * 2;
+        const r = count > 1 ? 0.75 : 0;
+        const x = cx + Math.cos(angle) * r;
+        const z = cz + Math.sin(angle) * r;
+        if (kind === "ink_barrels") {
+          barrels.push({ pos: [x, 0.55, z], color: "#6d28d9", groupIdx: i });
+        } else if (kind === "plastic_blocks") {
+          blocks.push({
+            pos: [x, 0.4, z],
+            rotY: angle,
+            color: "#0284c7",
+            groupIdx: i,
+          });
+        } else {
+          lumps.push({
+            pos: [x, 0.45, z],
+            rotY: angle,
+            color: "#57534e",
+            groupIdx: i,
+          });
+        }
+      }
+    });
+    return { barrels, blocks, lumps, infos };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, cols, maxBalance, labels.balance, labels.totalIn, labels.totalOut]);
+
+  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+
   return (
     <group>
       <HallShell width={hallW} depth={hallD} color="#44403c" />
-      {shown.map((b, i) => {
-        const col = i % cols;
-        const rowIdx = Math.floor(i / cols);
-        const pos: [number, number, number] = [
-          (col - (cols - 1) / 2) * 3.2,
-          0,
-          rowIdx * 3.2 - 3,
-        ];
-        return (
-          <WasteCluster
-            key={b.type}
-            position={pos}
-            kind={classifyWaste(b.type)}
-            scale={Math.max(0.2, Math.abs(b.balance) / maxBalance)}
-            onHover={() =>
-              setHover({
-                title: b.type,
-                lines: [
-                  {
-                    label: labels.balance,
-                    value: `${formatNumber(b.balance)} ${b.unit}`.trim(),
-                  },
-                  {
-                    label: labels.totalIn,
-                    value: `${formatNumber(b.totalIn)} ${b.unit}`.trim(),
-                  },
-                  {
-                    label: labels.totalOut,
-                    value: `${formatNumber(b.totalOut)} ${b.unit}`.trim(),
-                  },
-                ],
-              })
-            }
-            onLeave={() => setHover(null)}
-          />
-        );
-      })}
+      <InstancedUnits
+        entries={barrels}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<cylinderGeometry args={[0.38, 0.38, 1.1, 14]} />}
+        material={<meshStandardMaterial metalness={0.35} roughness={0.5} />}
+      />
+      <InstancedUnits
+        entries={blocks}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<boxGeometry args={[0.85, 0.8, 0.85]} />}
+        material={<meshStandardMaterial roughness={0.4} />}
+      />
+      <InstancedUnits
+        entries={lumps}
+        hoveredGroup={hoveredGroup}
+        onOver={onOver}
+        onOut={onOut}
+        castShadow
+        geometry={<icosahedronGeometry args={[0.55, 0]} />}
+        material={<meshStandardMaterial roughness={1} />}
+      />
     </group>
   );
 }
@@ -887,6 +1053,7 @@ export default function VirtualWarehouse3D() {
   const [scene, setScene] = useState<SceneId>("overview");
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const controlsRef = useRef<any>(null);
+  const perf = useMemo(detectPerfProfile, []);
 
   // Live refresh: keep the 3D scene in sync with warehouse transactions
   // without a manual page reload. Background refetches never toggle
@@ -1140,7 +1307,12 @@ export default function VirtualWarehouse3D() {
             </div>
           )}
 
-          <Canvas shadows dpr={[1, 1.5]} className="!bg-transparent">
+          <Canvas
+            shadows={perf.shadows}
+            dpr={perf.dpr}
+            gl={{ antialias: perf.antialias, powerPreference: "high-performance" }}
+            className="!bg-transparent"
+          >
             <Suspense fallback={null}>
               <PerspectiveCamera makeDefault position={SCENE_POSES.overview.pos} fov={45} />
               <OrbitControls
@@ -1152,24 +1324,27 @@ export default function VirtualWarehouse3D() {
               />
               <CameraRig scene={scene} controlsRef={controlsRef} />
 
-              <ambientLight intensity={0.55} />
+              <ambientLight intensity={perf.shadows ? 0.55 : 0.75} />
               <directionalLight
                 position={[18, 24, 12]}
                 intensity={1.1}
-                castShadow
-                shadow-mapSize-width={1024}
-                shadow-mapSize-height={1024}
+                castShadow={perf.shadows}
+                shadow-mapSize-width={perf.shadowMapSize}
+                shadow-mapSize-height={perf.shadowMapSize}
               />
               <Environment preset="warehouse" />
 
               <Ground />
-              <ContactShadows
-                position={[0, 0, 0]}
-                opacity={0.35}
-                scale={70}
-                blur={2.2}
-                far={12}
-              />
+              {perf.contactShadows && (
+                <ContactShadows
+                  position={[0, 0, 0]}
+                  opacity={0.35}
+                  scale={70}
+                  blur={2.2}
+                  far={12}
+                  frames={1}
+                />
+              )}
 
               {scene === "overview" && (
                 <group>
