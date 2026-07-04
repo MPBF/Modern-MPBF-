@@ -350,6 +350,7 @@ import {
 } from "./services/notification-manager";
 import { NotificationService } from "./services/notification-service";
 import { TaqnyatSMSService } from "./services/taqnyat-sms";
+import { translateAnnouncement } from "./services/announcement-translation";
 import { setNotificationManager } from "./storage";
 
 // Initialize notification service
@@ -18077,6 +18078,49 @@ Input: ${text}`;
       } catch (error) {
         console.error("Error creating display slide:", error);
         res.status(500).json({ message: "خطأ في إنشاء شريحة العرض" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/display/translate",
+    requireAuth,
+    requirePermission("manage_display_screen"),
+    async (req, res) => {
+      try {
+        const schema = z
+          .object({
+            title: z.string().max(2000).optional(),
+            message: z.string().max(5000).optional(),
+            footer: z.string().max(2000).optional(),
+            languages: z
+              .array(z.enum(["en", "ur", "hi", "fil", "ne"]))
+              .min(1)
+              .max(5),
+          })
+          .refine(
+            (d) =>
+              !!(d.title?.trim() || d.message?.trim() || d.footer?.trim()),
+            { message: "لا يوجد نص للترجمة" },
+          );
+        const parseResult = schema.safeParse(req.body);
+        if (!parseResult.success) {
+          return res.status(400).json({
+            message:
+              parseResult.error.errors[0]?.message || "بيانات الترجمة غير صحيحة",
+          });
+        }
+        const { title, message, footer, languages } = parseResult.data;
+        const translations = await translateAnnouncement(
+          { title, message, footer },
+          languages,
+        );
+        res.json({ translations });
+      } catch (error: any) {
+        console.error("Error translating announcement:", error);
+        res
+          .status(500)
+          .json({ message: error?.message || "خطأ في ترجمة الإعلان" });
       }
     },
   );

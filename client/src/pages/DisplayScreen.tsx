@@ -24,7 +24,7 @@ import {
   LogOut,
   Medal,
 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 interface SlideData {
@@ -351,6 +351,18 @@ function LatestRollsSlide({ rolls }: { rolls: RollData[] }) {
   );
 }
 
+const ANNOUNCEMENT_LANG_META: Record<
+  string,
+  { label: string; rtl: boolean }
+> = {
+  ar: { label: "العربية", rtl: true },
+  en: { label: "English", rtl: false },
+  ur: { label: "اردو", rtl: true },
+  hi: { label: "हिन्दी", rtl: false },
+  fil: { label: "Filipino", rtl: false },
+  ne: { label: "नेपाली", rtl: false },
+};
+
 function AnnouncementSlide({ content }: { content: any }) {
   const iconMap: Record<string, any> = {
     announcement: Megaphone,
@@ -368,24 +380,97 @@ function AnnouncementSlide({ content }: { content: any }) {
   };
   const gradient = colorMap[content?.color] || "from-blue-600 to-blue-900";
 
+  // Build the list of language versions: original Arabic first, then each translation.
+  const versions = useMemo(() => {
+    const list: {
+      code: string;
+      title: string;
+      message: string;
+      footer: string;
+    }[] = [
+      {
+        code: "ar",
+        title: content?.title || "",
+        message: content?.message || "",
+        footer: content?.footer || "",
+      },
+    ];
+    if (content?.autoTranslate && content?.translations) {
+      const order: string[] = Array.isArray(content?.translateLangs)
+        ? content.translateLangs
+        : Object.keys(content.translations);
+      for (const code of order) {
+        const tr = content.translations[code];
+        if (!tr) continue;
+        if (!tr.title && !tr.message && !tr.footer) continue;
+        list.push({
+          code,
+          title: tr.title || "",
+          message: tr.message || "",
+          footer: tr.footer || "",
+        });
+      }
+    }
+    return list;
+  }, [content]);
+
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [versions.length]);
+
+  useEffect(() => {
+    if (versions.length <= 1) return;
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % versions.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [versions.length]);
+
+  const current = versions[index] || versions[0];
+  const meta = ANNOUNCEMENT_LANG_META[current.code] || {
+    label: current.code,
+    rtl: false,
+  };
+
   return (
     <div
-      className={`h-full flex items-center justify-center p-12 bg-gradient-to-br ${gradient} rounded-3xl mx-6`}
+      className={`h-full flex items-center justify-center p-12 bg-gradient-to-br ${gradient} rounded-3xl mx-6 relative`}
     >
+      {versions.length > 1 && (
+        <>
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+            {versions.map((v, i) => (
+              <span
+                key={v.code}
+                className={`h-2 rounded-full transition-all ${
+                  i === index ? "w-8 bg-white" : "w-2 bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+          <div className="absolute top-6 right-8 px-4 py-1.5 rounded-full bg-white/15 text-white text-lg font-bold z-10">
+            {meta.label}
+          </div>
+        </>
+      )}
       <div
+        key={`${current.code}-${index}`}
         className="text-center max-w-4xl"
+        dir={meta.rtl ? "rtl" : "ltr"}
         style={{ animation: "fadeScaleIn 0.8s ease-out" }}
       >
         <Icon className="w-24 h-24 text-white/80 mx-auto mb-8" />
         <h2 className="text-5xl font-black text-white mb-6 leading-tight">
-          {content?.title || ""}
+          {current.title}
         </h2>
         <p className="text-3xl text-white/90 leading-relaxed whitespace-pre-wrap">
-          {content?.message || ""}
+          {current.message}
         </p>
-        {content?.footer && (
+        {current.footer && (
           <div className="mt-8 text-xl text-white/60 border-t border-white/20 pt-6">
-            {content.footer}
+            {current.footer}
           </div>
         )}
       </div>

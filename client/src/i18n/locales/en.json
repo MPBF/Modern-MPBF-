@@ -5425,7 +5425,18 @@
       "footer": "Footer Text (optional)",
       "footerExample": "Example: General Management",
       "bgColor": "Background Color",
-      "icon": "Icon"
+      "icon": "Icon",
+      "translate": {
+        "enable": "Auto-translate announcement",
+        "help": "Choose the languages to rotate the announcement through on screen, then press \"Generate translations\".",
+        "generate": "Generate translations",
+        "success": "Translations generated successfully",
+        "error": "Could not generate translations",
+        "noText": "Please enter the announcement text first",
+        "noLangs": "Please select at least one language",
+        "ready": "{{count}} language(s) translated",
+        "stale": "Text changed after translating — regenerate to update the translations."
+      }
     },
     "instructions_form": {
       "title": "Instructions",

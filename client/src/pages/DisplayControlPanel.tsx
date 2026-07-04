@@ -26,6 +26,7 @@ import {
   Printer,
   Film,
   Sparkles,
+  Languages,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -71,6 +72,14 @@ interface SlideData {
   is_active: boolean;
   created_at: string;
 }
+
+const ANNOUNCEMENT_LANGUAGES: { code: string; label: string }[] = [
+  { code: "en", label: "English" },
+  { code: "ur", label: "اردو" },
+  { code: "hi", label: "हिन्दी" },
+  { code: "fil", label: "Filipino" },
+  { code: "ne", label: "नेपाली" },
+];
 
 function useSlideTypes() {
   const { t } = useTranslation();
@@ -201,6 +210,22 @@ function SlideForm({
   const [contentIcon, setContentIcon] = useState(
     initialData?.content?.icon || "announcement",
   );
+  const [autoTranslate, setAutoTranslate] = useState<boolean>(
+    !!initialData?.content?.autoTranslate,
+  );
+  const [translateLangs, setTranslateLangs] = useState<string[]>(
+    Array.isArray(initialData?.content?.translateLangs)
+      ? initialData!.content.translateLangs
+      : [],
+  );
+  const [translations, setTranslations] = useState<Record<string, any>>(
+    initialData?.content?.translations || {},
+  );
+  const [translatedSource, setTranslatedSource] = useState<string>(
+    initialData?.content?.translatedSource || "",
+  );
+  const [translating, setTranslating] = useState(false);
+  const { toast } = useToast();
   const [instructionItems, setInstructionItems] = useState<string[]>(
     initialData?.content?.items || [""],
   );
@@ -245,6 +270,10 @@ function SlideForm({
         footer: contentFooter,
         color: contentColor,
         icon: contentIcon,
+        autoTranslate,
+        translateLangs: autoTranslate ? translateLangs : [],
+        translations: autoTranslate ? translations : {},
+        translatedSource: autoTranslate ? translatedSource : "",
       };
     } else if (slideType === "instructions") {
       content = { items: instructionItems.filter((i) => i.trim()) };
@@ -270,6 +299,64 @@ function SlideForm({
       duration_seconds: durationSeconds,
       content,
     });
+  };
+
+  const sourceSignature = `${contentTitle}\u0000${contentMessage}\u0000${contentFooter}`;
+  const translationsStale =
+    Object.keys(translations).length > 0 &&
+    translatedSource !== "" &&
+    translatedSource !== sourceSignature;
+
+  const toggleTranslateLang = (code: string) => {
+    setTranslateLangs((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  };
+
+  const handleGenerateTranslations = async () => {
+    if (!contentTitle.trim() && !contentMessage.trim() && !contentFooter.trim()) {
+      toast({
+        title: t("display.announcement_form.translate.noText"),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (translateLangs.length === 0) {
+      toast({
+        title: t("display.announcement_form.translate.noLangs"),
+        variant: "destructive",
+      });
+      return;
+    }
+    setTranslating(true);
+    try {
+      const res = await apiRequest("/api/display/translate", {
+        method: "POST",
+        body: JSON.stringify({
+          title: contentTitle,
+          message: contentMessage,
+          footer: contentFooter,
+          languages: translateLangs,
+        }),
+        timeout: 90000,
+      });
+      const data = await res.json();
+      if (data?.translations) {
+        setTranslations(data.translations);
+        setTranslatedSource(sourceSignature);
+        toast({ title: t("display.announcement_form.translate.success") });
+      } else {
+        throw new Error("no translations");
+      }
+    } catch (err: any) {
+      toast({
+        title: t("display.announcement_form.translate.error"),
+        description: err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setTranslating(false);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -422,6 +509,81 @@ function SlideForm({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="auto-translate"
+                checked={autoTranslate}
+                onChange={(e) => setAutoTranslate(e.target.checked)}
+                className="w-4 h-4 accent-blue-600 cursor-pointer"
+              />
+              <Label
+                htmlFor="auto-translate"
+                className="flex items-center gap-2 cursor-pointer font-bold text-sm"
+              >
+                <Languages className="w-4 h-4 text-blue-600" />
+                {t("display.announcement_form.translate.enable")}
+              </Label>
+            </div>
+
+            {autoTranslate && (
+              <div className="space-y-3 pr-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("display.announcement_form.translate.help")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ANNOUNCEMENT_LANGUAGES.map((lang) => {
+                    const active = translateLangs.includes(lang.code);
+                    const done = !!translations[lang.code];
+                    return (
+                      <button
+                        key={lang.code}
+                        type="button"
+                        onClick={() => toggleTranslateLang(lang.code)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
+                          active
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                        }`}
+                      >
+                        {lang.label}
+                        {active && done ? " ✓" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateTranslations}
+                  disabled={translating || translateLangs.length === 0}
+                >
+                  {translating ? (
+                    <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  ) : (
+                    <Languages className="w-4 h-4 ml-2" />
+                  )}
+                  {t("display.announcement_form.translate.generate")}
+                </Button>
+                {Object.keys(translations).length > 0 &&
+                  !translationsStale && (
+                    <div className="text-xs text-green-600 dark:text-green-400">
+                      {t("display.announcement_form.translate.ready", {
+                        count: Object.keys(translations).length,
+                      })}
+                    </div>
+                  )}
+                {translationsStale && (
+                  <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                    {t("display.announcement_form.translate.stale")}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
