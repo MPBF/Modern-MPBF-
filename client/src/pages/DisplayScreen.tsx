@@ -23,6 +23,8 @@ import {
   LogIn,
   LogOut,
   Medal,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -415,18 +417,20 @@ function AnnouncementSlide({ content }: { content: any }) {
   }, [content]);
 
   const [index, setIndex] = useState(0);
+  const [hovered, setHovered] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setIndex(0);
   }, [versions.length]);
 
   useEffect(() => {
-    if (versions.length <= 1) return;
+    if (versions.length <= 1 || hovered) return;
     const timer = setInterval(() => {
       setIndex((prev) => (prev + 1) % versions.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [versions.length]);
+  }, [versions.length, hovered]);
 
   const current = versions[index] || versions[0];
   const meta = ANNOUNCEMENT_LANG_META[current.code] || {
@@ -434,10 +438,43 @@ function AnnouncementSlide({ content }: { content: any }) {
     rtl: false,
   };
 
+  const handleCopy = async () => {
+    const text = [current.title, current.message, current.footer]
+      .filter(Boolean)
+      .join("\n\n");
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may be blocked; ignore silently.
+    }
+  };
+
   return (
     <div
-      className={`h-full flex items-center justify-center p-12 bg-gradient-to-br ${gradient} rounded-3xl mx-6 relative`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={`group h-full flex items-center justify-center p-12 bg-gradient-to-br ${gradient} rounded-3xl mx-6 relative select-text`}
     >
+      <button
+        onClick={handleCopy}
+        title="نسخ النص"
+        className="absolute bottom-6 left-8 flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 text-white text-lg font-bold z-10 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/25"
+      >
+        {copied ? (
+          <>
+            <Check className="w-5 h-5" />
+            تم النسخ
+          </>
+        ) : (
+          <>
+            <Copy className="w-5 h-5" />
+            نسخ
+          </>
+        )}
+      </button>
       {versions.length > 1 && (
         <>
           <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
@@ -1112,7 +1149,7 @@ export default function DisplayScreen() {
         </div>
 
         <div
-          className={`flex-1 transition-all duration-400 ease-out ${transitionClass}`}
+          className={`flex-1 transition-all duration-400 ease-out select-text ${transitionClass}`}
         >
           {renderSlideContent()}
         </div>
