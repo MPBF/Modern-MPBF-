@@ -19,12 +19,21 @@ import {
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
+import { useLocation } from "wouter";
 
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import { useLanguage } from "../contexts/LanguageContext";
 import { formatNumber } from "../lib/formatNumber";
 
@@ -85,6 +94,12 @@ interface HoverInfo {
   title: string;
   lines: { label: string; value: string }[];
   badge?: { text: string; variant: "green" | "gray" | "blue" };
+}
+
+interface SelectedPallet {
+  target: "production-hall" | "finished-goods";
+  productionOrderId: number;
+  info: HoverInfo;
 }
 
 // ============================================================
@@ -287,6 +302,7 @@ function InstancedUnits({
   hoveredGroup,
   onOver,
   onOut,
+  onClickGroup,
   castShadow,
   geometry,
   material,
@@ -295,6 +311,7 @@ function InstancedUnits({
   hoveredGroup: number;
   onOver: (groupIdx: number) => void;
   onOut: () => void;
+  onClickGroup?: (groupIdx: number) => void;
   castShadow?: boolean;
   geometry: React.ReactNode;
   material: React.ReactNode;
@@ -352,6 +369,12 @@ function InstancedUnits({
         onOver(entries[e.instanceId].groupIdx);
       }}
       onPointerOut={() => onOut()}
+      onClick={(e) => {
+        if (!onClickGroup) return;
+        e.stopPropagation();
+        if (e.instanceId == null) return;
+        onClickGroup(entries[e.instanceId].groupIdx);
+      }}
     >
       {geometry}
       {material}
@@ -434,6 +457,7 @@ function bundleOffsets(count: number): [number, number, number][] {
 }
 
 interface PalletDatum {
+  productionOrderId: number;
   position: [number, number, number];
   color: string;
   bundles: number;
@@ -445,12 +469,20 @@ interface PalletDatum {
 function InstancedPalletField({
   pallets,
   setHover,
+  onSelect,
 }: {
   pallets: PalletDatum[];
   setHover: (info: HoverInfo | null) => void;
+  onSelect?: (pallet: PalletDatum) => void;
 }) {
   const infos = useMemo(() => pallets.map((p) => p.info), [pallets]);
   const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+  const onClickGroup = onSelect
+    ? (groupIdx: number) => {
+        const pallet = pallets[groupIdx];
+        if (pallet) onSelect(pallet);
+      }
+    : undefined;
 
   const { wood, plain, glow, dull } = useMemo(() => {
     const wood: InstanceEntry[] = [];
@@ -478,6 +510,7 @@ function InstancedPalletField({
         hoveredGroup={hoveredGroup}
         onOver={onOver}
         onOut={onOut}
+        onClickGroup={onClickGroup}
         castShadow
         geometry={<boxGeometry args={[1, 1, 1]} />}
         material={<meshStandardMaterial roughness={0.9} />}
@@ -487,6 +520,7 @@ function InstancedPalletField({
         hoveredGroup={hoveredGroup}
         onOver={onOver}
         onOut={onOut}
+        onClickGroup={onClickGroup}
         castShadow
         geometry={<boxGeometry args={[0.78, 0.46, 0.72]} />}
         material={<meshStandardMaterial roughness={0.6} />}
@@ -496,6 +530,7 @@ function InstancedPalletField({
         hoveredGroup={hoveredGroup}
         onOver={onOver}
         onOut={onOut}
+        onClickGroup={onClickGroup}
         castShadow
         geometry={<boxGeometry args={[0.78, 0.46, 0.72]} />}
         material={
@@ -511,6 +546,7 @@ function InstancedPalletField({
         hoveredGroup={hoveredGroup}
         onOver={onOver}
         onOut={onOut}
+        onClickGroup={onClickGroup}
         castShadow
         geometry={<boxGeometry args={[0.78, 0.46, 0.72]} />}
         material={<meshStandardMaterial roughness={0.95} />}
@@ -666,6 +702,7 @@ function ProductionHallScene({
   rows,
   labels,
   setHover,
+  onSelect,
 }: {
   rows: ProductionHallRow[];
   labels: {
@@ -677,6 +714,7 @@ function ProductionHallScene({
     kg: string;
   };
   setHover: (info: HoverInfo | null) => void;
+  onSelect: (sel: SelectedPallet) => void;
 }) {
   const { language } = useLanguage();
   const shown = rows.slice(0, MAX_PALLETS);
@@ -699,6 +737,7 @@ function ProductionHallScene({
           row.product_name ||
           "—";
         return {
+          productionOrderId: row.production_order_id,
           position: palletGridPosition(i, shown.length),
           color: orderColor(row.order_number),
           bundles,
@@ -723,7 +762,17 @@ function ProductionHallScene({
   return (
     <group>
       <HallShell width={hallW} depth={hallD} color="#1e40af" />
-      <InstancedPalletField pallets={pallets} setHover={setHover} />
+      <InstancedPalletField
+        pallets={pallets}
+        setHover={setHover}
+        onSelect={(p) =>
+          onSelect({
+            target: "production-hall",
+            productionOrderId: p.productionOrderId,
+            info: p.info,
+          })
+        }
+      />
     </group>
   );
 }
@@ -736,6 +785,7 @@ function FinishedGoodsScene({
   rows,
   labels,
   setHover,
+  onSelect,
 }: {
   rows: DeliveryHallRow[];
   labels: {
@@ -749,6 +799,7 @@ function FinishedGoodsScene({
     kg: string;
   };
   setHover: (info: HoverInfo | null) => void;
+  onSelect: (sel: SelectedPallet) => void;
 }) {
   const { language } = useLanguage();
   const shown = rows.slice(0, MAX_PALLETS);
@@ -772,6 +823,7 @@ function FinishedGoodsScene({
           row.product_name ||
           "—";
         return {
+          productionOrderId: row.production_order_id,
           position: palletGridPosition(i, shown.length),
           color: full ? "#22c55e" : "#9ca3af",
           bundles,
@@ -805,7 +857,17 @@ function FinishedGoodsScene({
   return (
     <group>
       <HallShell width={hallW} depth={hallD} color="#047857" />
-      <InstancedPalletField pallets={pallets} setHover={setHover} />
+      <InstancedPalletField
+        pallets={pallets}
+        setHover={setHover}
+        onSelect={(p) =>
+          onSelect({
+            target: "finished-goods",
+            productionOrderId: p.productionOrderId,
+            info: p.info,
+          })
+        }
+      />
     </group>
   );
 }
@@ -1052,6 +1114,8 @@ export default function VirtualWarehouse3D() {
   const { isRTL } = useLanguage();
   const [scene, setScene] = useState<SceneId>("overview");
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  const [selected, setSelected] = useState<SelectedPallet | null>(null);
+  const [, navigate] = useLocation();
   const controlsRef = useRef<any>(null);
   const perf = useMemo(detectPerfProfile, []);
 
@@ -1060,6 +1124,18 @@ export default function VirtualWarehouse3D() {
   // `isLoading`, so the Canvas is not remounted and the camera keeps its
   // position (no flicker/reset).
   const LIVE_REFRESH_MS = 30_000;
+
+  const handleSelectPallet = (sel: SelectedPallet) => {
+    setHover(null);
+    setSelected(sel);
+  };
+
+  const openInWarehouse = () => {
+    if (!selected) return;
+    navigate(
+      `/warehouse?tab=${selected.target}&po=${selected.productionOrderId}`,
+    );
+  };
 
   const { data: productionHall = [], isLoading: loadingProduction } = useQuery<
     ProductionHallRow[]
@@ -1200,6 +1276,11 @@ export default function VirtualWarehouse3D() {
                       {t("virtualWarehouse.enterHint")}
                     </div>
                   )}
+                  {(scene === "production" || scene === "finished") && (
+                    <div className="text-[11px] text-slate-400">
+                      {t("virtualWarehouse.palletClickHint")}
+                    </div>
+                  )}
                 </div>
                 {isLoading && (
                   <Loader2 size={16} className="animate-spin text-slate-400" />
@@ -1290,6 +1371,72 @@ export default function VirtualWarehouse3D() {
               </Card>
             </div>
           )}
+
+          {/* Pallet details dialog */}
+          <Dialog
+            open={!!selected}
+            onOpenChange={(open) => {
+              if (!open) setSelected(null);
+            }}
+          >
+            <DialogContent
+              dir={isRTL ? "rtl" : "ltr"}
+              className="max-w-md"
+              data-testid="dialog-pallet-details"
+            >
+              <DialogHeader>
+                <DialogTitle className="flex items-center justify-between gap-2 pt-2">
+                  <span data-testid="text-pallet-title">
+                    {selected?.info.title}
+                  </span>
+                  {selected?.info.badge && (
+                    <Badge
+                      className={
+                        selected.info.badge.variant === "green"
+                          ? "bg-emerald-600 text-white"
+                          : selected.info.badge.variant === "gray"
+                            ? "bg-slate-600 text-white"
+                            : "bg-blue-600 text-white"
+                      }
+                    >
+                      {selected.info.badge.text}
+                    </Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  {t("virtualWarehouse.palletDetails")}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {selected?.info.lines.map((l, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-sm border-b border-border/50 pb-1.5 last:border-0"
+                  >
+                    <span className="text-muted-foreground">{l.label}</span>
+                    <span className="font-medium">{l.value}</span>
+                  </div>
+                ))}
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelected(null)}
+                  data-testid="button-close-pallet-dialog"
+                >
+                  {t("virtualWarehouse.close")}
+                </Button>
+                <Button
+                  onClick={openInWarehouse}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  data-testid="button-open-in-warehouse"
+                >
+                  <WarehouseIcon size={16} className={isRTL ? "ml-2" : "mr-2"} />
+                  {t("virtualWarehouse.openInWarehouse")}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Empty / capped notices */}
           {scene !== "overview" && sceneEmpty && !isLoading && (
@@ -1382,6 +1529,7 @@ export default function VirtualWarehouse3D() {
                     kg: t("common.kg"),
                   }}
                   setHover={setHover}
+                  onSelect={handleSelectPallet}
                 />
               )}
 
@@ -1399,6 +1547,7 @@ export default function VirtualWarehouse3D() {
                     kg: t("common.kg"),
                   }}
                   setHover={setHover}
+                  onSelect={handleSelectPallet}
                 />
               )}
 

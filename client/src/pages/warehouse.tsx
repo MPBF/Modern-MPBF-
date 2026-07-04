@@ -17,7 +17,7 @@ import {
   Sliders,
   Recycle,
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import PageLayout from "../components/layout/PageLayout";
@@ -81,8 +81,49 @@ import { apiRequest } from "../lib/queryClient";
 import { userHasPermission } from "../utils/roleUtils";
 import { formatNumberAr } from "../../../shared/number-utils";
 
+const MAIN_TABS = [
+  "production-hall",
+  "finished-goods",
+  "raw-materials",
+  "industrial-waste",
+  "definitions",
+  "reports",
+] as const;
+
+function readWarehouseParams(): { tab: string; highlightPo: string | null } {
+  if (typeof window === "undefined") {
+    return { tab: "production-hall", highlightPo: null };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab") || "";
+  return {
+    tab: (MAIN_TABS as readonly string[]).includes(tab)
+      ? tab
+      : "production-hall",
+    highlightPo: params.get("po"),
+  };
+}
+
+// Callback-ref factory: scrolls the highlighted row into view once per mount.
+function useScrollToHighlight() {
+  const scrolled = useRef(false);
+  return useCallback(
+    (isHighlighted: boolean) => (el: HTMLElement | null) => {
+      if (el && isHighlighted && !scrolled.current) {
+        scrolled.current = true;
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
+      }
+    },
+    [],
+  );
+}
+
 export default function Warehouse() {
   const { t } = useTranslation();
+  const [{ tab: initialTab, highlightPo }] = useState(readWarehouseParams);
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const [voucherFormType, setVoucherFormType] = useState<
     | "raw-material-in"
@@ -175,7 +216,7 @@ export default function Warehouse() {
         </Card>
       </div>
 
-      <Tabs defaultValue="production-hall" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex flex-wrap h-auto gap-1 p-1 sm:inline-flex sm:flex-nowrap sm:h-10">
           <TabsTrigger
             value="production-hall"
@@ -224,6 +265,7 @@ export default function Warehouse() {
         <TabsContent value="production-hall" className="space-y-4">
           <ProductionHallContent
             onCreateVoucher={() => openVoucherForm("finished-goods-in")}
+            highlightPo={highlightPo}
           />
         </TabsContent>
 
@@ -231,6 +273,7 @@ export default function Warehouse() {
           <FinishedGoodsSection
             onCreateVoucherIn={() => openVoucherForm("finished-goods-in")}
             onCreateVoucherOut={() => openVoucherForm("finished-goods-out")}
+            highlightPo={highlightPo}
           />
         </TabsContent>
 
@@ -271,9 +314,11 @@ export default function Warehouse() {
 function FinishedGoodsSection({
   onCreateVoucherIn,
   onCreateVoucherOut,
+  highlightPo,
 }: {
   onCreateVoucherIn: () => void;
   onCreateVoucherOut: () => void;
+  highlightPo?: string | null;
 }) {
   const { t } = useTranslation();
 
@@ -298,7 +343,7 @@ function FinishedGoodsSection({
         </TabsList>
 
         <TabsContent value="fp-del">
-          <DeliveryHallContent />
+          <DeliveryHallContent highlightPo={highlightPo} />
         </TabsContent>
         <TabsContent value="fp-rec">
           <VouchersList
@@ -311,9 +356,14 @@ function FinishedGoodsSection({
   );
 }
 
-function DeliveryHallContent() {
+function DeliveryHallContent({
+  highlightPo,
+}: {
+  highlightPo?: string | null;
+}) {
   const { t } = useTranslation();
   const ln = useLocalizedName();
+  const highlightRef = useScrollToHighlight();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
   const [deliveryWeights, setDeliveryWeights] = useState<
@@ -771,10 +821,15 @@ function DeliveryHallContent() {
                           const isSelected = selectedOrders.has(
                             order.production_order_id.toString(),
                           );
+                          const isHighlighted =
+                            highlightPo != null &&
+                            order.production_order_id.toString() ===
+                              highlightPo;
                           return (
                             <tr
                               key={order.production_order_id}
-                              className={`border-b hover:bg-gray-50 dark:hover:bg-gray-800 ${isSelected ? "bg-orange-50 dark:bg-orange-900/20" : ""}`}
+                              ref={highlightRef(isHighlighted)}
+                              className={`border-b hover:bg-gray-50 dark:hover:bg-gray-800 ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30" : isSelected ? "bg-orange-50 dark:bg-orange-900/20" : ""}`}
                             >
                               <td className="py-2 px-3 text-center">
                                 <input
@@ -839,10 +894,14 @@ function DeliveryHallContent() {
                       const isSelected = selectedOrders.has(
                         order.production_order_id.toString(),
                       );
+                      const isHighlighted =
+                        highlightPo != null &&
+                        order.production_order_id.toString() === highlightPo;
                       return (
                         <div
                           key={order.production_order_id}
-                          className={`border rounded-lg p-3 space-y-2 ${isSelected ? "bg-orange-50 dark:bg-orange-900/20 border-orange-300" : ""}`}
+                          ref={highlightRef(isHighlighted)}
+                          className={`border rounded-lg p-3 space-y-2 ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30 border-amber-400" : isSelected ? "bg-orange-50 dark:bg-orange-900/20 border-orange-300" : ""}`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -994,11 +1053,14 @@ function RawMaterialsSection({
 
 function ProductionHallContent({
   onCreateVoucher,
+  highlightPo,
 }: {
   onCreateVoucher: () => void;
+  highlightPo?: string | null;
 }) {
   const { t } = useTranslation();
   const ln = useLocalizedName();
+  const highlightRef = useScrollToHighlight();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [receiptWeights, setReceiptWeights] = useState<Record<string, string>>(
@@ -1532,10 +1594,15 @@ function ProductionHallContent({
                           const isSelected = selectedOrders.has(
                             order.production_order_id.toString(),
                           );
+                          const isHighlighted =
+                            highlightPo != null &&
+                            order.production_order_id.toString() ===
+                              highlightPo;
                           return (
                             <tr
                               key={order.production_order_id}
-                              className={`border-b hover:bg-gray-50 dark:hover:bg-gray-800 ${isSelected ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
+                              ref={highlightRef(isHighlighted)}
+                              className={`border-b hover:bg-gray-50 dark:hover:bg-gray-800 ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30" : isSelected ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
                             >
                               <td className="py-2 px-3">
                                 {remaining > 0 && (
@@ -1656,10 +1723,14 @@ function ProductionHallContent({
                       const isSelected = selectedOrders.has(
                         order.production_order_id.toString(),
                       );
+                      const isHighlighted =
+                        highlightPo != null &&
+                        order.production_order_id.toString() === highlightPo;
                       return (
                         <div
                           key={order.production_order_id}
-                          className={`border rounded-lg p-3 space-y-2 ${isSelected ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300" : ""}`}
+                          ref={highlightRef(isHighlighted)}
+                          className={`border rounded-lg p-3 space-y-2 ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30 border-amber-400" : isSelected ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300" : ""}`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">

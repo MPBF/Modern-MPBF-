@@ -22,7 +22,11 @@
     "totalIn": "Total In",
     "totalOut": "Total Out",
     "empty": "No items to display in this warehouse",
-    "cappedNote": "Only a subset of items is shown to keep performance smooth"
+    "cappedNote": "Only a subset of items is shown to keep performance smooth",
+    "palletClickHint": "Click any pallet to view details",
+    "palletDetails": "Pallet Details",
+    "openInWarehouse": "Open in Warehouse",
+    "close": "Close"
   },
   "rollMgmt": {
     "tabTitle": "Roll Management",
