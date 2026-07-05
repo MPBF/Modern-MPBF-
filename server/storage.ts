@@ -654,6 +654,7 @@ export interface IStorage {
 
   // Production Orders
   getAllProductionOrders(filters?: {
+    id?: number;
     order_id?: number;
     customer_id?: string;
     production_stage?: string;
@@ -1861,6 +1862,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProductionOrders(filters?: {
+    id?: number;
     order_id?: number;
     customer_id?: string;
     production_stage?: string;
@@ -1873,6 +1875,9 @@ export class DatabaseStorage implements IStorage {
         const productItem = alias(items, "product_item");
 
         const whereClauses: any[] = [];
+        if (filters?.id !== undefined && !isNaN(filters.id)) {
+          whereClauses.push(eq(production_orders.id, filters.id));
+        }
         if (filters?.order_id !== undefined && !isNaN(filters.order_id)) {
           whereClauses.push(eq(production_orders.order_id, filters.order_id));
         }
@@ -9313,9 +9318,7 @@ export class DatabaseStorage implements IStorage {
   // missing for a completed order), product/customer info, net quantity,
   // packaging units for the item, operator names + production date.
   async getBatchLabelData(productionOrderId: number): Promise<any> {
-    const [po] = await this.getAllProductionOrders({}).then((rows) =>
-      rows.filter((r: any) => r.id === productionOrderId),
-    );
+    const [po] = await this.getAllProductionOrders({ id: productionOrderId });
     if (!po) return null;
 
     // Batch/packaging labels can be printed while an order is still in

@@ -2623,7 +2623,7 @@ export async function registerRoutes(
   });
 
   // Create notification template
-  app.post("/api/notification-templates", requireAuth, async (req, res) => {
+  app.post("/api/notification-templates", requireAuth, requirePermission("manage_settings", "admin"), async (req, res) => {
     try {
       const validation = insertNotificationTemplateSchema.safeParse(req.body);
       if (!validation.success) {

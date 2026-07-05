@@ -183,12 +183,12 @@ export default function RecentRolls() {
                     </div>
 
                     <div className="text-right">
-                      {roll.length && (
+                      {Number(roll.length) > 0 && (
                         <div className="text-sm font-medium text-gray-900">
                           {roll.length} {t("dashboard.rolls.meter")}
                         </div>
                       )}
-                      {roll.weight && (
+                      {Number(roll.weight) > 0 && (
                         <div className="text-xs text-gray-500">
                           {roll.weight} {t("dashboard.rolls.kg")}
                         </div>
@@ -197,8 +197,8 @@ export default function RecentRolls() {
                   </div>
 
                   {roll.status === "in_progress" &&
-                    roll.length &&
-                    roll.target_length && (
+                    Number(roll.length) > 0 &&
+                    Number(roll.target_length) > 0 && (
                       <div className="mt-3">
                         <div className="flex justify-between text-xs text-gray-600 mb-1">
                           <span>{t("dashboard.rolls.progress")}</span>
