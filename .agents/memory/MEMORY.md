@@ -37,3 +37,4 @@
 - [Manager roll reassignment concurrency](roll-manager-reassign-concurrency.md) — manager roll edits must SELECT...FOR UPDATE the roll, reuse advisory key 1003 for dest-PO seq, recompute BOTH old+new PO completion AFTER txn commits.
 - [users.id FK columns are integer](users-fk-column-types.md) — every column referencing users.id must be declared integer (live DB is ground truth); varchar decls are latent bugs that let String(id) casts compile; check `any`-typed objects too.
 - [PDF template path traversal](security-fixes.md) — /api/pdf/generate & generatePDFFromTemplate must resolve template paths and reject anything escaping the templates dir (was arbitrary file read for any authed user).
+- [Punching hook/banana detection](punching-hook-detection.md) — overrun % from substring match on punching (hook/علاقي/t-shirt=20%, banana/بنانة=10%, else 5%); new علاقي* variants auto-inherit, no enum.

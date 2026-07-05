@@ -19,8 +19,13 @@ export function calculateOverrunPercentage(punching?: string | null): number {
 
   const punchingLower = punching.toLowerCase();
 
-  // Hook products get 20% overrun - Support both Arabic "علاقي" and English "hook"
-  if (punchingLower.includes("hook") || punchingLower.includes("علاقي")) {
+  // Hook products get 20% overrun - Support Arabic "علاقي" / "علاقي هوك" and
+  // English "hook" / "t-shirt" (T-Shirt bags are hook/hanger type).
+  if (
+    punchingLower.includes("hook") ||
+    punchingLower.includes("علاقي") ||
+    punchingLower.includes("t-shirt")
+  ) {
     return 20.0;
   }
 
@@ -70,7 +75,11 @@ export function calculateProductionQuantities(
   let overrunReason = "منتج عادي";
   if (punching) {
     const punchingLower = punching.toLowerCase();
-    if (punchingLower.includes("hook") || punchingLower.includes("علاقي")) {
+    if (
+      punchingLower.includes("hook") ||
+      punchingLower.includes("علاقي") ||
+      punchingLower.includes("t-shirt")
+    ) {
       overrunReason = "منتج علاقي (Hook)";
     } else if (
       punchingLower.includes("banana") ||
@@ -111,7 +120,11 @@ export function getOverrunReasonDescription(punching?: string | null): string {
 
   const punchingLower = punching.toLowerCase();
 
-  if (punchingLower.includes("hook") || punchingLower.includes("علاقي")) {
+  if (
+    punchingLower.includes("hook") ||
+    punchingLower.includes("علاقي") ||
+    punchingLower.includes("t-shirt")
+  ) {
     return "نسبة إضافة عالية للمنتجات العلاقية (Hook) - 20%";
   }
 
