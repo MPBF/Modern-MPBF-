@@ -635,7 +635,7 @@ export default function OrdersForm({
                               <SelectItem
                                 key={product.id}
                                 value={String(product.id)}
-                                className="h-auto min-h-[70px] py-2"
+                                className="h-auto min-h-[70px] py-2 border-b border-gray-200 last:border-b-0"
                               >
                                 <div className="w-full text-right py-1">
                                   <div className="font-semibold text-gray-900 mb-1 text-sm leading-relaxed">
@@ -672,7 +672,9 @@ export default function OrdersForm({
                                             {t("orders.thickness")}:
                                           </span>
                                           <span className="text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
-                                            {product.thickness}{" "}
+                                            {Number.isFinite(Number(product.thickness))
+                                              ? Math.round(Number(product.thickness))
+                                              : product.thickness}{" "}
                                             {t("common.micron")}
                                           </span>
                                         </div>
@@ -705,7 +707,10 @@ export default function OrdersForm({
                                             {t("orders.width")}:
                                           </span>{" "}
                                           <span className="text-orange-600 font-medium">
-                                            {product.width} {t("common.cm")}
+                                            {Number.isFinite(Number(product.width))
+                                              ? Math.round(Number(product.width))
+                                              : product.width}{" "}
+                                            {t("common.cm")}
                                           </span>
                                         </div>
                                       )}
