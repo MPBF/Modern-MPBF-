@@ -30,6 +30,7 @@ import {
   printPreventiveAction,
   printPreventiveReference,
 } from "./PreventiveMaintenancePrint";
+import AdvancedSection from "./AdvancedSection";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -730,16 +731,18 @@ export default function PreventiveActionsTab() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">
-                      {t("maintenance.preventiveActions.notes")}
-                    </label>
-                    <Textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
+                  <AdvancedSection>
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">
+                        {t("maintenance.preventiveActions.notes")}
+                      </label>
+                      <Textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                  </AdvancedSection>
                 </div>
 
                 <DialogFooter>

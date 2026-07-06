@@ -2639,6 +2639,7 @@
   },
   "maintenance": {
     "title": "إدارة الصيانة",
+    "advancedOptions": "خيارات متقدمة",
     "preventiveActions": {
       "tab": "الإجراءات الوقائية",
       "title": "الإجراءات الوقائية",

@@ -55,6 +55,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import AdvancedSection from "./AdvancedSection";
 
 import type { TFunction } from "i18next";
 
@@ -607,54 +608,6 @@ export default function ConsumablePartsTab({
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={addForm.control}
-                        name="barcode"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {t("maintenance.consumable.barcode")}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value ?? ""}
-                                placeholder={t(
-                                  "maintenance.consumable.barcodeOptional",
-                                )}
-                                data-testid="input-barcode-add"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={addForm.control}
-                        name="location"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {t("maintenance.consumable.location")}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value ?? ""}
-                                placeholder={t(
-                                  "maintenance.consumable.storageLocation",
-                                )}
-                                data-testid="input-location"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
                     <div className="grid grid-cols-3 gap-4">
                       <FormField
                         control={addForm.control}
@@ -680,64 +633,6 @@ export default function ConsumablePartsTab({
                         )}
                       />
 
-                      <FormField
-                        control={addForm.control}
-                        name="min_quantity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {t("maintenance.consumable.minQuantity")}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                type="number"
-                                min="0"
-                                onChange={(e) =>
-                                  field.onChange(
-                                    e.target.value
-                                      ? parseInt(e.target.value)
-                                      : undefined,
-                                  )
-                                }
-                                data-testid="input-min-quantity"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={addForm.control}
-                        name="max_quantity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {t("maintenance.consumable.maxQuantity")}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                type="number"
-                                min="0"
-                                onChange={(e) =>
-                                  field.onChange(
-                                    e.target.value
-                                      ? parseInt(e.target.value)
-                                      : undefined,
-                                  )
-                                }
-                                data-testid="input-max-quantity"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={addForm.control}
                         name="unit"
@@ -815,25 +710,133 @@ export default function ConsumablePartsTab({
                       />
                     </div>
 
-                    <FormField
-                      control={addForm.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t("maintenance.consumable.notes")}
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              value={field.value ?? ""}
-                              data-testid="textarea-notes-add"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <AdvancedSection>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={addForm.control}
+                          name="barcode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t("maintenance.consumable.barcode")}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder={t(
+                                    "maintenance.consumable.barcodeOptional",
+                                  )}
+                                  data-testid="input-barcode-add"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={addForm.control}
+                          name="location"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t("maintenance.consumable.location")}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder={t(
+                                    "maintenance.consumable.storageLocation",
+                                  )}
+                                  data-testid="input-location"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={addForm.control}
+                          name="min_quantity"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t("maintenance.consumable.minQuantity")}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min="0"
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      e.target.value
+                                        ? parseInt(e.target.value)
+                                        : undefined,
+                                    )
+                                  }
+                                  data-testid="input-min-quantity"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={addForm.control}
+                          name="max_quantity"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t("maintenance.consumable.maxQuantity")}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min="0"
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      e.target.value
+                                        ? parseInt(e.target.value)
+                                        : undefined,
+                                    )
+                                  }
+                                  data-testid="input-max-quantity"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={addForm.control}
+                        name="notes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t("maintenance.consumable.notes")}
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                {...field}
+                                value={field.value ?? ""}
+                                data-testid="textarea-notes-add"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </AdvancedSection>
 
                     <div className="flex justify-end space-x-2 space-x-reverse">
                       <Button
@@ -1019,48 +1022,6 @@ export default function ConsumablePartsTab({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={editForm.control}
-                    name="barcode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {t("maintenance.consumable.barcode")}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            data-testid="input-edit-barcode"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {t("maintenance.consumable.location")}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            data-testid="input-edit-location"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={editForm.control}
@@ -1086,64 +1047,6 @@ export default function ConsumablePartsTab({
                     )}
                   />
 
-                  <FormField
-                    control={editForm.control}
-                    name="min_quantity"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {t("maintenance.consumable.minQuantity")}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            min="0"
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value
-                                  ? parseInt(e.target.value)
-                                  : undefined,
-                              )
-                            }
-                            data-testid="input-edit-min-quantity"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="max_quantity"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {t("maintenance.consumable.maxQuantity")}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            min="0"
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value
-                                  ? parseInt(e.target.value)
-                                  : undefined,
-                              )
-                            }
-                            data-testid="input-edit-max-quantity"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={editForm.control}
                     name="unit"
@@ -1219,23 +1122,127 @@ export default function ConsumablePartsTab({
                   />
                 </div>
 
-                <FormField
-                  control={editForm.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("maintenance.consumable.notes")}</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          value={field.value ?? ""}
-                          data-testid="textarea-edit-notes"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <AdvancedSection>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="barcode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {t("maintenance.consumable.barcode")}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              value={field.value ?? ""}
+                              data-testid="input-edit-barcode"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {t("maintenance.consumable.location")}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              value={field.value ?? ""}
+                              data-testid="input-edit-location"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="min_quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {t("maintenance.consumable.minQuantity")}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="number"
+                              min="0"
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value
+                                    ? parseInt(e.target.value)
+                                    : undefined,
+                                )
+                              }
+                              data-testid="input-edit-min-quantity"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="max_quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {t("maintenance.consumable.maxQuantity")}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="number"
+                              min="0"
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value
+                                    ? parseInt(e.target.value)
+                                    : undefined,
+                                )
+                              }
+                              data-testid="input-edit-max-quantity"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={editForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t("maintenance.consumable.notes")}
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="textarea-edit-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </AdvancedSection>
 
                 <div className="flex justify-end space-x-2 space-x-reverse">
                   <Button

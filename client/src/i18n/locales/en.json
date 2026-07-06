@@ -2194,6 +2194,7 @@
   },
   "maintenance": {
     "title": "Maintenance Management",
+    "advancedOptions": "Advanced options",
     "preventiveActions": {
       "tab": "Preventive Actions",
       "title": "Preventive Actions",

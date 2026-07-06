@@ -32,6 +32,7 @@ import {
 } from "../../../shared/id-generator";
 import PageLayout from "../components/layout/PageLayout";
 import MaintenanceEngineer from "./maintenance-engineer";
+import AdvancedSection from "../components/maintenance/AdvancedSection";
 import ComponentCatalogTab from "../components/maintenance/ComponentCatalogTab";
 import ConsumablePartsTab from "../components/maintenance/ConsumablePartsTab";
 import PreventiveActionsTab from "../components/maintenance/PreventiveActionsTab";
@@ -1479,6 +1480,7 @@ function MaintenanceActionsTab({
                     )}
                   />
 
+                  <AdvancedSection>
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -1639,6 +1641,7 @@ function MaintenanceActionsTab({
                       )}
                     />
                   </div>
+                  </AdvancedSection>
 
                   <div className="flex justify-end gap-2">
                     <Button
@@ -2002,83 +2005,45 @@ function MaintenanceReportsTab({
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-4"
                 >
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="report_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("maintenance.reportType")}</FormLabel>
-                          <Select onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={t(
-                                    "maintenance.selectReportType",
-                                  )}
-                                />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="breakdown">
-                                {t("maintenance.reportTypes.breakdown")}
-                              </SelectItem>
-                              <SelectItem value="malfunction">
-                                {t("maintenance.reportTypes.malfunction")}
-                              </SelectItem>
-                              <SelectItem value="safety">
-                                {t("maintenance.reportTypes.safety")}
-                              </SelectItem>
-                              <SelectItem value="quality">
-                                {t("maintenance.reportTypes.quality")}
-                              </SelectItem>
-                              <SelectItem value="preventive">
-                                {t("maintenance.reportTypes.preventive")}
-                              </SelectItem>
-                              <SelectItem value="spare_parts">
-                                {t("maintenance.reportTypes.spareParts")}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="severity"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("maintenance.severity")}</FormLabel>
-                          <Select onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={t("maintenance.selectSeverity")}
-                                />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="low">
-                                {t("maintenance.severity.low")}
-                              </SelectItem>
-                              <SelectItem value="medium">
-                                {t("maintenance.severity.medium")}
-                              </SelectItem>
-                              <SelectItem value="high">
-                                {t("maintenance.severity.high")}
-                              </SelectItem>
-                              <SelectItem value="critical">
-                                {t("maintenance.severity.critical")}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="report_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("maintenance.reportType")}</FormLabel>
+                        <Select onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={t("maintenance.selectReportType")}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="breakdown">
+                              {t("maintenance.reportTypes.breakdown")}
+                            </SelectItem>
+                            <SelectItem value="malfunction">
+                              {t("maintenance.reportTypes.malfunction")}
+                            </SelectItem>
+                            <SelectItem value="safety">
+                              {t("maintenance.reportTypes.safety")}
+                            </SelectItem>
+                            <SelectItem value="quality">
+                              {t("maintenance.reportTypes.quality")}
+                            </SelectItem>
+                            <SelectItem value="preventive">
+                              {t("maintenance.reportTypes.preventive")}
+                            </SelectItem>
+                            <SelectItem value="spare_parts">
+                              {t("maintenance.reportTypes.spareParts")}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     control={form.control}
@@ -2120,51 +2085,94 @@ function MaintenanceReportsTab({
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="machine_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t("maintenance.machineOptional")}
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder={t(
-                                "maintenance.machineIdPlaceholder",
-                              )}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <AdvancedSection>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="severity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("maintenance.severity")}</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || ""}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={t(
+                                      "maintenance.selectSeverity",
+                                    )}
+                                  />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="low">
+                                  {t("maintenance.severity.low")}
+                                </SelectItem>
+                                <SelectItem value="medium">
+                                  {t("maintenance.severity.medium")}
+                                </SelectItem>
+                                <SelectItem value="high">
+                                  {t("maintenance.severity.high")}
+                                </SelectItem>
+                                <SelectItem value="critical">
+                                  {t("maintenance.severity.critical")}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="estimated_repair_time"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t("maintenance.estimatedRepairTime")}
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              {...field}
-                              onChange={(e) =>
-                                field.onChange(parseFloat(e.target.value) || 0)
-                              }
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                      <FormField
+                        control={form.control}
+                        name="machine_id"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t("maintenance.machineOptional")}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder={t(
+                                  "maintenance.machineIdPlaceholder",
+                                )}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="estimated_repair_time"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t("maintenance.estimatedRepairTime")}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </AdvancedSection>
 
                   <div className="flex justify-end gap-2">
                     <Button
@@ -2465,64 +2473,71 @@ function OperatorNegligenceTab({
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="severity"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t("maintenance.negligenceSeverity")}
-                          </FormLabel>
-                          <Select onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={t("maintenance.selectSeverity")}
-                                />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="low">
-                                {t("maintenance.severity.low")}
-                              </SelectItem>
-                              <SelectItem value="medium">
-                                {t("maintenance.severity.medium")}
-                              </SelectItem>
-                              <SelectItem value="high">
-                                {t("maintenance.severity.high")}
-                              </SelectItem>
-                              <SelectItem value="critical">
-                                {t("maintenance.severity.critical")}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <AdvancedSection>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="severity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t("maintenance.negligenceSeverity")}
+                            </FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || ""}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={t(
+                                      "maintenance.selectSeverity",
+                                    )}
+                                  />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="low">
+                                  {t("maintenance.severity.low")}
+                                </SelectItem>
+                                <SelectItem value="medium">
+                                  {t("maintenance.severity.medium")}
+                                </SelectItem>
+                                <SelectItem value="high">
+                                  {t("maintenance.severity.high")}
+                                </SelectItem>
+                                <SelectItem value="critical">
+                                  {t("maintenance.severity.critical")}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="immediate_actions_taken"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t("maintenance.immediateActions")}
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder={t(
-                                "maintenance.immediateActionsPlaceholder",
-                              )}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                      <FormField
+                        control={form.control}
+                        name="immediate_actions_taken"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t("maintenance.immediateActions")}
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                {...field}
+                                placeholder={t(
+                                  "maintenance.immediateActionsPlaceholder",
+                                )}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </AdvancedSection>
 
                   <div className="flex justify-end gap-2">
                     <Button
@@ -2731,78 +2746,6 @@ function MaintenanceRequestDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="urgency_level"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("maintenance.urgencyLevel")}</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value || ""}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={t("maintenance.selectUrgencyLevel")}
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="normal">
-                        {t("maintenance.urgency.normal")}
-                      </SelectItem>
-                      <SelectItem value="medium">
-                        {t("maintenance.urgency.medium")}
-                      </SelectItem>
-                      <SelectItem value="urgent">
-                        {t("maintenance.urgency.urgent")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <FormField
-            control={form.control}
-            name="assigned_to"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("maintenance.assignedToOptional")}</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value || ""}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={t("maintenance.selectTechnician")}
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      {t("maintenance.noAssignment")}
-                    </SelectItem>
-                    {Array.isArray(users) &&
-                      users
-                        .filter((user: any) => user.role === "technician")
-                        .map((user: any) => (
-                          <SelectItem key={user.id} value={user.id.toString()}>
-                            {user.full_name || user.username}
-                          </SelectItem>
-                        ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
           <FormField
             control={form.control}
             name="description"
@@ -2822,6 +2765,85 @@ function MaintenanceRequestDialog({
               </FormItem>
             )}
           />
+
+          <AdvancedSection>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="urgency_level"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("maintenance.urgencyLevel")}</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={t("maintenance.selectUrgencyLevel")}
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="normal">
+                          {t("maintenance.urgency.normal")}
+                        </SelectItem>
+                        <SelectItem value="medium">
+                          {t("maintenance.urgency.medium")}
+                        </SelectItem>
+                        <SelectItem value="urgent">
+                          {t("maintenance.urgency.urgent")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="assigned_to"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t("maintenance.assignedToOptional")}
+                    </FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={t("maintenance.selectTechnician")}
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          {t("maintenance.noAssignment")}
+                        </SelectItem>
+                        {Array.isArray(users) &&
+                          users
+                            .filter((user: any) => user.role === "technician")
+                            .map((user: any) => (
+                              <SelectItem
+                                key={user.id}
+                                value={user.id.toString()}
+                              >
+                                {user.full_name || user.username}
+                              </SelectItem>
+                            ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </AdvancedSection>
 
           <div className="flex justify-end gap-2">
             <Button
