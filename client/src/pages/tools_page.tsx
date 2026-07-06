@@ -49,6 +49,7 @@ import { Tabs } from "../components/ui/tabs";
 import { Textarea } from "../components/ui/textarea";
 import { useToast } from "../hooks/use-toast";
 import { getHangerHeightCm } from "../lib/bag-rules-engine";
+import { extractColors, type ExtractedColor } from "../lib/image-utils";
 import { apiRequest, queryClient } from "../lib/queryClient";
 
 type TabId =
@@ -1540,8 +1541,8 @@ function ColorMixTools(): JSX.Element {
   const [hex, setHex] = useState<string>("#008DCB");
   const [cmyk, setCmyk] = useState<CMYK>(() => rgbToCmyk(0, 141, 203));
   const [totalInkPct, setTotalInkPct] = useState<number>(100);
-  const [palette, setPalette] = useState<string[]>([]);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [palette, setPalette] = useState<ExtractedColor[]>([]);
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
 
   function onHexChange(v: string) {
     const clean = normalizeHex(v);
@@ -1550,40 +1551,19 @@ function ColorMixTools(): JSX.Element {
     setCmyk(rgbToCmyk(r, g, b));
   }
 
-  function handleImageUpload(file: File) {
-    const img = new Image();
-    img.onload = () => {
-      const cvs = canvasRef.current ?? document.createElement("canvas");
-      const ctx = cvs.getContext("2d");
-      if (!ctx) return;
-      const W = 240,
-        H = Math.max(120, Math.floor((img.height / img.width) * 240));
-      cvs.width = W;
-      cvs.height = H;
-      ctx.drawImage(img, 0, 0, W, H);
-      const data = ctx.getImageData(0, 0, W, H).data;
-      const buckets: Record<string, number> = {};
-      for (let i = 0; i < data.length; i += 16) {
-        const r = data[i],
-          g = data[i + 1],
-          b = data[i + 2];
-        const R = r >> 5,
-          G = g >> 5,
-          B = b >> 5;
-        const key = `${R}-${G}-${B}`;
-        buckets[key] = (buckets[key] || 0) + 1;
-      }
-      const entries = Object.entries(buckets)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 6);
-      const pal = entries.map(([k]) => {
-        const [R, G, B] = k.split("-").map((n) => Number(n));
-        return rgbToHex(R * 32 + 16, G * 32 + 16, B * 32 + 16);
-      });
-      setPalette(pal);
-      if (pal[0]) onHexChange(pal[0]);
-    };
-    img.src = URL.createObjectURL(file);
+  async function handleImageUpload(file: File) {
+    const url = URL.createObjectURL(file);
+    setIsExtracting(true);
+    try {
+      const colors = await extractColors(url, 6);
+      setPalette(colors);
+      if (colors[0]) onHexChange(colors[0].hex);
+    } catch {
+      setPalette([]);
+    } finally {
+      setIsExtracting(false);
+      URL.revokeObjectURL(url);
+    }
   }
 
   const mix = useMemo(() => {
@@ -1683,8 +1663,12 @@ function ColorMixTools(): JSX.Element {
             </p>
           </label>
         </div>
-        <canvas ref={canvasRef} className="hidden" />
-        {palette.length > 0 && (
+        {isExtracting && (
+          <p className="text-sm text-muted-foreground text-center">
+            {t("common.loading")}
+          </p>
+        )}
+        {!isExtracting && palette.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium">
               {t("tools.colorMix.extractedColors")}
@@ -1692,12 +1676,19 @@ function ColorMixTools(): JSX.Element {
             <div className="grid grid-cols-6 gap-2">
               {palette.map((p) => (
                 <button
-                  key={p}
-                  className="aspect-square rounded-lg border-2 hover:scale-110 transition-transform"
-                  style={{ backgroundColor: p }}
-                  title={p}
-                  onClick={() => onHexChange(p)}
-                />
+                  key={p.hex}
+                  className="flex flex-col items-center gap-1"
+                  title={`${p.hex} · ${p.percentage}%`}
+                  onClick={() => onHexChange(p.hex)}
+                >
+                  <span
+                    className="aspect-square w-full rounded-lg border-2 hover:scale-110 transition-transform"
+                    style={{ backgroundColor: p.hex }}
+                  />
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    {p.percentage}%
+                  </span>
+                </button>
               ))}
             </div>
           </div>
