@@ -2444,6 +2444,13 @@
       "spareParts": "Spare Parts",
       "consumableParts": "Consumable Parts"
     },
+    "groups": {
+      "corrective": "Corrective",
+      "inventory": "Inventory & Parts",
+      "preventive": "Preventive",
+      "smartEngineer": "Smart Engineer"
+    },
+    "noPermission": "You do not have access to any maintenance section",
     "newRequest": "New Request",
     "requestNumber": "Request Number",
     "machineName": "Machine Name",

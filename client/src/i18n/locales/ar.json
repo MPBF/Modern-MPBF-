@@ -2955,6 +2955,13 @@
       "spareParts": "قطع الغيار",
       "consumableParts": "القطع الاستهلاكية"
     },
+    "groups": {
+      "corrective": "الصيانة التصحيحية",
+      "inventory": "المخزون وقطع الغيار",
+      "preventive": "الصيانة الوقائية",
+      "smartEngineer": "المهندس الذكي"
+    },
+    "noPermission": "ليس لديك صلاحية الوصول إلى أي قسم من أقسام الصيانة",
     "newRequest": "طلب جديد",
     "requestNumber": "رقم الطلب",
     "machineName": "اسم الماكينة",

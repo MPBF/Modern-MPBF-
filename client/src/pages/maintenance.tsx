@@ -15,6 +15,10 @@ import {
   Edit,
   Trash2,
   Cog,
+  Boxes,
+  ShieldCheck,
+  Bot,
+  ClipboardList,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -157,49 +161,113 @@ const createMaintenanceRequestSchema = (t: TFunction) =>
     assigned_to: z.string().optional(),
   });
 
-const maintenanceTabPermissions: {
-  tab: string;
+interface MaintenanceSubTab {
+  id: string;
+  labelKey: string;
+  icon: typeof Wrench;
   permissions: PermissionKey[];
-}[] = [
+}
+
+interface MaintenanceGroup {
+  id: string;
+  labelKey: string;
+  icon: typeof Wrench;
+  subTabs: MaintenanceSubTab[];
+}
+
+// The maintenance module is organized into 4 top-level groups, each holding a
+// set of sub-tabs. A group is shown only when the user can see at least one of
+// its sub-tabs. Per-sub-tab permission sets are preserved exactly as before.
+const MAINTENANCE_GROUPS: MaintenanceGroup[] = [
   {
-    tab: "requests",
-    permissions: [
-      "view_maintenance_requests",
-      "view_maintenance",
-      "manage_maintenance",
+    id: "corrective",
+    labelKey: "maintenance.groups.corrective",
+    icon: ClipboardList,
+    subTabs: [
+      {
+        id: "requests",
+        labelKey: "maintenance.tabs.requests",
+        icon: Wrench,
+        permissions: [
+          "view_maintenance_requests",
+          "view_maintenance",
+          "manage_maintenance",
+        ],
+      },
+      {
+        id: "actions",
+        labelKey: "maintenance.tabs.actions",
+        icon: CheckCircle,
+        permissions: ["manage_maintenance_actions", "manage_maintenance"],
+      },
+      {
+        id: "reports",
+        labelKey: "maintenance.tabs.reports",
+        icon: FileText,
+        permissions: [
+          "view_maintenance_reports",
+          "view_maintenance",
+          "manage_maintenance",
+        ],
+      },
+      {
+        id: "negligence",
+        labelKey: "maintenance.tabs.negligence",
+        icon: AlertCircle,
+        permissions: ["manage_negligence", "manage_maintenance"],
+      },
     ],
   },
   {
-    tab: "actions",
-    permissions: ["manage_maintenance_actions", "manage_maintenance"],
-  },
-  {
-    tab: "reports",
-    permissions: [
-      "view_maintenance_reports",
-      "view_maintenance",
-      "manage_maintenance",
+    id: "inventory",
+    labelKey: "maintenance.groups.inventory",
+    icon: Boxes,
+    subTabs: [
+      {
+        id: "spare-parts",
+        labelKey: "maintenance.tabs.spareParts",
+        icon: Users,
+        permissions: ["manage_spare_parts", "manage_maintenance"],
+      },
+      {
+        id: "consumable-parts",
+        labelKey: "maintenance.tabs.consumableParts",
+        icon: Wrench,
+        permissions: ["manage_consumable_parts", "manage_maintenance"],
+      },
+      {
+        id: "component-catalog",
+        labelKey: "maintenance.componentCatalog.tab",
+        icon: Cog,
+        permissions: ["manage_maintenance"],
+      },
     ],
   },
   {
-    tab: "negligence",
-    permissions: ["manage_negligence", "manage_maintenance"],
+    id: "preventive",
+    labelKey: "maintenance.groups.preventive",
+    icon: ShieldCheck,
+    subTabs: [
+      {
+        id: "preventive-actions",
+        labelKey: "maintenance.preventiveActions.tab",
+        icon: Calendar,
+        permissions: ["view_maintenance", "manage_maintenance"],
+      },
+    ],
   },
   {
-    tab: "spare-parts",
-    permissions: ["manage_spare_parts", "manage_maintenance"],
-  },
-  {
-    tab: "consumable-parts",
-    permissions: ["manage_consumable_parts", "manage_maintenance"],
-  },
-  {
-    tab: "preventive-actions",
-    permissions: ["view_maintenance", "manage_maintenance"],
-  },
-  {
-    tab: "component-catalog",
-    permissions: ["manage_maintenance"],
+    id: "smart-engineer",
+    labelKey: "maintenance.groups.smartEngineer",
+    icon: Bot,
+    subTabs: [
+      {
+        id: "smart-engineer",
+        labelKey: "maintenanceEngineer.title",
+        icon: Cog,
+        permissions: ["view_maintenance", "manage_maintenance"],
+      },
+    ],
   },
 ];
 
@@ -209,11 +277,47 @@ export default function Maintenance() {
   const canAddMaint = canAddInArea(user, "maintenance");
   const canEditMaint = canEditInArea(user, "maintenance");
   const canDeleteMaint = canDeleteInArea(user, "maintenance");
-  const [currentTab, setCurrentTab] = useState(
-    maintenanceTabPermissions.find((tp) =>
-      userHasPermission(user, tp.permissions),
-    )?.tab || "requests",
+  // Filter groups/sub-tabs down to what this user is allowed to see.
+  const visibleGroups = MAINTENANCE_GROUPS.map((g) => ({
+    ...g,
+    subTabs: g.subTabs.filter((s) => userHasPermission(user, s.permissions)),
+  })).filter((g) => g.subTabs.length > 0);
+  const groupById = Object.fromEntries(visibleGroups.map((g) => [g.id, g]));
+  const firstSubOf = (groupId: string) =>
+    groupById[groupId]?.subTabs[0]?.id;
+
+  const [currentGroup, setCurrentGroup] = useState<string>(
+    () => visibleGroups[0]?.id || "corrective",
   );
+  const [correctiveSub, setCorrectiveSub] = useState<string>(
+    () => firstSubOf("corrective") || "requests",
+  );
+  const [inventorySub, setInventorySub] = useState<string>(
+    () => firstSubOf("inventory") || "spare-parts",
+  );
+
+  // Auth/permissions can resolve after the first render, which changes
+  // `visibleGroups`. Reconcile the selected group/sub-tabs so a user never
+  // lands on a group or sub-tab they are not allowed to see.
+  const visibleGroupsKey = visibleGroups
+    .map((g) => `${g.id}:${g.subTabs.map((s) => s.id).join(",")}`)
+    .join("|");
+  useEffect(() => {
+    if (visibleGroups.length === 0) return;
+    if (!groupById[currentGroup]) {
+      setCurrentGroup(visibleGroups[0].id);
+    }
+    const correctiveSubs = groupById.corrective?.subTabs;
+    if (correctiveSubs && !correctiveSubs.some((s) => s.id === correctiveSub)) {
+      setCorrectiveSub(correctiveSubs[0].id);
+    }
+    const inventorySubs = groupById.inventory?.subTabs;
+    if (inventorySubs && !inventorySubs.some((s) => s.id === inventorySub)) {
+      setInventorySub(inventorySubs[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleGroupsKey]);
+
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(
     null,
   );
@@ -535,104 +639,59 @@ export default function Maintenance() {
         </Card>
       </div>
 
-      <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-        <TabsList className="flex flex-wrap gap-1 h-auto mb-6">
-          {userHasPermission(user, [
-            "view_maintenance_requests",
-            "view_maintenance",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger value="requests" className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" />
-              {t("maintenance.tabs.requests")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "manage_maintenance_actions",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger value="actions" className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4" />
-              {t("maintenance.tabs.actions")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "view_maintenance_reports",
-            "view_maintenance",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger value="reports" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              {t("maintenance.tabs.reports")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "manage_negligence",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger value="negligence" className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              {t("maintenance.tabs.negligence")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "manage_spare_parts",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger
-              value="spare-parts"
-              className="flex items-center gap-2"
-            >
-              <Users className="h-4 w-4" />
-              {t("maintenance.tabs.spareParts")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "manage_consumable_parts",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger
-              value="consumable-parts"
-              className="flex items-center gap-2"
-            >
-              <Wrench className="h-4 w-4" />
-              {t("maintenance.tabs.consumableParts")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "view_maintenance",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger
-              value="preventive-actions"
-              className="flex items-center gap-2"
-            >
-              <Calendar className="h-4 w-4" />
-              {t("maintenance.preventiveActions.tab")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, ["manage_maintenance"]) && (
-            <TabsTrigger
-              value="component-catalog"
-              className="flex items-center gap-2"
-            >
-              <Wrench className="h-4 w-4" />
-              {t("maintenance.componentCatalog.tab")}
-            </TabsTrigger>
-          )}
-          {userHasPermission(user, [
-            "view_maintenance",
-            "manage_maintenance",
-          ]) && (
-            <TabsTrigger
-              value="smart-engineer"
-              className="flex items-center gap-2"
-            >
-              <Cog className="h-4 w-4" />
-              {t("maintenanceEngineer.title")}
-            </TabsTrigger>
-          )}
+      {visibleGroups.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            {t("maintenance.noPermission")}
+          </CardContent>
+        </Card>
+      )}
+
+      {visibleGroups.length > 0 && (
+      <Tabs
+        value={currentGroup}
+        onValueChange={setCurrentGroup}
+        className="w-full"
+      >
+        <TabsList className="flex flex-wrap gap-2 h-auto p-1.5 bg-muted/60 rounded-xl mb-6">
+          {visibleGroups.map((group) => {
+            const GroupIcon = group.icon;
+            return (
+              <TabsTrigger
+                key={group.id}
+                value={group.id}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-blue-700 data-[state=active]:shadow-sm"
+              >
+                <GroupIcon className="h-4 w-4" />
+                {t(group.labelKey)}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
+
+        {/* ═══ Group: Corrective (requests / actions / reports / negligence) ═══ */}
+        {groupById.corrective && (
+        <TabsContent value="corrective" className="mt-0">
+          <Tabs
+            value={correctiveSub}
+            onValueChange={setCorrectiveSub}
+            className="w-full"
+          >
+            <TabsList className="flex flex-wrap gap-1 h-auto mb-4 bg-transparent p-0 border-b w-full justify-start rounded-none">
+              {groupById.corrective.subTabs.map((sub) => {
+                const SubIcon = sub.icon;
+                return (
+                  <TabsTrigger
+                    key={sub.id}
+                    value={sub.id}
+                    className="flex items-center gap-2 px-4 py-2 rounded-none border-b-2 border-transparent text-muted-foreground data-[state=active]:border-blue-600 data-[state=active]:text-blue-700 data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+                  >
+                    <SubIcon className="h-4 w-4" />
+                    {t(sub.labelKey)}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
 
         <TabsContent value="requests">
           <Card>
@@ -926,6 +985,33 @@ export default function Maintenance() {
             onCreateReport={createOperatorReportMutation.mutate}
           />
         </TabsContent>
+          </Tabs>
+        </TabsContent>
+        )}
+
+        {/* ═══ Group: Inventory & Parts (spare / consumable / catalog) ═══ */}
+        {groupById.inventory && (
+        <TabsContent value="inventory" className="mt-0">
+          <Tabs
+            value={inventorySub}
+            onValueChange={setInventorySub}
+            className="w-full"
+          >
+            <TabsList className="flex flex-wrap gap-1 h-auto mb-4 bg-transparent p-0 border-b w-full justify-start rounded-none">
+              {groupById.inventory.subTabs.map((sub) => {
+                const SubIcon = sub.icon;
+                return (
+                  <TabsTrigger
+                    key={sub.id}
+                    value={sub.id}
+                    className="flex items-center gap-2 px-4 py-2 rounded-none border-b-2 border-transparent text-muted-foreground data-[state=active]:border-blue-600 data-[state=active]:text-blue-700 data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+                  >
+                    <SubIcon className="h-4 w-4" />
+                    {t(sub.labelKey)}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
 
         <TabsContent value="spare-parts">
           <SparePartsTab
@@ -938,23 +1024,28 @@ export default function Maintenance() {
           <ConsumablePartsTab />
         </TabsContent>
 
-        <TabsContent value="preventive-actions">
-          <PreventiveActionsTab />
-        </TabsContent>
-
         <TabsContent value="component-catalog">
           <ComponentCatalogTab />
         </TabsContent>
+          </Tabs>
+        </TabsContent>
+        )}
 
-        {userHasPermission(user, [
-          "view_maintenance",
-          "manage_maintenance",
-        ]) && (
-          <TabsContent value="smart-engineer">
+        {/* ═══ Group: Preventive ═══ */}
+        {groupById.preventive && (
+          <TabsContent value="preventive" className="mt-0">
+            <PreventiveActionsTab />
+          </TabsContent>
+        )}
+
+        {/* ═══ Group: Smart Engineer ═══ */}
+        {groupById["smart-engineer"] && (
+          <TabsContent value="smart-engineer" className="mt-0">
             <MaintenanceEngineer embedded />
           </TabsContent>
         )}
       </Tabs>
+      )}
 
       <Dialog
         open={isActionViewDialogOpen}
