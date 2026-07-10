@@ -9,6 +9,7 @@ import {
   Package,
   PackageCheck,
   Layers,
+  Target,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -518,9 +519,10 @@ export default function CuttingOperatorDashboard({
                     order.cutting_length_cm ||
                     order.punching) && (
                     <p
-                      className="text-sm text-gray-700 dark:text-gray-300"
+                      className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300"
                       data-testid={`text-size-${order.production_order_id}`}
                     >
+                      <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                       {order.size_caption && (
                         <span>
                           {t("operators.common.size")}: {order.size_caption}
@@ -546,7 +548,8 @@ export default function CuttingOperatorDashboard({
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                        <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         {t("operators.common.progress")}
                       </span>
                       <span

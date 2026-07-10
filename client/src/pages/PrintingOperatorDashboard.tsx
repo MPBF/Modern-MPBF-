@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Layers,
   Weight,
+  Target,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -502,7 +503,8 @@ export default function PrintingOperatorDashboard({
                     </div>
                     {order.size_caption && (
                       <div>
-                        <p className="text-gray-500 dark:text-gray-400">
+                        <p className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                          <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                           {t("production.size")}
                         </p>
                         <p
@@ -569,7 +571,8 @@ export default function PrintingOperatorDashboard({
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                        <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         {t("operators.common.progress")}
                       </span>
                       <span
@@ -588,7 +591,7 @@ export default function PrintingOperatorDashboard({
                   </div>
 
                   <div className="flex items-center gap-2 text-sm">
-                    <Package className="h-4 w-4 text-gray-400" />
+                    <Weight className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                     <span className="text-gray-600 dark:text-gray-400">
                       {t("operators.common.totalWeight")}:
                     </span>
