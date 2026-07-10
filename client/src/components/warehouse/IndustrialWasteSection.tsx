@@ -307,6 +307,13 @@ function WasteInList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: IN_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/production-hall"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/delivery-hall"],
+      });
       toast({ title: t("warehouse.industrialWaste.deleteSuccess") });
       setDeleteId(null);
     },
@@ -541,6 +548,13 @@ function WasteOutList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OUT_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/production-hall"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/delivery-hall"],
+      });
       toast({ title: t("warehouse.industrialWaste.deleteSuccess") });
       setDeleteId(null);
     },
