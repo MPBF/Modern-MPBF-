@@ -106,6 +106,7 @@ interface SavedQueryParam {
   name: string;
   label: string;
   type: ParamType;
+  default?: string;
 }
 
 interface SavedQuery {
@@ -122,6 +123,51 @@ const PARAM_TYPE_LABELS: Record<ParamType, string> = {
   number: "رقم",
   date: "تاريخ",
 };
+
+// Relative date tokens offered as defaults for date parameters. Resolved to a
+// concrete YYYY-MM-DD when the run prompt is opened.
+const DATE_DEFAULT_NONE = "__none__";
+const DATE_DEFAULT_OPTIONS: { value: string; label: string }[] = [
+  { value: DATE_DEFAULT_NONE, label: "بدون قيمة افتراضية" },
+  { value: "today", label: "اليوم" },
+  { value: "start_of_month", label: "بداية الشهر" },
+  { value: "last_30_days", label: "آخر ٣٠ يوماً" },
+];
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function startOfMonthISO(): string {
+  const now = new Date();
+  return toISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+
+// Turn a parameter's stored default into the value the run prompt should
+// pre-fill with. Date params support relative tokens; everything else is literal.
+function resolveParamDefault(p: SavedQueryParam): string {
+  const def = p.default ?? "";
+  if (!def) return "";
+  if (p.type === "date") {
+    switch (def) {
+      case "today":
+        return toISODate(new Date());
+      case "start_of_month":
+        return startOfMonthISO();
+      case "last_30_days": {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return toISODate(d);
+      }
+      default:
+        return def;
+    }
+  }
+  return def;
+}
 
 const emptyForm = {
   name: "",
@@ -476,7 +522,7 @@ export function ExternalDbSettingsContent() {
     if (q.parameters && q.parameters.length > 0) {
       const init: Record<string, string> = {};
       q.parameters.forEach((p) => {
-        init[p.name] = "";
+        init[p.name] = resolveParamDefault(p);
       });
       setParamValues(init);
       setRunQueryTarget(q);
@@ -1074,7 +1120,7 @@ export function ExternalDbSettingsContent() {
               ) : (
                 <div className="space-y-2">
                   {savedParams.map((p, i) => (
-                    <div key={i} className="flex items-end gap-2">
+                    <div key={i} className="flex flex-wrap items-end gap-2">
                       <div className="grid gap-1 flex-1">
                         <Label className="text-xs">الاسم (بدون @)</Label>
                         <Input
@@ -1103,7 +1149,10 @@ export function ExternalDbSettingsContent() {
                         <Select
                           value={p.type}
                           onValueChange={(v) =>
-                            updateParam(i, { type: v as ParamType })
+                            updateParam(i, {
+                              type: v as ParamType,
+                              default: undefined,
+                            })
                           }
                         >
                           <SelectTrigger className="h-8 text-xs">
@@ -1119,6 +1168,44 @@ export function ExternalDbSettingsContent() {
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="grid gap-1 w-40">
+                        <Label className="text-xs">القيمة الافتراضية</Label>
+                        {p.type === "date" ? (
+                          <Select
+                            value={p.default || DATE_DEFAULT_NONE}
+                            onValueChange={(v) =>
+                              updateParam(i, {
+                                default:
+                                  v === DATE_DEFAULT_NONE ? undefined : v,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DATE_DEFAULT_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                  {o.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            type={p.type === "number" ? "number" : "text"}
+                            dir={p.type === "text" ? "rtl" : "ltr"}
+                            className="h-8 text-xs"
+                            value={p.default ?? ""}
+                            onChange={(e) =>
+                              updateParam(i, {
+                                default: e.target.value || undefined,
+                              })
+                            }
+                            placeholder="اختياري"
+                          />
+                        )}
                       </div>
                       <Button
                         size="icon"
@@ -1184,6 +1271,38 @@ export function ExternalDbSettingsContent() {
                     }))
                   }
                 />
+                {p.type === "date" && (
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-xs"
+                      onClick={() =>
+                        setParamValues((prev) => ({
+                          ...prev,
+                          [p.name]: toISODate(new Date()),
+                        }))
+                      }
+                    >
+                      اليوم
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-xs"
+                      onClick={() =>
+                        setParamValues((prev) => ({
+                          ...prev,
+                          [p.name]: startOfMonthISO(),
+                        }))
+                      }
+                    >
+                      بداية الشهر
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -5446,6 +5446,10 @@ export interface SavedQueryParam {
   name: string;
   label: string;
   type: "text" | "number" | "date";
+  // Optional default the run prompt pre-fills with. For date params this may be
+  // a relative token ("today" | "start_of_month" | "last_30_days") resolved at
+  // run time; otherwise a literal value.
+  default?: string;
 }
 
 export const external_db_saved_queries = pgTable("external_db_saved_queries", {

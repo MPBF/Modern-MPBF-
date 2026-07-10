@@ -78,6 +78,7 @@ const paramDefSchema = z.object({
     .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "اسم المعامل غير صالح"),
   label: z.string().min(1, "وصف المعامل مطلوب").max(150),
   type: z.enum(["text", "number", "date"]),
+  default: z.string().max(150).optional(),
 });
 
 const savedQueryCreateSchema = z.object({
