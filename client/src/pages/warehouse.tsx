@@ -566,6 +566,9 @@ function DeliveryHallContent({
         queryKey: ["/api/warehouse/vouchers/stats"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/production-hall"],
+      });
       setDeliveryDialogOpen(false);
       setSelectedOrders(new Set());
       setDeliveryWeights({});
@@ -1337,6 +1340,9 @@ function ProductionHallContent({
 
       queryClient.invalidateQueries({
         queryKey: ["/api/warehouse/production-hall"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/delivery-hall"],
       });
       queryClient.invalidateQueries({
         queryKey: ["/api/warehouse/vouchers", "finished-goods-in"],

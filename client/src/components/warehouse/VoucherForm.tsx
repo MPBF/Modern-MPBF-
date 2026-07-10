@@ -280,6 +280,12 @@ export function VoucherForm({ type, open, onOpenChange }: VoucherFormProps) {
       queryClient.invalidateQueries({
         queryKey: ["/api/warehouse/production-orders-for-receipt"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/production-hall"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/delivery-hall"],
+      });
       toast({
         title: t("warehouse.toast.savedSuccess"),
         description: t("warehouse.toast.voucherCreated"),

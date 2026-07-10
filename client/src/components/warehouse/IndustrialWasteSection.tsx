@@ -826,6 +826,13 @@ function WasteInDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: IN_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/production-hall"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/delivery-hall"],
+      });
       toast({
         title: isEdit
           ? t("warehouse.industrialWaste.updateSuccess")
@@ -1046,6 +1053,13 @@ function WasteOutDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OUT_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/production-hall"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/warehouse/delivery-hall"],
+      });
       toast({
         title: isEdit
           ? t("warehouse.industrialWaste.updateSuccess")
