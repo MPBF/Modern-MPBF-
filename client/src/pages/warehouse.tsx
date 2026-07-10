@@ -79,7 +79,10 @@ import { useToast } from "../hooks/use-toast";
 import { packagingUnitErrorToast } from "../lib/packagingUnitErrors";
 import { apiRequest } from "../lib/queryClient";
 import { userHasPermission } from "../utils/roleUtils";
-import { formatNumberAr } from "../../../shared/number-utils";
+import {
+  formatNumberAr,
+  formatNumberOfUnits,
+} from "../../../shared/number-utils";
 
 const MAIN_TABS = [
   "production-hall",
@@ -851,9 +854,23 @@ function DeliveryHallContent({
                               </td>
                               <td className="py-2 px-3 text-center whitespace-nowrap">
                                 {formatNumberAr(order.warehouse_received_kg, 2)}
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  {t("orders.numberOfUnits")}:{" "}
+                                  {formatNumberOfUnits(
+                                    order.warehouse_received_kg,
+                                    order.unit_weight_kg,
+                                  )}
+                                </div>
                               </td>
                               <td className="py-2 px-3 text-center whitespace-nowrap">
                                 {formatNumberAr(order.warehouse_delivered_kg, 2)}
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  {t("orders.numberOfUnits")}:{" "}
+                                  {formatNumberOfUnits(
+                                    order.warehouse_delivered_kg,
+                                    order.unit_weight_kg,
+                                  )}
+                                </div>
                               </td>
                               <td className="py-2 px-3 text-center whitespace-nowrap">
                                 <Badge
@@ -950,6 +967,30 @@ function DeliveryHallContent({
                               <span className="font-medium">
                                 {formatNumberAr(order.warehouse_delivered_kg, 2)}{" "}
                                 {t("warehouse.delivery.kg")}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">
+                                {t("orders.numberOfUnits")} (
+                                {t("warehouse.delivery.receivedLabel")}):
+                              </span>
+                              <span className="font-medium">
+                                {formatNumberOfUnits(
+                                  order.warehouse_received_kg,
+                                  order.unit_weight_kg,
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">
+                                {t("orders.numberOfUnits")} (
+                                {t("warehouse.delivery.deliveredLabel")}):
+                              </span>
+                              <span className="font-medium">
+                                {formatNumberOfUnits(
+                                  order.warehouse_delivered_kg,
+                                  order.unit_weight_kg,
+                                )}
                               </span>
                             </div>
                           </div>
@@ -1658,11 +1699,25 @@ function ProductionHallContent({
                                 <span className="text-teal-600 font-bold">
                                   {formatNumberAr(order.total_ready_weight, 2)}
                                 </span>
+                                <div className="text-xs font-normal text-gray-500 mt-0.5">
+                                  {t("orders.numberOfUnits")}:{" "}
+                                  {formatNumberOfUnits(
+                                    order.total_ready_weight,
+                                    order.unit_weight_kg,
+                                  )}
+                                </div>
                               </td>
                               <td className="py-2 px-3 whitespace-nowrap">
                                 <span className="text-orange-600 font-medium">
                                   {formatNumberAr(order.total_received_weight, 2)}
                                 </span>
+                                <div className="text-xs font-normal text-gray-500 mt-0.5">
+                                  {t("orders.numberOfUnits")}:{" "}
+                                  {formatNumberOfUnits(
+                                    order.total_received_weight,
+                                    order.unit_weight_kg,
+                                  )}
+                                </div>
                               </td>
                               <td className="py-2 px-3 whitespace-nowrap">
                                 <span
@@ -1795,6 +1850,17 @@ function ProductionHallContent({
                               </span>
                               <span className="text-teal-600 font-bold">
                                 {formatNumberAr(order.total_ready_weight, 2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">
+                                {t("orders.numberOfUnits")}:
+                              </span>
+                              <span className="font-medium">
+                                {formatNumberOfUnits(
+                                  order.total_ready_weight,
+                                  order.unit_weight_kg,
+                                )}
                               </span>
                             </div>
                             <div className="flex justify-between">

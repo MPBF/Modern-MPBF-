@@ -20,7 +20,10 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { formatNumberAr } from "../../../../shared/number-utils";
+import {
+  formatNumberAr,
+  formatNumberOfUnits,
+} from "../../../../shared/number-utils";
 
 import OrdersForm from "./OrdersForm";
 import OrdersSearch from "./OrdersSearch";
@@ -573,6 +576,16 @@ export default function OrdersTabs({
                                     data-testid={`text-net-quantity-${po.id}`}
                                   >
                                     {formatNumberAr(net, 2)}
+                                    <div
+                                      className="text-xs font-normal text-gray-500 mt-0.5"
+                                      data-testid={`text-units-${po.id}`}
+                                    >
+                                      {t("orders.numberOfUnits")}:{" "}
+                                      {formatNumberOfUnits(
+                                        net,
+                                        customerProduct?.unit_weight_kg,
+                                      )}
+                                    </div>
                                   </td>
                                   <td
                                     className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600"
@@ -694,6 +707,17 @@ export default function OrdersTabs({
                                   </span>
                                   <span className="font-medium text-blue-600">
                                     {formatNumberAr(net, 2)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">
+                                    {t("orders.numberOfUnits")}:
+                                  </span>
+                                  <span className="font-medium">
+                                    {formatNumberOfUnits(
+                                      net,
+                                      customerProduct?.unit_weight_kg,
+                                    )}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">

@@ -86,6 +86,51 @@ export function formatNumberAr(value: number, decimals: number = 0): string {
 }
 
 /**
+ * Calculate the number of finished units represented by a quantity in kg.
+ * عدد الوحدات = الكمية (كجم) ÷ وزن الوحدة (كجم)
+ * @param quantityKg - The quantity in kilograms (e.g. net/received/delivered)
+ * @param unitWeightKg - The weight of a single finished unit in kilograms
+ * @returns Rounded number of units, or null when it cannot be computed
+ */
+export function calculateNumberOfUnits(
+  quantityKg: number | string | null | undefined,
+  unitWeightKg: number | string | null | undefined,
+): number | null {
+  const qty = safeParseFloat(quantityKg, NaN);
+  const unit = safeParseFloat(unitWeightKg, NaN);
+
+  if (
+    !Number.isFinite(qty) ||
+    !Number.isFinite(unit) ||
+    unit <= 0
+  ) {
+    return null;
+  }
+
+  return Math.round(qty / unit);
+}
+
+/**
+ * Format the number of finished units for display.
+ * Returns a safe placeholder when the unit weight is missing or zero.
+ * @param quantityKg - The quantity in kilograms
+ * @param unitWeightKg - The weight of a single finished unit in kilograms
+ * @param placeholder - Value shown when units cannot be computed (default "—")
+ * @returns Formatted units string (Arabic numerals) or the placeholder
+ */
+export function formatNumberOfUnits(
+  quantityKg: number | string | null | undefined,
+  unitWeightKg: number | string | null | undefined,
+  placeholder: string = "—",
+): string {
+  const units = calculateNumberOfUnits(quantityKg, unitWeightKg);
+  if (units === null) {
+    return placeholder;
+  }
+  return formatNumberAr(units, 0);
+}
+
+/**
  * Validate that a value is a positive number
  * @param value - The value to check
  * @returns True if valid positive number

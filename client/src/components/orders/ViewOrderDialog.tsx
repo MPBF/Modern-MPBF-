@@ -2,7 +2,10 @@ import { format } from "date-fns";
 import { Printer } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { formatNumberAr } from "../../../../shared/number-utils";
+import {
+  formatNumberAr,
+  formatNumberOfUnits,
+} from "../../../../shared/number-utils";
 
 import { Button } from "../ui/button";
 import {
@@ -256,6 +259,17 @@ export default function ViewOrderDialog({
                               </span>
                               <p className="font-medium text-blue-600">
                                 {formatNumberAr(net, 2)}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">
+                                {t("orders.numberOfUnits")}:
+                              </span>
+                              <p className="font-medium">
+                                {formatNumberOfUnits(
+                                  net,
+                                  customerProduct?.unit_weight_kg,
+                                )}
                               </p>
                             </div>
                             <div>

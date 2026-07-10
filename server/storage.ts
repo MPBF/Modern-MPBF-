@@ -6526,7 +6526,8 @@ export class DatabaseStorage implements IStorage {
         c.name AS customer_name,
         c.name_ar AS customer_name_ar,
         COALESCE(i.name, cp.id::text) AS product_name,
-        i.name_ar AS product_name_ar
+        i.name_ar AS product_name_ar,
+        cp.unit_weight_kg AS unit_weight_kg
       FROM production_orders po
       JOIN orders o ON po.order_id = o.id
       JOIN customers c ON o.customer_id = c.id
@@ -11588,6 +11589,7 @@ export class DatabaseStorage implements IStorage {
         c.name AS customer_name,
         c.name_ar AS customer_name_ar,
         cp.item_id AS item_id,
+        cp.unit_weight_kg AS unit_weight_kg,
         COALESCE(i.name, cp.id::text) AS product_name,
         i.name_ar AS product_name_ar,
         COALESCE(SUM(r.weight_kg), 0) AS total_film_weight,
@@ -11629,7 +11631,7 @@ export class DatabaseStorage implements IStorage {
         AND po.status IS DISTINCT FROM 'archived'
         AND o.status IS DISTINCT FROM 'archived'
       GROUP BY po.id, po.production_order_number, po.order_id, po.quantity_kg, po.final_quantity_kg,
-               po.warehouse_received_kg, po.status, o.order_number, c.name, c.name_ar, i.name, i.name_ar, cp.id, cp.item_id
+               po.warehouse_received_kg, po.status, o.order_number, c.name, c.name_ar, i.name, i.name_ar, cp.id, cp.item_id, cp.unit_weight_kg
       ORDER BY po.id
     `);
     return (rows.rows as any[]).map((row) => ({

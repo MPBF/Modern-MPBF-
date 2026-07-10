@@ -439,6 +439,7 @@
     "producedQuantityKg": "الكمية المنتجة (كجم)",
     "netQuantityKg": "الكمية الصافية (كجم)",
     "wasteKg": "الهدر (كجم)",
+    "numberOfUnits": "عدد الوحدات",
     "fetchOrdersFailed": "فشل في جلب الطلبات",
     "fetchProductionOrdersFailed": "فشل في جلب أوامر الإنتاج",
     "fetchCustomersFailed": "فشل في جلب العملاء",

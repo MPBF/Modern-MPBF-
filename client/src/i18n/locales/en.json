@@ -431,6 +431,7 @@
     "producedQuantityKg": "Produced Quantity (kg)",
     "netQuantityKg": "Net Quantity (kg)",
     "wasteKg": "Waste (kg)",
+    "numberOfUnits": "Number of Units",
     "fetchOrdersFailed": "Fetch Orders Failed",
     "fetchProductionOrdersFailed": "Fetch Production Orders Failed",
     "fetchCustomersFailed": "Fetch Customers Failed",
