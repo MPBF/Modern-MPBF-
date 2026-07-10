@@ -15,8 +15,9 @@ import {
   Recycle,
   Warehouse as WarehouseIcon,
   Loader2,
+  X,
 } from "lucide-react";
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 import { useLocation } from "wouter";
@@ -175,6 +176,14 @@ function detectPerfProfile(): PerfProfile {
         antialias: true,
       };
 }
+
+// Touch-capable device detection (computed once). Used to enable
+// tap-to-select behavior on phones/tablets where hover is unavailable.
+const IS_TOUCH =
+  typeof window !== "undefined" &&
+  ((typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches) ||
+    "ontouchstart" in window);
 
 // ============================================================
 // Camera rig — smoothly moves camera + controls target per scene
@@ -364,16 +373,28 @@ function InstancedUnits({
       castShadow={castShadow}
       frustumCulled={false}
       onPointerMove={(e) => {
+        // Touch taps are handled by onClick; skipping here avoids the
+        // hover panel flashing and being cleared on finger lift.
+        if (e.pointerType === "touch") return;
         e.stopPropagation();
         if (e.instanceId == null) return;
         onOver(entries[e.instanceId].groupIdx);
       }}
-      onPointerOut={() => onOut()}
+      onPointerOut={(e) => {
+        if (e.pointerType === "touch") return;
+        onOut();
+      }}
       onClick={(e) => {
-        if (!onClickGroup) return;
         e.stopPropagation();
         if (e.instanceId == null) return;
-        onClickGroup(entries[e.instanceId].groupIdx);
+        const groupIdx = entries[e.instanceId].groupIdx;
+        if (onClickGroup) {
+          onClickGroup(groupIdx);
+        } else if (IS_TOUCH) {
+          // Scenes without a details dialog (raw/waste) show the info
+          // panel on tap and keep it until the user taps elsewhere.
+          onOver(groupIdx);
+        }
       }}
     >
       {geometry}
@@ -385,10 +406,21 @@ function InstancedUnits({
 // Shared hover-group state helper for the instanced scenes
 function useGroupHover(
   infos: HoverInfo[],
+  hover: HoverInfo | null,
   setHover: (info: HoverInfo | null) => void,
 ) {
   const [hoveredGroup, setHoveredGroup] = useState(-1);
   const hoveredRef = useRef(-1);
+  // When the panel is dismissed externally (empty-space tap or the close
+  // button clears `hover`), reset the internal highlight/selection state so
+  // tapping the same cluster again re-opens it and no stale highlight lingers.
+  useEffect(() => {
+    if (hover === null && hoveredRef.current !== -1) {
+      hoveredRef.current = -1;
+      setHoveredGroup(-1);
+      document.body.style.cursor = "auto";
+    }
+  }, [hover]);
   const onOver = (groupIdx: number) => {
     if (hoveredRef.current === groupIdx) return;
     hoveredRef.current = groupIdx;
@@ -468,15 +500,17 @@ interface PalletDatum {
 
 function InstancedPalletField({
   pallets,
+  hover,
   setHover,
   onSelect,
 }: {
   pallets: PalletDatum[];
+  hover: HoverInfo | null;
   setHover: (info: HoverInfo | null) => void;
   onSelect?: (pallet: PalletDatum) => void;
 }) {
   const infos = useMemo(() => pallets.map((p) => p.info), [pallets]);
-  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, hover, setHover);
   const onClickGroup = onSelect
     ? (groupIdx: number) => {
         const pallet = pallets[groupIdx];
@@ -701,6 +735,7 @@ function Building({
 function ProductionHallScene({
   rows,
   labels,
+  hover,
   setHover,
   onSelect,
 }: {
@@ -713,6 +748,7 @@ function ProductionHallScene({
     readyWeight: string;
     kg: string;
   };
+  hover: HoverInfo | null;
   setHover: (info: HoverInfo | null) => void;
   onSelect: (sel: SelectedPallet) => void;
 }) {
@@ -764,6 +800,7 @@ function ProductionHallScene({
       <HallShell width={hallW} depth={hallD} color="#1e40af" />
       <InstancedPalletField
         pallets={pallets}
+        hover={hover}
         setHover={setHover}
         onSelect={(p) =>
           onSelect({
@@ -784,6 +821,7 @@ function ProductionHallScene({
 function FinishedGoodsScene({
   rows,
   labels,
+  hover,
   setHover,
   onSelect,
 }: {
@@ -798,6 +836,7 @@ function FinishedGoodsScene({
     partiallyReceived: string;
     kg: string;
   };
+  hover: HoverInfo | null;
   setHover: (info: HoverInfo | null) => void;
   onSelect: (sel: SelectedPallet) => void;
 }) {
@@ -859,6 +898,7 @@ function FinishedGoodsScene({
       <HallShell width={hallW} depth={hallD} color="#047857" />
       <InstancedPalletField
         pallets={pallets}
+        hover={hover}
         setHover={setHover}
         onSelect={(p) =>
           onSelect({
@@ -880,11 +920,13 @@ function RawMaterialsScene({
   rows,
   itemNames,
   labels,
+  hover,
   setHover,
 }: {
   rows: InventoryRow[];
   itemNames: Map<string, { name: string | null; name_ar: string | null }>;
   labels: { material: string; stock: string };
+  hover: HoverInfo | null;
   setHover: (info: HoverInfo | null) => void;
 }) {
   const { language } = useLanguage();
@@ -949,7 +991,7 @@ function RawMaterialsScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [withStock, itemNames, language, labels.stock, cols, maxStock]);
 
-  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, hover, setHover);
 
   return (
     <group>
@@ -996,10 +1038,12 @@ function classifyWaste(type: string): WasteKind {
 function WasteScene({
   balances,
   labels,
+  hover,
   setHover,
 }: {
   balances: { type: string; balance: number; totalIn: number; totalOut: number; unit: string }[];
   labels: { balance: string; totalIn: string; totalOut: string };
+  hover: HoverInfo | null;
   setHover: (info: HoverInfo | null) => void;
 }) {
   const shown = useMemo(
@@ -1069,7 +1113,7 @@ function WasteScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, cols, maxBalance, labels.balance, labels.totalIn, labels.totalOut]);
 
-  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, setHover);
+  const { hoveredGroup, onOver, onOut } = useGroupHover(infos, hover, setHover);
 
   return (
     <group>
@@ -1344,19 +1388,32 @@ export default function VirtualWarehouse3D() {
                     <div className="text-sm font-bold" data-testid="text-hover-title">
                       {hover.title}
                     </div>
-                    {hover.badge && (
-                      <Badge
-                        className={
-                          hover.badge.variant === "green"
-                            ? "bg-emerald-600 text-white"
-                            : hover.badge.variant === "gray"
-                              ? "bg-slate-600 text-white"
-                              : "bg-blue-600 text-white"
-                        }
-                      >
-                        {hover.badge.text}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {hover.badge && (
+                        <Badge
+                          className={
+                            hover.badge.variant === "green"
+                              ? "bg-emerald-600 text-white"
+                              : hover.badge.variant === "gray"
+                                ? "bg-slate-600 text-white"
+                                : "bg-blue-600 text-white"
+                          }
+                        >
+                          {hover.badge.text}
+                        </Badge>
+                      )}
+                      {IS_TOUCH && (
+                        <button
+                          type="button"
+                          onClick={() => setHover(null)}
+                          className="rounded-md p-1 text-slate-400 hover:text-white hover:bg-slate-700/70"
+                          aria-label={t("virtualWarehouse.close")}
+                          data-testid="button-close-hover-panel"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {hover.lines.map((l, i) => (
                     <div
@@ -1459,6 +1516,7 @@ export default function VirtualWarehouse3D() {
             dpr={perf.dpr}
             gl={{ antialias: perf.antialias, powerPreference: "high-performance" }}
             className="!bg-transparent"
+            onPointerMissed={() => setHover(null)}
           >
             <Suspense fallback={null}>
               <PerspectiveCamera makeDefault position={SCENE_POSES.overview.pos} fov={45} />
@@ -1528,6 +1586,7 @@ export default function VirtualWarehouse3D() {
                     readyWeight: t("virtualWarehouse.readyWeight"),
                     kg: t("common.kg"),
                   }}
+                  hover={hover}
                   setHover={setHover}
                   onSelect={handleSelectPallet}
                 />
@@ -1546,6 +1605,7 @@ export default function VirtualWarehouse3D() {
                     partiallyReceived: t("virtualWarehouse.partiallyReceived"),
                     kg: t("common.kg"),
                   }}
+                  hover={hover}
                   setHover={setHover}
                   onSelect={handleSelectPallet}
                 />
@@ -1559,6 +1619,7 @@ export default function VirtualWarehouse3D() {
                     material: t("virtualWarehouse.material"),
                     stock: t("virtualWarehouse.stock"),
                   }}
+                  hover={hover}
                   setHover={setHover}
                 />
               )}
@@ -1571,6 +1632,7 @@ export default function VirtualWarehouse3D() {
                     totalIn: t("virtualWarehouse.totalIn"),
                     totalOut: t("virtualWarehouse.totalOut"),
                   }}
+                  hover={hover}
                   setHover={setHover}
                 />
               )}
