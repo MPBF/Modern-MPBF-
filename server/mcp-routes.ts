@@ -61,6 +61,25 @@ function extractAndValidateBearer(req: Request): string | null {
   return authHeader.slice(7);
 }
 
+function getBaseUrl(req: Request): string {
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const host =
+    req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+  return `${proto}://${host}`;
+}
+
+// Advertise the OAuth Protected Resource Metadata (RFC 9728) on 401 so MCP
+// clients (e.g. ChatGPT) can discover the authorization server and perform
+// Dynamic Client Registration. Without this header the client never learns
+// where to register/authorize and connection setup fails.
+function setWwwAuthenticate(req: Request, res: Response): void {
+  const baseUrl = getBaseUrl(req);
+  res.setHeader(
+    "WWW-Authenticate",
+    `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+  );
+}
+
 const authFailures = new Map<string, { count: number; lastAttempt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_FAILURES = 10;
@@ -101,6 +120,7 @@ export function registerMcpRoutes(app: Express) {
       const apiKey = extractAndValidateBearer(req);
       if (!apiKey) {
         recordAuthFailure(clientIp);
+        setWwwAuthenticate(req, res);
         res.status(401).json({
           error:
             "Missing or invalid Authorization header. Use Bearer <API_KEY>",
@@ -153,6 +173,7 @@ export function registerMcpRoutes(app: Express) {
     try {
       const apiKey = extractAndValidateBearer(req);
       if (!apiKey) {
+        setWwwAuthenticate(req, res);
         res
           .status(401)
           .json({ error: "Missing or invalid Authorization header" });
@@ -188,6 +209,7 @@ export function registerMcpRoutes(app: Express) {
     try {
       const apiKey = extractAndValidateBearer(req);
       if (!apiKey) {
+        setWwwAuthenticate(req, res);
         res
           .status(401)
           .json({ error: "Missing or invalid Authorization header" });

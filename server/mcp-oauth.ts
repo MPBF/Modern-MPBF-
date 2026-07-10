@@ -121,22 +121,49 @@ function verifyCodeChallenge(
 }
 
 export function registerMcpOAuthRoutes(app: Express) {
-  app.get(
-    "/.well-known/oauth-authorization-server",
-    (req: Request, res: Response) => {
-      const baseUrl = getBaseUrl(req);
-      res.json({
-        issuer: baseUrl,
-        authorization_endpoint: `${baseUrl}/oauth/authorize`,
-        token_endpoint: `${baseUrl}/oauth/token`,
-        registration_endpoint: `${baseUrl}/oauth/register`,
-        response_types_supported: ["code"],
-        grant_types_supported: ["authorization_code", "refresh_token"],
-        token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
-        code_challenge_methods_supported: ["S256", "plain"],
-        scopes_supported: ["mcp:read"],
-      });
-    },
+  const authServerMetadata = (req: Request) => {
+    const baseUrl = getBaseUrl(req);
+    return {
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      registration_endpoint: `${baseUrl}/oauth/register`,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+      code_challenge_methods_supported: ["S256", "plain"],
+      scopes_supported: ["mcp:read"],
+    };
+  };
+
+  const protectedResourceMetadata = (req: Request) => {
+    const baseUrl = getBaseUrl(req);
+    return {
+      resource: `${baseUrl}/mcp`,
+      authorization_servers: [baseUrl],
+      scopes_supported: ["mcp:read"],
+      bearer_methods_supported: ["header"],
+    };
+  };
+
+  // OAuth 2.0 Authorization Server Metadata (RFC 8414). Modern MCP clients
+  // (including ChatGPT) probe both the root well-known path and one suffixed
+  // with the MCP resource path, so serve both.
+  app.get("/.well-known/oauth-authorization-server", (req, res) =>
+    res.json(authServerMetadata(req)),
+  );
+  app.get("/.well-known/oauth-authorization-server/mcp", (req, res) =>
+    res.json(authServerMetadata(req)),
+  );
+
+  // OAuth 2.0 Protected Resource Metadata (RFC 9728). Required by the MCP
+  // authorization spec so clients can discover which authorization server
+  // protects the /mcp endpoint and then perform Dynamic Client Registration.
+  app.get("/.well-known/oauth-protected-resource", (req, res) =>
+    res.json(protectedResourceMetadata(req)),
+  );
+  app.get("/.well-known/oauth-protected-resource/mcp", (req, res) =>
+    res.json(protectedResourceMetadata(req)),
   );
 
   app.post("/oauth/register", async (req: Request, res: Response) => {
@@ -169,11 +196,14 @@ export function registerMcpOAuthRoutes(app: Express) {
       res.status(201).json({
         client_id: clientId,
         client_secret: clientSecret,
+        client_id_issued_at: Math.floor(Date.now() / 1000),
+        client_secret_expires_at: 0,
         client_name: client_name || "MCP Client",
         redirect_uris,
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         token_endpoint_auth_method: "client_secret_post",
+        scope: "mcp:read",
       });
     } catch (error) {
       console.error("OAuth register error:", error);
@@ -348,14 +378,25 @@ export function registerMcpOAuthRoutes(app: Express) {
           .limit(1);
 
         if (clientResults.length === 0) {
-          res.status(400).json({
-            error: "invalid_client",
-            error_description: "Client not registered",
-          });
-          return;
-        }
-
-        if (redirect_uri) {
+          // Lazily register clients we haven't seen before (e.g. a ChatGPT
+          // connector that skipped Dynamic Client Registration, or one whose
+          // registration predates a database reset). Dynamic Client
+          // Registration is already open and unauthenticated on
+          // /oauth/register, so accepting an unknown client_id here adds no new
+          // trust boundary: the real gate is the API key the user enters below
+          // plus PKCE and redirect_uri binding on the issued authorization code.
+          await db
+            .insert(mcp_oauth_clients)
+            .values({
+              client_id,
+              client_secret_hash: hashToken(
+                crypto.randomBytes(32).toString("hex"),
+              ),
+              client_name: "Auto-registered MCP Client",
+              redirect_uris: redirect_uri ? [redirect_uri] : [],
+            })
+            .onConflictDoNothing();
+        } else if (redirect_uri) {
           const registeredUris = clientResults[0].redirect_uris as string[];
           if (
             !Array.isArray(registeredUris) ||

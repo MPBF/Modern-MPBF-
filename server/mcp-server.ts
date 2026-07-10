@@ -36,6 +36,394 @@ export function createMcpServer() {
     },
   );
 
+  const appBaseUrl = (
+    process.env.APP_BASE_URL ||
+    (process.env.REPLIT_DOMAINS
+      ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+      : "")
+  ).replace(/\/$/, "");
+  const link = (path: string) => `${appBaseUrl}${path}`;
+
+  // ChatGPT connectors require two tools named exactly `search` and `fetch`.
+  // `search` returns a list of { id, title, url }; `fetch` returns the full
+  // record for a given id. Both are the standard retrieval contract used by
+  // ChatGPT's MCP connector / deep-research flows.
+  server.tool(
+    "search",
+    "Search across all factory data (orders, customers, products, production orders, rolls, machines, inventory items, categories, maintenance requests, and quality issues) using a free-text query. Returns a list of matching records, each with an id, title, and url. Use the `fetch` tool with a returned id to read the full record. This is the primary discovery tool for ChatGPT connectors.",
+    {
+      query: z
+        .string()
+        .describe("Free-text search query (Arabic or English)"),
+    },
+    async ({ query }) => {
+      const q = (query ?? "").trim();
+      const results: { id: string; title: string; url: string }[] = [];
+      if (!q) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ results }) },
+          ],
+        };
+      }
+      const like = `%${q}%`;
+      const PER = 8;
+      try {
+        const [
+          orderRows,
+          customerRows,
+          productionRows,
+          rollRows,
+          machineRows,
+          itemRows,
+          categoryRows,
+          maintenanceRows,
+          qualityRows,
+        ] = await Promise.all([
+          db
+            .select({
+              id: orders.id,
+              order_number: orders.order_number,
+              status: orders.status,
+            })
+            .from(orders)
+            .where(
+              sql`${orders.order_number} ILIKE ${like} OR ${orders.customer_id} ILIKE ${like} OR ${orders.notes} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: customers.id,
+              name: customers.name,
+              name_ar: customers.name_ar,
+            })
+            .from(customers)
+            .where(
+              sql`${customers.name} ILIKE ${like} OR ${customers.name_ar} ILIKE ${like} OR ${customers.phone} ILIKE ${like} OR ${customers.id} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: production_orders.id,
+              pon: production_orders.production_order_number,
+              status: production_orders.status,
+            })
+            .from(production_orders)
+            .where(
+              sql`${production_orders.production_order_number} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: rolls.id,
+              roll_number: rolls.roll_number,
+              stage: rolls.stage,
+            })
+            .from(rolls)
+            .where(
+              sql`${rolls.roll_number} ILIKE ${like} OR ${rolls.qr_code_text} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: machines.id,
+              name: machines.name,
+              name_ar: machines.name_ar,
+            })
+            .from(machines)
+            .where(
+              sql`${machines.name} ILIKE ${like} OR ${machines.name_ar} ILIKE ${like} OR ${machines.id} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: items.id,
+              name: items.name,
+              name_ar: items.name_ar,
+            })
+            .from(items)
+            .where(
+              sql`${items.name} ILIKE ${like} OR ${items.name_ar} ILIKE ${like} OR ${items.code} ILIKE ${like} OR ${items.id} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: categories.id,
+              name: categories.name,
+              name_ar: categories.name_ar,
+            })
+            .from(categories)
+            .where(
+              sql`${categories.name} ILIKE ${like} OR ${categories.name_ar} ILIKE ${like} OR ${categories.id} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: maintenance_requests.id,
+              request_number: maintenance_requests.request_number,
+              status: maintenance_requests.status,
+            })
+            .from(maintenance_requests)
+            .where(
+              sql`${maintenance_requests.request_number} ILIKE ${like} OR ${maintenance_requests.description} ILIKE ${like} OR ${maintenance_requests.machine_id} ILIKE ${like}`,
+            )
+            .limit(PER),
+          db
+            .select({
+              id: quality_issues.id,
+              issue_number: quality_issues.issue_number,
+              severity: quality_issues.severity,
+            })
+            .from(quality_issues)
+            .where(
+              sql`${quality_issues.issue_number} ILIKE ${like} OR ${quality_issues.description} ILIKE ${like}`,
+            )
+            .limit(PER),
+        ]);
+
+        for (const r of orderRows)
+          results.push({
+            id: `order:${r.id}`,
+            title: `طلب ${r.order_number} (${r.status})`,
+            url: link("/orders"),
+          });
+        for (const r of customerRows)
+          results.push({
+            id: `customer:${r.id}`,
+            title: `عميل: ${r.name_ar || r.name}`,
+            url: link("/customers"),
+          });
+        for (const r of productionRows)
+          results.push({
+            id: `production_order:${r.id}`,
+            title: `أمر إنتاج ${r.pon} (${r.status})`,
+            url: link("/production"),
+          });
+        for (const r of rollRows)
+          results.push({
+            id: `roll:${r.id}`,
+            title: `رول ${r.roll_number} (${r.stage})`,
+            url: link("/production"),
+          });
+        for (const r of machineRows)
+          results.push({
+            id: `machine:${r.id}`,
+            title: `ماكينة: ${r.name_ar || r.name}`,
+            url: link("/machines"),
+          });
+        for (const r of itemRows)
+          results.push({
+            id: `item:${r.id}`,
+            title: `صنف: ${r.name_ar || r.name}`,
+            url: link("/inventory"),
+          });
+        for (const r of categoryRows)
+          results.push({
+            id: `category:${r.id}`,
+            title: `فئة: ${r.name_ar || r.name}`,
+            url: link("/definitions"),
+          });
+        for (const r of maintenanceRows)
+          results.push({
+            id: `maintenance_request:${r.id}`,
+            title: `طلب صيانة ${r.request_number} (${r.status})`,
+            url: link("/maintenance"),
+          });
+        for (const r of qualityRows)
+          results.push({
+            id: `quality_issue:${r.id}`,
+            title: `مشكلة جودة ${r.issue_number} (${r.severity})`,
+            url: link("/quality"),
+          });
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ results, error: error.message }),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify({ results }) },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "fetch",
+    "Fetch the full record for a single id returned by the `search` tool. The id must be in the form `type:id` (for example `order:123`, `customer:CID001`, `roll:456`). Returns the full record as JSON text. Required companion to `search` for ChatGPT connectors.",
+    {
+      id: z
+        .string()
+        .describe("Record id in the form `type:id`, as returned by `search`"),
+    },
+    async ({ id }) => {
+      const sep = id.indexOf(":");
+      const type = sep === -1 ? "" : id.slice(0, sep);
+      const rawId = sep === -1 ? id : id.slice(sep + 1);
+      const fail = (msg: string) => ({
+        content: [
+          { type: "text" as const, text: JSON.stringify({ error: msg }) },
+        ],
+        isError: true,
+      });
+
+      try {
+        let record: any = null;
+        let title = id;
+        let url = link("/");
+
+        switch (type) {
+          case "order": {
+            const [row] = await db
+              .select()
+              .from(orders)
+              .where(eq(orders.id, Number(rawId)))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `طلب ${row.order_number}`;
+              url = link("/orders");
+            }
+            break;
+          }
+          case "customer": {
+            const [row] = await db
+              .select()
+              .from(customers)
+              .where(eq(customers.id, rawId))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `عميل: ${row.name_ar || row.name}`;
+              url = link("/customers");
+            }
+            break;
+          }
+          case "production_order": {
+            const [row] = await db
+              .select()
+              .from(production_orders)
+              .where(eq(production_orders.id, Number(rawId)))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `أمر إنتاج ${row.production_order_number}`;
+              url = link("/production");
+            }
+            break;
+          }
+          case "roll": {
+            const [row] = await db
+              .select()
+              .from(rolls)
+              .where(eq(rolls.id, Number(rawId)))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `رول ${row.roll_number}`;
+              url = link("/production");
+            }
+            break;
+          }
+          case "machine": {
+            const [row] = await db
+              .select()
+              .from(machines)
+              .where(eq(machines.id, rawId))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `ماكينة: ${row.name_ar || row.name}`;
+              url = link("/machines");
+            }
+            break;
+          }
+          case "item": {
+            const [row] = await db
+              .select()
+              .from(items)
+              .where(eq(items.id, rawId))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `صنف: ${row.name_ar || row.name}`;
+              url = link("/inventory");
+            }
+            break;
+          }
+          case "category": {
+            const [row] = await db
+              .select()
+              .from(categories)
+              .where(eq(categories.id, rawId))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `فئة: ${row.name_ar || row.name}`;
+              url = link("/definitions");
+            }
+            break;
+          }
+          case "maintenance_request": {
+            const [row] = await db
+              .select()
+              .from(maintenance_requests)
+              .where(eq(maintenance_requests.id, Number(rawId)))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `طلب صيانة ${row.request_number}`;
+              url = link("/maintenance");
+            }
+            break;
+          }
+          case "quality_issue": {
+            const [row] = await db
+              .select()
+              .from(quality_issues)
+              .where(eq(quality_issues.id, Number(rawId)))
+              .limit(1);
+            record = row;
+            if (row) {
+              title = `مشكلة جودة ${row.issue_number}`;
+              url = link("/quality");
+            }
+            break;
+          }
+          default:
+            return fail(
+              `Unknown id type "${type}". Expected one of: order, customer, production_order, roll, machine, item, category, maintenance_request, quality_issue.`,
+            );
+        }
+
+        if (!record) return fail(`No record found for id "${id}".`);
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                id,
+                title,
+                url,
+                text: JSON.stringify(record, null, 2),
+                metadata: { type },
+              }),
+            },
+          ],
+        };
+      } catch (error: any) {
+        return fail(error.message);
+      }
+    },
+  );
+
   server.tool(
     "get_dashboard_stats",
     "Get factory dashboard statistics including order counts, production stats, machine status, and inventory overview",
