@@ -13088,6 +13088,27 @@ Input: ${text}`;
     },
   );
 
+  // الحضور والانصراف اليومي لكل الموظفين (سجل مجمّع لكل مستخدم)
+  app.get(
+    "/api/hr/attendance/daily",
+    requireAuth,
+    requirePermission("view_attendance_reports", "manage_attendance", "view_hr", "manage_hr"),
+    async (req, res) => {
+      try {
+        const date =
+          (req.query.date as string) || new Date().toISOString().split("T")[0];
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return res.status(400).json({ message: "تاريخ غير صحيح" });
+        }
+        const data = await storage.getDailyAttendanceOverview(date);
+        res.json({ data, date });
+      } catch (error) {
+        console.error("Error fetching daily attendance overview:", error);
+        res.status(500).json({ message: "خطأ في جلب الحضور اليومي" });
+      }
+    },
+  );
+
   // تصدير تقرير الحضور إلى Excel
   app.get(
     "/api/hr/attendance/report/export",

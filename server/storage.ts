@@ -786,6 +786,7 @@ export interface IStorage {
   getDailyAttendanceStats(date: string): Promise<any>;
   upsertManualAttendance(entries: any[]): Promise<any[]>;
   getDailyAttendanceStatus(userId: number, date: string): Promise<any>;
+  getDailyAttendanceOverview(date: string): Promise<any[]>;
   getOpenAttendanceWithdrawal(
     attendanceId: number,
   ): Promise<AttendanceWithdrawal | null>;
@@ -3420,6 +3421,103 @@ export class DatabaseStorage implements IStorage {
       work_hours: latest.work_hours,
       records: records,
     };
+  }
+
+  // نظرة يومية على حضور كل الموظفين: دمج كل صفوف اليوم في سجل واحد لكل مستخدم
+  // (التسجيل الذاتي ينشئ صفاً منفصلاً لكل إجراء، لذا يجب التجميع وليس أخذ صف واحد)
+  async getDailyAttendanceOverview(date: string): Promise<any[]> {
+    return withDatabaseErrorHandling(
+      async () => {
+        const allUsers = await db
+          .select({
+            id: users.id,
+            username: users.username,
+            display_name: users.display_name,
+            display_name_ar: users.display_name_ar,
+            section_id: users.section_id,
+            role_name: roles.name,
+            role_name_ar: roles.name_ar,
+          })
+          .from(users)
+          .leftJoin(roles, eq(users.role_id, roles.id))
+          .where(eq(users.status, "active"))
+          .orderBy(users.display_name);
+
+        const attRows = await db
+          .select()
+          .from(attendance)
+          .where(eq(attendance.date, date));
+
+        const rowsByUser = new Map<number, any[]>();
+        for (const r of attRows as any[]) {
+          const list = rowsByUser.get(r.user_id) ?? [];
+          list.push(r);
+          rowsByUser.set(r.user_id, list);
+        }
+
+        const sectionsMap = await this.getSectionsMap();
+
+        const minTime = (vals: (Date | null)[]) => {
+          const ts = vals.filter((v): v is Date => v != null);
+          if (!ts.length) return null;
+          return ts.reduce((a, b) => (a.getTime() <= b.getTime() ? a : b));
+        };
+        const maxTime = (vals: (Date | null)[]) => {
+          const ts = vals.filter((v): v is Date => v != null);
+          if (!ts.length) return null;
+          return ts.reduce((a, b) => (a.getTime() >= b.getTime() ? a : b));
+        };
+
+        return allUsers.map((u) => {
+          const rows = rowsByUser.get(u.id) ?? [];
+          const sec =
+            u.section_id != null
+              ? sectionsMap.get(String(u.section_id))
+              : undefined;
+          const base = {
+            user_id: u.id,
+            username: u.username,
+            display_name: u.display_name,
+            display_name_ar: u.display_name_ar,
+            role_name: u.role_name,
+            role_name_ar: u.role_name_ar,
+            section_name: sec?.name ?? null,
+            section_name_ar: sec?.name_ar ?? null,
+            date,
+          };
+          if (!rows.length) {
+            return {
+              ...base,
+              current_status: "غائب",
+              check_in_time: null,
+              break_start_time: null,
+              break_end_time: null,
+              check_out_time: null,
+            };
+          }
+          // آخر صف حسب وقت الإنشاء يمثل الحالة الحالية
+          const latest = rows.reduce((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return tb >= ta ? b : a;
+          });
+          return {
+            ...base,
+            current_status: latest.status || "حاضر",
+            check_in_time: minTime(rows.map((r) => r.check_in_time)),
+            break_start_time: minTime(
+              rows.flatMap((r) => [r.lunch_start_time, r.break_start_time]),
+            ),
+            break_end_time: maxTime(
+              rows.flatMap((r) => [r.lunch_end_time, r.break_end_time]),
+            ),
+            check_out_time: maxTime(rows.map((r) => r.check_out_time)),
+          };
+        });
+      },
+      "getDailyAttendanceOverview",
+      "جلب الحضور اليومي لكل الموظفين",
+    );
   }
 
   async createAttendanceWithdrawal(
