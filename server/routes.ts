@@ -13109,6 +13109,120 @@ Input: ${text}`;
     },
   );
 
+  // تعديل سجل الحضور اليومي لموظف (للمدير فقط)
+  app.patch(
+    "/api/hr/attendance/daily",
+    requireAuth,
+    requirePermission("manage_attendance", "manage_hr"),
+    async (req, res) => {
+      try {
+        const schema = z.object({
+          user_id: z.number().int().positive(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          check_in_time: z.string().nullable().optional(),
+          break_start_time: z.string().nullable().optional(),
+          break_end_time: z.string().nullable().optional(),
+          check_out_time: z.string().nullable().optional(),
+          status: z
+            .enum([
+              "حاضر",
+              "يعمل",
+              "في الاستراحة",
+              "استراحة",
+              "استراحة غداء",
+              "منسحب",
+              "مغادر",
+              "غائب",
+              "إجازة",
+              "عطلة",
+            ])
+            .optional(),
+        });
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ message: "بيانات التعديل غير صحيحة" });
+        }
+        const body = parsed.data;
+
+        const toDate = (
+          v: string | null | undefined,
+          label: string,
+        ): Date | null | undefined => {
+          if (v === undefined) return undefined;
+          if (v === null) return null;
+          const d = new Date(v);
+          if (isNaN(d.getTime())) {
+            throw new Error(`وقت غير صحيح: ${label}`);
+          }
+          return d;
+        };
+
+        let patch: {
+          check_in_time?: Date | null;
+          break_start_time?: Date | null;
+          break_end_time?: Date | null;
+          check_out_time?: Date | null;
+          status?: string;
+        };
+        try {
+          patch = {
+            status: body.status,
+          };
+          const ci = toDate(body.check_in_time, "وقت الحضور");
+          const bs = toDate(body.break_start_time, "بداية الاستراحة");
+          const be = toDate(body.break_end_time, "نهاية الاستراحة");
+          const co = toDate(body.check_out_time, "وقت الانصراف");
+          if (ci !== undefined) patch.check_in_time = ci;
+          if (bs !== undefined) patch.break_start_time = bs;
+          if (be !== undefined) patch.break_end_time = be;
+          if (co !== undefined) patch.check_out_time = co;
+        } catch (e: any) {
+          return res.status(400).json({ message: e.message });
+        }
+
+        // تحقق منطقي بسيط على القيم المرسلة معاً
+        const t = (d: Date | null | undefined) =>
+          d instanceof Date ? d.getTime() : null;
+        const ciT = t(patch.check_in_time);
+        const coT = t(patch.check_out_time);
+        const bsT = t(patch.break_start_time);
+        const beT = t(patch.break_end_time);
+        if (ciT != null && coT != null && coT < ciT) {
+          return res
+            .status(400)
+            .json({ message: "وقت الانصراف لا يمكن أن يسبق وقت الحضور" });
+        }
+        if (bsT != null && beT != null && beT < bsT) {
+          return res.status(400).json({
+            message: "نهاية الاستراحة لا يمكن أن تسبق بدايتها",
+          });
+        }
+
+        const hasChange =
+          "check_in_time" in patch ||
+          "break_start_time" in patch ||
+          "break_end_time" in patch ||
+          "check_out_time" in patch ||
+          !!patch.status;
+        if (!hasChange) {
+          return res.status(400).json({ message: "لا توجد تعديلات" });
+        }
+
+        const currentUserId = (req as any).user?.id;
+        await storage.updateDailyAttendance(
+          body.user_id,
+          body.date,
+          patch,
+          typeof currentUserId === "number" ? currentUserId : undefined,
+        );
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error updating daily attendance:", error);
+        res.status(500).json({ message: "خطأ في تعديل سجل الحضور" });
+      }
+    },
+  );
+
   // تصدير تقرير الحضور إلى Excel
   app.get(
     "/api/hr/attendance/report/export",

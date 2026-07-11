@@ -1,13 +1,28 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Pencil, RefreshCw } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
 import { Skeleton } from "../../components/ui/skeleton";
+import { Label } from "../../components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import {
   Table,
   TableBody,
@@ -16,6 +31,10 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table";
+import { useToast } from "../../hooks/use-toast";
+import { apiRequest, queryClient } from "../../lib/queryClient";
+import { useAuth } from "../../hooks/use-auth";
+import { userHasPermission } from "../../utils/roleUtils";
 import { useLanguage } from "../../contexts/LanguageContext";
 
 function todayStr() {
@@ -72,11 +91,103 @@ const STATUS_EN: Record<string, string> = {
   "عطلة": "Holiday",
 };
 
+const EDITABLE_STATUSES = [
+  "حاضر",
+  "يعمل",
+  "في الاستراحة",
+  "استراحة غداء",
+  "مغادر",
+  "غائب",
+  "إجازة",
+  "عطلة",
+] as const;
+
+type EditForm = {
+  check_in: string;
+  break_start: string;
+  break_end: string;
+  check_out: string;
+  status: string;
+};
+
+function toTimeInput(t: string | null): string {
+  if (!t) return "";
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function timeToISO(date: string, hhmm: string): string | null {
+  if (!hhmm) return null;
+  const d = new Date(`${date}T${hhmm}:00`);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 export default function DailyAttendance() {
   const { isRTL } = useLanguage();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const L = (ar: string, en: string) => (isRTL ? ar : en);
   const [date, setDate] = useState(todayStr());
   const isToday = date === todayStr();
+  const canManage = userHasPermission(user, ["manage_attendance", "manage_hr"]);
+
+  const [editRow, setEditRow] = useState<DailyRow | null>(null);
+  const [form, setForm] = useState<EditForm>({
+    check_in: "",
+    break_start: "",
+    break_end: "",
+    check_out: "",
+    status: "حاضر",
+  });
+
+  const openEdit = (r: DailyRow) => {
+    setForm({
+      check_in: toTimeInput(r.check_in_time),
+      break_start: toTimeInput(r.break_start_time),
+      break_end: toTimeInput(r.break_end_time),
+      check_out: toTimeInput(r.check_out_time),
+      status: r.current_status || "حاضر",
+    });
+    setEditRow(r);
+  };
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editRow) return;
+      const body = {
+        user_id: editRow.user_id,
+        date,
+        check_in_time: timeToISO(date, form.check_in),
+        break_start_time: timeToISO(date, form.break_start),
+        break_end_time: timeToISO(date, form.break_end),
+        check_out_time: timeToISO(date, form.check_out),
+        status: form.status || undefined,
+      };
+      await apiRequest("/api/hr/attendance/daily", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/hr/attendance/daily"],
+      });
+      setEditRow(null);
+      toast({
+        title: L("تم حفظ التعديل بنجاح", "Changes saved successfully"),
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: L("فشل حفظ التعديل", "Failed to save changes"),
+        description: err?.message || "",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data, isLoading, isFetching, refetch } = useQuery<{
     data: DailyRow[];
@@ -218,6 +329,11 @@ export default function DailyAttendance() {
                   <TableHead className="text-center">
                     {L("الحالة الحالية", "Current Status")}
                   </TableHead>
+                  {canManage && (
+                    <TableHead className="text-center">
+                      {L("تعديل", "Edit")}
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -250,6 +366,18 @@ export default function DailyAttendance() {
                     <TableCell className="text-center">
                       {statusBadge(r.current_status)}
                     </TableCell>
+                    {canManage && (
+                      <TableCell className="text-center">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => openEdit(r)}
+                          data-testid={`button-edit-attendance-${r.user_id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -257,6 +385,122 @@ export default function DailyAttendance() {
           </div>
         )}
       </CardContent>
+
+      <Dialog
+        open={!!editRow}
+        onOpenChange={(open) => {
+          if (!open) setEditRow(null);
+        }}
+      >
+        <DialogContent dir={isRTL ? "rtl" : "ltr"}>
+          <DialogHeader>
+            <DialogTitle>
+              {L("تعديل سجل الحضور", "Edit Attendance Record")}
+              {editRow ? ` — ${empName(editRow)}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="space-y-1">
+              <Label>{L("وقت الحضور", "Check-in")}</Label>
+              <Input
+                type="time"
+                value={form.check_in}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, check_in: e.target.value }))
+                }
+                data-testid="input-edit-check-in"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{L("وقت الانصراف", "Check-out")}</Label>
+              <Input
+                type="time"
+                value={form.check_out}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, check_out: e.target.value }))
+                }
+                data-testid="input-edit-check-out"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{L("بداية الاستراحة", "Break Start")}</Label>
+              <Input
+                type="time"
+                value={form.break_start}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, break_start: e.target.value }))
+                }
+                data-testid="input-edit-break-start"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{L("العودة من الاستراحة", "Break Return")}</Label>
+              <Input
+                type="time"
+                value={form.break_end}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, break_end: e.target.value }))
+                }
+                data-testid="input-edit-break-end"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>{L("الحالة", "Status")}</Label>
+              <Select
+                value={form.status}
+                onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}
+              >
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(EDITABLE_STATUSES as readonly string[]).includes(
+                    form.status,
+                  )
+                    ? null
+                    : form.status && (
+                        <SelectItem value={form.status}>
+                          {isRTL
+                            ? form.status
+                            : STATUS_EN[form.status] || form.status}
+                        </SelectItem>
+                      )}
+                  {EDITABLE_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {isRTL ? s : STATUS_EN[s] || s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {L(
+              "اترك أي حقل وقت فارغاً لمسح قيمته من السجل.",
+              "Leave any time field empty to clear its value.",
+            )}
+          </p>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEditRow(null)}
+              disabled={editMutation.isPending}
+              data-testid="button-cancel-edit-attendance"
+            >
+              {L("إلغاء", "Cancel")}
+            </Button>
+            <Button
+              onClick={() => editMutation.mutate()}
+              disabled={editMutation.isPending}
+              data-testid="button-save-edit-attendance"
+            >
+              {editMutation.isPending
+                ? L("جاري الحفظ...", "Saving...")
+                : L("حفظ", "Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

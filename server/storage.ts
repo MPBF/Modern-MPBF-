@@ -787,6 +787,18 @@ export interface IStorage {
   upsertManualAttendance(entries: any[]): Promise<any[]>;
   getDailyAttendanceStatus(userId: number, date: string): Promise<any>;
   getDailyAttendanceOverview(date: string): Promise<any[]>;
+  updateDailyAttendance(
+    userId: number,
+    date: string,
+    patch: {
+      check_in_time?: Date | null;
+      break_start_time?: Date | null;
+      break_end_time?: Date | null;
+      check_out_time?: Date | null;
+      status?: string;
+    },
+    updatedBy?: number,
+  ): Promise<void>;
   getOpenAttendanceWithdrawal(
     attendanceId: number,
   ): Promise<AttendanceWithdrawal | null>;
@@ -3517,6 +3529,105 @@ export class DatabaseStorage implements IStorage {
       },
       "getDailyAttendanceOverview",
       "جلب الحضور اليومي لكل الموظفين",
+    );
+  }
+
+  async updateDailyAttendance(
+    userId: number,
+    date: string,
+    patch: {
+      check_in_time?: Date | null;
+      break_start_time?: Date | null;
+      break_end_time?: Date | null;
+      check_out_time?: Date | null;
+      status?: string;
+    },
+    updatedBy?: number,
+  ): Promise<void> {
+    return withDatabaseErrorHandling(
+      async () => {
+        await db.transaction(async (tx) => {
+          const rows = await tx
+            .select()
+            .from(attendance)
+            .where(
+              and(eq(attendance.user_id, userId), eq(attendance.date, date)),
+            )
+            .orderBy(attendance.created_at);
+
+          if (!rows.length) {
+            // لا توجد سجلات لهذا اليوم — أنشئ سجلاً واحداً بالقيم المعدّلة
+            await tx.insert(attendance).values({
+              user_id: userId,
+              date,
+              status: patch.status ?? "حاضر",
+              check_in_time: patch.check_in_time ?? null,
+              break_start_time: patch.break_start_time ?? null,
+              break_end_time: patch.break_end_time ?? null,
+              check_out_time: patch.check_out_time ?? null,
+              created_by: updatedBy ?? null,
+              updated_by: updatedBy ?? null,
+            } as any);
+            return;
+          }
+
+          const first = rows[0] as any;
+          const last = rows[rows.length - 1] as any;
+          const now = new Date();
+
+          // امسح الحقول المعدّلة من كل السجلات ثم ثبّت القيمة على سجل واحد
+          // (العرض يجمع بـ min/max عبر الصفوف فيجب ألا تبقى قيمة قديمة منافسة)
+          const clearAll: Record<string, any> = {};
+          if ("check_in_time" in patch) clearAll.check_in_time = null;
+          if ("break_start_time" in patch) {
+            clearAll.break_start_time = null;
+            clearAll.lunch_start_time = null;
+          }
+          if ("break_end_time" in patch) {
+            clearAll.break_end_time = null;
+            clearAll.lunch_end_time = null;
+          }
+          if ("check_out_time" in patch) clearAll.check_out_time = null;
+
+          if (Object.keys(clearAll).length > 0) {
+            await tx
+              .update(attendance)
+              .set({ ...clearAll, updated_by: updatedBy ?? null, updated_at: now })
+              .where(
+                and(eq(attendance.user_id, userId), eq(attendance.date, date)),
+              );
+          }
+
+          // القيم الجديدة: بداية اليوم على أول سجل، نهايته على آخر سجل
+          const firstSet: Record<string, any> = {};
+          if ("check_in_time" in patch && patch.check_in_time != null)
+            firstSet.check_in_time = patch.check_in_time;
+          if ("break_start_time" in patch && patch.break_start_time != null)
+            firstSet.break_start_time = patch.break_start_time;
+
+          const lastSet: Record<string, any> = {};
+          if ("break_end_time" in patch && patch.break_end_time != null)
+            lastSet.break_end_time = patch.break_end_time;
+          if ("check_out_time" in patch && patch.check_out_time != null)
+            lastSet.check_out_time = patch.check_out_time;
+          if (patch.status) lastSet.status = patch.status;
+
+          if (Object.keys(firstSet).length > 0) {
+            await tx
+              .update(attendance)
+              .set({ ...firstSet, updated_by: updatedBy ?? null, updated_at: now })
+              .where(eq(attendance.id, first.id));
+          }
+          if (Object.keys(lastSet).length > 0) {
+            await tx
+              .update(attendance)
+              .set({ ...lastSet, updated_by: updatedBy ?? null, updated_at: now })
+              .where(eq(attendance.id, last.id));
+          }
+        });
+      },
+      "updateDailyAttendance",
+      `تعديل حضور المستخدم ${userId} ليوم ${date}`,
     );
   }
 
