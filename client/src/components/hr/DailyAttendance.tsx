@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Pencil, RefreshCw } from "lucide-react";
+import { Pencil, RefreshCw, Send } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -189,6 +189,41 @@ export default function DailyAttendance() {
     },
   });
 
+  const [notifyingUserId, setNotifyingUserId] = useState<number | null>(null);
+
+  const notifyMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      await apiRequest("/api/hr/attendance/daily/notify", {
+        method: "POST",
+        body: JSON.stringify({ user_id: userId, date }),
+      });
+    },
+    onMutate: (userId: number) => {
+      setNotifyingUserId(userId);
+    },
+    onSuccess: () => {
+      toast({
+        title: L(
+          "تم إرسال إشعار الحضور عبر الواتس اب",
+          "Attendance notification sent via WhatsApp",
+        ),
+      });
+    },
+    onError: (err: any) => {
+      const msg = err?.message || "";
+      toast({
+        title: msg.includes("لا يملك رقم جوال")
+          ? L("المستخدم لا يملك رقم جوال", "User has no phone number")
+          : L("فشل إرسال الإشعار", "Failed to send notification"),
+        description: msg.includes("لا يملك رقم جوال") ? "" : msg,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setNotifyingUserId(null);
+    },
+  });
+
   const { data, isLoading, isFetching, refetch } = useQuery<{
     data: DailyRow[];
     date: string;
@@ -331,7 +366,7 @@ export default function DailyAttendance() {
                   </TableHead>
                   {canManage && (
                     <TableHead className="text-center">
-                      {L("تعديل", "Edit")}
+                      {L("إجراءات", "Actions")}
                     </TableHead>
                   )}
                 </TableRow>
@@ -368,14 +403,36 @@ export default function DailyAttendance() {
                     </TableCell>
                     {canManage && (
                       <TableCell className="text-center">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => openEdit(r)}
-                          data-testid={`button-edit-attendance-${r.user_id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openEdit(r)}
+                            title={L("تعديل السجل", "Edit record")}
+                            data-testid={`button-edit-attendance-${r.user_id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => notifyMutation.mutate(r.user_id)}
+                            disabled={notifyingUserId === r.user_id}
+                            title={L(
+                              "إرسال إشعار واتس اب",
+                              "Send WhatsApp notification",
+                            )}
+                            data-testid={`button-notify-attendance-${r.user_id}`}
+                          >
+                            <Send
+                              className={`h-4 w-4 ${
+                                notifyingUserId === r.user_id
+                                  ? "animate-pulse"
+                                  : ""
+                              }`}
+                            />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>

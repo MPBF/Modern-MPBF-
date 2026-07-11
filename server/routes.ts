@@ -13223,6 +13223,98 @@ Input: ${text}`;
     },
   );
 
+  // إرسال إشعار واتس اب بحالة الحضور اليومي لموظف
+  app.post(
+    "/api/hr/attendance/daily/notify",
+    requireAuth,
+    requirePermission("manage_attendance", "manage_hr"),
+    async (req, res) => {
+      try {
+        const schema = z.object({
+          user_id: z.number().int().positive(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        });
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ message: "بيانات غير صحيحة" });
+        }
+        const { user_id, date } = parsed.data;
+
+        const notifUser = await storage.getUserById(user_id);
+        if (!notifUser) {
+          return res.status(404).json({ message: "المستخدم غير موجود" });
+        }
+        if (!notifUser.phone || !String(notifUser.phone).trim()) {
+          return res
+            .status(400)
+            .json({ message: "المستخدم لا يملك رقم جوال" });
+        }
+
+        const overview = await storage.getDailyAttendanceOverview(date);
+        const row = (overview as any[]).find((r) => r.user_id === user_id);
+        if (!row) {
+          return res
+            .status(404)
+            .json({ message: "لا يوجد سجل حضور لهذا اليوم" });
+        }
+
+        const fmt = (t: Date | string | null) => {
+          if (!t) return "—";
+          const d = new Date(t);
+          if (isNaN(d.getTime())) return "—";
+          return d.toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Asia/Riyadh",
+          });
+        };
+
+        const displayName =
+          notifUser.display_name_ar ||
+          notifUser.display_name ||
+          notifUser.username ||
+          "";
+        const statusPhrase =
+          `ملخص حضورك ليوم ${date}: الحالة: ${row.current_status}` +
+          `، الحضور: ${fmt(row.check_in_time)}` +
+          `، بداية الاستراحة: ${fmt(row.break_start_time)}` +
+          `، العودة من الاستراحة: ${fmt(row.break_end_time)}` +
+          `، الانصراف: ${fmt(row.check_out_time)}`;
+        const timeStr = new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Riyadh",
+        });
+
+        const fullMessage = `مرحباً ${displayName}، ${statusPhrase} (${timeStr})`;
+        const result = await notificationService.sendWhatsAppMessage(
+          String(notifUser.phone),
+          fullMessage,
+          {
+            title: "تنبيه الحضور",
+            priority: "normal",
+            context_type: "attendance",
+            context_id: `daily-${date}-${user_id}`,
+            useTemplate: true,
+            templateName: "attendance_update",
+            templateVariables: [displayName, statusPhrase, timeStr],
+          },
+        );
+
+        if (!result.success) {
+          return res.status(502).json({
+            message: "تعذر إرسال الإشعار عبر الواتس اب",
+            error: result.error,
+          });
+        }
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error sending daily attendance notification:", error);
+        res.status(500).json({ message: "خطأ في إرسال الإشعار" });
+      }
+    },
+  );
+
   // تصدير تقرير الحضور إلى Excel
   app.get(
     "/api/hr/attendance/report/export",
