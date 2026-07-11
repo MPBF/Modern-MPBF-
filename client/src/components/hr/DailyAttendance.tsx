@@ -49,9 +49,13 @@ const STATUS_STYLES: Record<string, string> = {
     "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   "استراحة غداء":
     "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  "منسحب":
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   "مغادر": "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   "غائب": "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   "إجازة":
+    "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
+  "عطلة":
     "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
 };
 
@@ -61,9 +65,11 @@ const STATUS_EN: Record<string, string> = {
   "في الاستراحة": "On Break",
   "استراحة": "On Break",
   "استراحة غداء": "Lunch Break",
+  "منسحب": "Withdrawn",
   "مغادر": "Checked Out",
   "غائب": "Absent",
   "إجازة": "On Leave",
+  "عطلة": "Holiday",
 };
 
 export default function DailyAttendance() {
@@ -109,12 +115,18 @@ export default function DailyAttendance() {
 
   const counts = rows.reduce(
     (acc, r) => {
-      if (r.current_status === "غائب") acc.absent++;
+      if (
+        r.current_status === "غائب" ||
+        r.current_status === "إجازة" ||
+        r.current_status === "عطلة"
+      )
+        acc.absent++;
       else if (r.current_status === "مغادر") acc.left++;
       else if (
         r.current_status === "في الاستراحة" ||
         r.current_status === "استراحة" ||
-        r.current_status === "استراحة غداء"
+        r.current_status === "استراحة غداء" ||
+        r.current_status === "منسحب"
       )
         acc.onBreak++;
       else acc.present++;
