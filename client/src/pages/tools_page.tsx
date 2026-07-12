@@ -425,18 +425,42 @@ function ResultCard({ label, value, highlight }: ResultCardProps): JSX.Element {
 
 // ===================== 1) حاسبة وزن الأكياس =====================
 
-type BagType = "hanger" | "banana" | "no-handle" | "table-cover";
+type BagType =
+  | "hanger"
+  | "banana"
+  | "trash"
+  | "table-cover"
+  | "roll-tube"
+  | "roll-sheet";
+
+const TRASH_DENSITY = 1.15;
+const DEFAULT_DENSITY = 0.95;
+/** Banana handle die-cut: 9cm × 2cm for all sizes */
+const BANANA_CUT_W_CM = 9;
+const BANANA_CUT_H_CM = 2;
 
 function migrateLegacyBagType(t: unknown): BagType {
   if (
     t === "hanger" ||
     t === "banana" ||
-    t === "no-handle" ||
-    t === "table-cover"
+    t === "trash" ||
+    t === "table-cover" ||
+    t === "roll-tube" ||
+    t === "roll-sheet"
   )
     return t;
-  if (t === "side-gusset" || t === "flat") return "no-handle";
-  return "no-handle";
+  if (t === "no-handle" || t === "side-gusset" || t === "flat") return "trash";
+  return "trash";
+}
+
+function isRollType(t: BagType): boolean {
+  return t === "roll-tube" || t === "roll-sheet";
+}
+
+/** Approximate hanger die-cut area (cm²): cut ≈ 30% of width wide × 70% of hanger height deep */
+function getHangerCutAreaCm2(widthCm: number, hangerCm: number): number {
+  if (widthCm <= 0 || hangerCm <= 0) return 0;
+  return 0.3 * widthCm * 0.7 * hangerCm;
 }
 
 interface BagWeightRecord {
@@ -692,7 +716,7 @@ function useBagWeightHistory() {
 }
 
 function bagTypeUsesGusset(type: BagType): boolean {
-  return type === "hanger" || type === "banana";
+  return type === "hanger" || type === "banana" || type === "trash";
 }
 
 interface BagShapeSvgProps {
@@ -715,9 +739,160 @@ function BagShapeSvg({
   const shadowId = `bagShadow_${uid}`;
 
   const isTableCover = type === "table-cover";
+  const isTrash = type === "trash";
+  const isRoll = isRollType(type);
 
   const svgW = 220;
   const svgH = 280;
+
+  if (isRoll) {
+    const isTube = type === "roll-tube";
+    const rollFill = isTube ? "#dbeafe" : "#dcfce7";
+    const rollStroke = isTube ? "#2563eb" : "#16a34a";
+    const rollAccent = isTube ? "#1d4ed8" : "#15803d";
+    const wRatio =
+      widthCm > 0 ? Math.max(0.4, Math.min(1, widthCm / 100)) : 0.7;
+    const cylW = Math.round(svgW * 0.55 * wRatio);
+    const cylH = 96;
+    const cylX = Math.round((svgW - cylW) / 2);
+    const cylY = 60;
+    const rx = 16;
+    const filmY = cylY + cylH;
+    return (
+      <svg
+        viewBox={`0 0 ${svgW} ${svgH}`}
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-label="Roll preview"
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={rollFill} stopOpacity="1" />
+            <stop offset="50%" stopColor="#ffffff" stopOpacity="0.85" />
+            <stop offset="100%" stopColor={rollFill} stopOpacity="1" />
+          </linearGradient>
+          <filter id={shadowId}>
+            <feDropShadow dx="2" dy="3" stdDeviation="2" floodOpacity="0.18" />
+          </filter>
+        </defs>
+        {/* Roll cylinder */}
+        <rect
+          x={cylX}
+          y={cylY}
+          width={cylW}
+          height={cylH}
+          fill={`url(#${gradId})`}
+          stroke={rollStroke}
+          strokeWidth="1.4"
+          filter={`url(#${shadowId})`}
+        />
+        <ellipse
+          cx={cylX}
+          cy={cylY + cylH / 2}
+          rx={rx}
+          ry={cylH / 2}
+          fill={rollFill}
+          stroke={rollStroke}
+          strokeWidth="1.4"
+        />
+        <ellipse
+          cx={cylX}
+          cy={cylY + cylH / 2}
+          rx={rx * 0.35}
+          ry={cylH * 0.16}
+          fill="#ffffff"
+          stroke={rollAccent}
+          strokeWidth="1"
+        />
+        <ellipse
+          cx={cylX + cylW}
+          cy={cylY + cylH / 2}
+          rx={rx}
+          ry={cylH / 2}
+          fill={rollFill}
+          stroke={rollStroke}
+          strokeWidth="1.4"
+          opacity="0.9"
+        />
+        {/* Unwinding film */}
+        <path
+          d={`M${cylX + cylW},${filmY - 4}
+            Q${cylX + cylW + 18},${filmY + 24} ${cylX + cylW - 6},${filmY + 44}
+            L${cylX - 6},${filmY + 44}
+            L${cylX},${filmY - 4} Z`}
+          fill={rollFill}
+          fillOpacity="0.5"
+          stroke={rollStroke}
+          strokeWidth="0.8"
+          strokeDasharray={isTube ? "0" : "4,3"}
+        />
+        {/* TUBE = closed edges, SHEET = open edge marks */}
+        {isTube ? (
+          <>
+            <line
+              x1={cylX - 2}
+              y1={filmY + 12}
+              x2={cylX + cylW - 2}
+              y2={filmY + 12}
+              stroke={rollAccent}
+              strokeWidth="1"
+              opacity="0.5"
+            />
+            <line
+              x1={cylX - 4}
+              y1={filmY + 28}
+              x2={cylX + cylW - 4}
+              y2={filmY + 28}
+              stroke={rollAccent}
+              strokeWidth="1"
+              opacity="0.5"
+            />
+          </>
+        ) : (
+          <line
+            x1={cylX - 4}
+            y1={filmY + 20}
+            x2={cylX + cylW - 4}
+            y2={filmY + 20}
+            stroke={rollAccent}
+            strokeWidth="1"
+            strokeDasharray="5,4"
+            opacity="0.6"
+          />
+        )}
+        {/* Width dimension */}
+        <line
+          x1={cylX}
+          y1={cylY - 14}
+          x2={cylX + cylW}
+          y2={cylY - 14}
+          stroke={rollAccent}
+          strokeWidth="0.8"
+        />
+        <text
+          x={cylX + cylW / 2}
+          y={cylY - 20}
+          textAnchor="middle"
+          fontSize="10"
+          fill={rollAccent}
+          fontWeight="600"
+        >
+          {widthCm > 0 ? `${widthCm} سم` : ""}
+        </text>
+        <text
+          x={svgW / 2}
+          y={filmY + 70}
+          textAnchor="middle"
+          fontSize="13"
+          fill={rollAccent}
+          fontWeight="700"
+        >
+          {isTube ? "TUBE رول" : "SHEET رول"}
+        </text>
+      </svg>
+    );
+  }
 
   const widthRef = isTableCover ? 100 : 60;
   const lengthRef = isTableCover ? 70 : 80;
@@ -751,9 +926,9 @@ function BagShapeSvg({
   const bagX = Math.round((svgW - bagW) / 2);
   const bagY = Math.round((svgH - bagH - earH) / 2 + earH);
 
-  const fill = isTableCover ? "#fce7f3" : "#dbeafe";
-  const stroke = isTableCover ? "#db2777" : "#2563eb";
-  const accent = isTableCover ? "#be185d" : "#1d4ed8";
+  const fill = isTableCover ? "#fce7f3" : isTrash ? "#e2e8f0" : "#dbeafe";
+  const stroke = isTableCover ? "#db2777" : isTrash ? "#475569" : "#2563eb";
+  const accent = isTableCover ? "#be185d" : isTrash ? "#334155" : "#1d4ed8";
 
   const sideGussetW =
     sideGussetCm > 0 && bagTypeUsesGusset(type)
@@ -870,13 +1045,16 @@ function BagShapeSvg({
         </>
       )}
 
-      {/* Banana handle die-cut: fixed 8cm wide × 2cm tall */}
+      {/* Banana handle die-cut: fixed 9cm wide × 2cm tall */}
       {type === "banana" &&
         (() => {
           const w8 = widthCm > 0 ? widthCm : 30;
-          const cutoutWidthRatio = Math.min(0.7, 8 / w8);
+          const cutoutWidthRatio = Math.min(0.7, BANANA_CUT_W_CM / w8);
           const lForH = lengthCm > 0 ? lengthCm : 40;
-          const cutoutHeightRatio = Math.min(0.12, 2 / lForH);
+          const cutoutHeightRatio = Math.min(
+            0.12,
+            BANANA_CUT_H_CM / lForH,
+          );
           const holeW = bagW * cutoutWidthRatio;
           const holeH = bagH * cutoutHeightRatio;
           const cx = bagX + bagW / 2;
@@ -900,9 +1078,29 @@ function BagShapeSvg({
                 fontWeight="600"
                 opacity="0.75"
               >
-                8 × 2 سم
+                {BANANA_CUT_W_CM} × {BANANA_CUT_H_CM} سم
               </text>
             </g>
+          );
+        })()}
+
+      {/* Trash bag: gathered/wavy top edge */}
+      {isTrash &&
+        (() => {
+          const segs = 6;
+          const segW = bagW / segs;
+          let d = `M${bagX},${bagY}`;
+          for (let i = 0; i < segs; i++) {
+            const x0 = bagX + i * segW;
+            d += ` Q${x0 + segW / 2},${bagY + (i % 2 === 0 ? -7 : 7)} ${x0 + segW},${bagY}`;
+          }
+          return (
+            <path
+              d={d}
+              fill="none"
+              stroke={stroke}
+              strokeWidth="1.4"
+            />
           );
         })()}
 
@@ -975,15 +1173,24 @@ function BagWeightCalculator({
   const [widthCm, setWidthCm] = useState<number>(30);
   const [lengthCm, setLengthCm] = useState<number>(40);
   const [thicknessMicron, setThicknessMicron] = useState<number>(18);
-  const [layers, setLayers] = useState<number>(2);
-  const [density, setDensity] = useState<number>(0.95);
+  const [density, setDensity] = useState<number>(DEFAULT_DENSITY);
   const [sideGussetCm, setSideGussetCm] = useState<number>(0);
+  const [bagsCount, setBagsCount] = useState<number>(1000);
+  const [weightInputKg, setWeightInputKg] = useState<number>(25);
+  const [rollWeightKg, setRollWeightKg] = useState<number>(50);
+  const [rollMeters, setRollMeters] = useState<number>(1000);
   const { history, addRecord, clearHistory, deleteRecord } =
     useBagWeightHistory();
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const usesGusset = bagTypeUsesGusset(bagType);
   const isTableCover = bagType === "table-cover";
+  const isRoll = isRollType(bagType);
+
+  const handleTypeChange = (v: BagType) => {
+    setBagType(v);
+    setDensity(v === "trash" ? TRASH_DENSITY : DEFAULT_DENSITY);
+  };
 
   useEffect(() => {
     onDims?.({ widthCm, lengthCm });
@@ -1002,28 +1209,65 @@ function BagWeightCalculator({
     const w = toNumber(widthCm);
     const l = toNumber(lengthCm);
     const g = toNumber(sideGussetCm);
+    const d = toNumber(density);
+    const layersUsed = isTableCover || bagType === "roll-sheet" ? 1 : 2;
+
+    if (isRoll) {
+      // وزن المتر الطولي من الرول (جم/متر)
+      const gramsPerMeter = Math.max(0, w * 100 * layersUsed * t_cm * d);
+      const metersPerKg = gramsPerMeter > 0 ? 1000 / gramsPerMeter : 0;
+      const areaM2 = (w / 100) * layersUsed; // مساحة الفيلم لكل متر طولي
+      return {
+        layersUsed,
+        gramsPerBag: 0,
+        bagsPerKg: 0,
+        areaM2,
+        gramsPerMeter,
+        metersPerKg,
+        excludedCm2: 0,
+      } as const;
+    }
+
     const effWidth = usesGusset ? w + 2 * g : w;
     const effLength = bagType === "hanger" && l > 0 && w > 0 ? l + hangerCm : l;
-    const layersUsed = isTableCover ? 1 : Math.max(1, toNumber(layers));
-    const gramsPerBag = Math.max(
-      0,
-      effWidth * effLength * layersUsed * t_cm * toNumber(density),
-    );
+    let excludedCm2 = 0;
+    if (bagType === "hanger") {
+      excludedCm2 = getHangerCutAreaCm2(w, hangerCm);
+    } else if (bagType === "banana") {
+      excludedCm2 = BANANA_CUT_W_CM * BANANA_CUT_H_CM;
+    }
+    const grossAreaCm2 = effWidth * effLength;
+    const netAreaCm2 = Math.max(0, grossAreaCm2 - excludedCm2);
+    const gramsPerBag = Math.max(0, netAreaCm2 * layersUsed * t_cm * d);
     const bagsPerKg = gramsPerBag > 0 ? 1000 / gramsPerBag : 0;
-    const areaM2 = (effWidth / 100) * (effLength / 100);
-    return { gramsPerBag, bagsPerKg, areaM2 } as const;
+    const areaM2 = netAreaCm2 / 10000;
+    return {
+      layersUsed,
+      gramsPerBag,
+      bagsPerKg,
+      areaM2,
+      gramsPerMeter: 0,
+      metersPerKg: 0,
+      excludedCm2,
+    } as const;
   }, [
     bagType,
     widthCm,
     lengthCm,
     thicknessMicron,
-    layers,
     density,
     sideGussetCm,
     usesGusset,
     isTableCover,
+    isRoll,
     hangerCm,
   ]);
+
+  // محولات الكميات
+  const bagsToWeightKg = (toNumber(bagsCount) * result.gramsPerBag) / 1000;
+  const weightToBags = toNumber(weightInputKg) * result.bagsPerKg;
+  const rollWeightToMeters = toNumber(rollWeightKg) * result.metersPerKg;
+  const metersToWeightKg = (toNumber(rollMeters) * result.gramsPerMeter) / 1000;
 
   useEffect(() => {
     onBagWeight?.(result.gramsPerBag || 0);
@@ -1033,13 +1277,13 @@ function BagWeightCalculator({
     addRecord({
       bagType,
       widthCm,
-      lengthCm,
+      lengthCm: isRoll ? 100 : lengthCm,
       sideGussetCm: usesGusset ? sideGussetCm : 0,
       thicknessMicron,
-      layers: isTableCover ? 1 : layers,
+      layers: result.layersUsed,
       density,
-      gramsPerBag: result.gramsPerBag,
-      bagsPerKg: result.bagsPerKg,
+      gramsPerBag: isRoll ? result.gramsPerMeter : result.gramsPerBag,
+      bagsPerKg: isRoll ? result.metersPerKg : result.bagsPerKg,
       areaM2: result.areaM2,
     });
   };
@@ -1065,10 +1309,14 @@ function BagWeightCalculator({
         return t("tools.bagWeight.hanger");
       case "banana":
         return t("tools.bagWeight.banana");
-      case "no-handle":
-        return t("tools.bagWeight.noHandle");
+      case "trash":
+        return t("tools.bagWeight.trash");
       case "table-cover":
         return t("tools.bagWeight.tableCover");
+      case "roll-tube":
+        return t("tools.bagWeight.rollTube");
+      case "roll-sheet":
+        return t("tools.bagWeight.rollSheet");
       default:
         return type;
     }
@@ -1157,13 +1405,13 @@ function BagWeightCalculator({
       createdAt: new Date().toLocaleString("en-US"),
       bagType,
       widthCm,
-      lengthCm,
+      lengthCm: isRoll ? 100 : lengthCm,
       sideGussetCm: usesGusset ? sideGussetCm : 0,
       thicknessMicron,
-      layers: isTableCover ? 1 : layers,
+      layers: result.layersUsed,
       density,
-      gramsPerBag: result.gramsPerBag,
-      bagsPerKg: result.bagsPerKg,
+      gramsPerBag: isRoll ? result.gramsPerMeter : result.gramsPerBag,
+      bagsPerKg: isRoll ? result.metersPerKg : result.bagsPerKg,
       areaM2: result.areaM2,
     };
     directPrint([currentRecord]);
@@ -1173,134 +1421,241 @@ function BagWeightCalculator({
     onPrintRef?.(handlePrintCurrent);
   });
 
+  const ALL_BAG_TYPES: BagType[] = [
+    "hanger",
+    "banana",
+    "trash",
+    "table-cover",
+    "roll-tube",
+    "roll-sheet",
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="space-y-4 lg:col-span-2">
-          <div className="flex items-start gap-4">
-            <div className="flex-1 space-y-4">
-              <SelectField
-                label={t("tools.bagWeight.type")}
-                value={bagType}
-                onChange={(v) => setBagType(v as BagType)}
-                options={[
-                  { value: "hanger", label: t("tools.bagWeight.hanger") },
-                  { value: "banana", label: t("tools.bagWeight.banana") },
-                  { value: "no-handle", label: t("tools.bagWeight.noHandle") },
-                  {
-                    value: "table-cover",
-                    label: t("tools.bagWeight.tableCover"),
-                  },
-                ]}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <InputField
-                  label={t("tools.bagWeight.width")}
-                  value={widthCm}
-                  onChange={setWidthCm}
-                  suffix={t("tools.common.cm")}
-                />
-                <InputField
-                  label={t("tools.bagWeight.length")}
-                  value={lengthCm}
-                  onChange={setLengthCm}
-                  suffix={t("tools.common.cm")}
-                />
-              </div>
-              {usesGusset ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <InputField
-                    label={t("tools.bagWeight.gusset")}
-                    value={sideGussetCm}
-                    onChange={setSideGussetCm}
-                    suffix={t("tools.common.cm")}
-                    hint={t("tools.bagWeight.perSide")}
-                  />
-                  <InputField
-                    label={t("tools.bagWeight.thickness")}
-                    value={thicknessMicron}
-                    onChange={setThicknessMicron}
-                    suffix="μm"
-                  />
-                </div>
-              ) : (
-                <InputField
-                  label={t("tools.bagWeight.thickness")}
-                  value={thicknessMicron}
-                  onChange={setThicknessMicron}
-                  suffix="μm"
-                />
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                {!isTableCover && (
-                  <InputField
-                    label={t("tools.bagWeight.layers")}
-                    value={layers}
-                    onChange={setLayers}
-                    step={1}
-                  />
-                )}
-                <InputField
-                  label={t("tools.bagWeight.density")}
-                  value={density}
-                  onChange={setDensity}
-                  step={0.01}
-                  suffix="g/cm³"
-                />
-              </div>
-              {bagType === "hanger" && (
-                <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2">
-                  {t("tools.bagWeight.hangerHeightAuto", { value: hangerCm })}
-                </div>
-              )}
-            </div>
-            <div className="hidden md:flex w-36 flex-shrink-0 flex-col items-center gap-2">
+      {/* اختيار النوع - بطاقات مرئية */}
+      <div className="space-y-2">
+        <span className="text-sm font-medium">
+          {t("tools.bagWeight.type")}
+        </span>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {ALL_BAG_TYPES.map((bt) => (
+            <button
+              key={bt}
+              type="button"
+              onClick={() => handleTypeChange(bt)}
+              data-testid={`button-bag-type-${bt}`}
+              className={`rounded-xl border p-2 flex flex-col items-center gap-1 transition-all ${
+                bagType === bt
+                  ? "border-primary ring-2 ring-primary/40 bg-primary/5"
+                  : "border-border hover:border-primary/40 hover:bg-muted/50"
+              }`}
+            >
               <BagShapeSvg
-                type={bagType}
-                widthCm={toNumber(widthCm)}
-                lengthCm={toNumber(lengthCm)}
-                sideGussetCm={usesGusset ? toNumber(sideGussetCm) : 0}
-                className="w-full h-auto transition-all duration-300"
+                type={bt}
+                widthCm={0}
+                lengthCm={0}
+                sideGussetCm={0}
+                className="w-14 h-16"
               />
-              <span className="text-[11px] font-medium text-muted-foreground text-center">
-                {getBagTypeLabel(bagType)}
+              <span className="text-[11px] font-medium text-center leading-tight">
+                {getBagTypeLabel(bt)}
               </span>
-            </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* المدخلات */}
+        <div className="space-y-4">
+          <h3 className="font-semibold text-lg">
+            {t("tools.bagWeight.dimensions")}
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <InputField
+              label={
+                isRoll
+                  ? t("tools.bagWeight.rollWidth")
+                  : t("tools.bagWeight.width")
+              }
+              value={widthCm}
+              onChange={setWidthCm}
+              suffix={t("tools.common.cm")}
+            />
+            {!isRoll && (
+              <InputField
+                label={t("tools.bagWeight.length")}
+                value={lengthCm}
+                onChange={setLengthCm}
+                suffix={t("tools.common.cm")}
+              />
+            )}
+            {usesGusset && (
+              <InputField
+                label={t("tools.bagWeight.gusset")}
+                value={sideGussetCm}
+                onChange={setSideGussetCm}
+                suffix={t("tools.common.cm")}
+                hint={t("tools.bagWeight.perSide")}
+              />
+            )}
+            <InputField
+              label={t("tools.bagWeight.thickness")}
+              value={thicknessMicron}
+              onChange={setThicknessMicron}
+              suffix="μm"
+            />
+            <InputField
+              label={t("tools.bagWeight.density")}
+              value={density}
+              onChange={setDensity}
+              step={0.01}
+              suffix="g/cm³"
+            />
           </div>
+          {bagType === "hanger" && (
+            <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2 space-y-1">
+              <div>
+                {t("tools.bagWeight.hangerHeightAuto", { value: hangerCm })}
+              </div>
+              <div>
+                {t("tools.bagWeight.hangerCutHint", {
+                  value: fmtFixed(result.excludedCm2, 1),
+                })}
+              </div>
+            </div>
+          )}
+          {bagType === "banana" && (
+            <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2">
+              {t("tools.bagWeight.bananaCutHint")}
+            </div>
+          )}
+          {bagType === "trash" && (
+            <div className="text-xs text-muted-foreground bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              {t("tools.bagWeight.trashDensityHint", {
+                value: TRASH_DENSITY,
+              })}
+            </div>
+          )}
+          {isTableCover && (
+            <div className="text-xs text-muted-foreground bg-pink-50 dark:bg-pink-950/30 border border-pink-100 dark:border-pink-900 rounded-lg px-3 py-2">
+              {t("tools.bagWeight.tableCoverHint")}
+            </div>
+          )}
+          {isRoll && (
+            <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2">
+              {bagType === "roll-tube"
+                ? t("tools.bagWeight.rollTubeHint")
+                : t("tools.bagWeight.rollSheetHint")}
+            </div>
+          )}
         </div>
 
+        {/* المجسم */}
+        <div className="flex flex-col items-center justify-center gap-2">
+          <BagShapeSvg
+            type={bagType}
+            widthCm={toNumber(widthCm)}
+            lengthCm={toNumber(lengthCm)}
+            sideGussetCm={usesGusset ? toNumber(sideGussetCm) : 0}
+            className="w-44 md:w-52 h-auto transition-all duration-300"
+          />
+          <span className="text-xs font-semibold text-muted-foreground">
+            {getBagTypeLabel(bagType)}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {t("tools.bagWeight.layersUsed", { value: result.layersUsed })}
+          </span>
+        </div>
+
+        {/* النتائج */}
         <div className="space-y-4">
-          <div className="md:hidden flex flex-col items-center gap-1 mb-4">
-            <BagShapeSvg
-              type={bagType}
-              widthCm={toNumber(widthCm)}
-              lengthCm={toNumber(lengthCm)}
-              sideGussetCm={usesGusset ? toNumber(sideGussetCm) : 0}
-              className="w-28 h-auto"
-            />
-            <span className="text-[11px] font-medium text-muted-foreground">
-              {getBagTypeLabel(bagType)}
-            </span>
-          </div>
           <h3 className="font-semibold text-lg flex items-center gap-2">
             <Scale className="h-5 w-5 text-primary" />
             {t("tools.bagWeight.results")}
           </h3>
-          <div className="grid gap-3">
-            <ResultCard
-              label={t("tools.bagWeight.weightPerBag")}
-              value={`${fmtFixed(result.gramsPerBag, 3)} ${t("tools.common.gram")}`}
-              highlight
-            />
-            <ResultCard
-              label={t("tools.bagWeight.bagsPerKg")}
-              value={`${fmtFixed(result.bagsPerKg, 1)} ${t("tools.common.bag")}`}
-            />
-            <ResultCard
-              label={t("tools.bagWeight.area")}
-              value={`${fmtFixed(result.areaM2, 4)} ${t("tools.common.sqm")}`}
-            />
-          </div>
+          {isRoll ? (
+            <div className="grid gap-3">
+              <ResultCard
+                label={t("tools.bagWeight.gramsPerMeter")}
+                value={`${fmtFixed(result.gramsPerMeter, 2)} ${t("tools.common.gram")}`}
+                highlight
+              />
+              <ResultCard
+                label={t("tools.bagWeight.metersPerKg")}
+                value={`${fmtFixed(result.metersPerKg, 2)} ${t("tools.common.meter")}`}
+              />
+              <div className="rounded-xl border p-3 space-y-2">
+                <InputField
+                  label={t("tools.bagWeight.rollWeight")}
+                  value={rollWeightKg}
+                  onChange={setRollWeightKg}
+                  suffix={t("tools.common.kg")}
+                />
+                <div className="text-sm font-semibold text-primary">
+                  {t("tools.bagWeight.rollLengthResult", {
+                    value: fmtFixed(rollWeightToMeters, 1),
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border p-3 space-y-2">
+                <InputField
+                  label={t("tools.bagWeight.rollLength")}
+                  value={rollMeters}
+                  onChange={setRollMeters}
+                  suffix={t("tools.common.meter")}
+                />
+                <div className="text-sm font-semibold text-primary">
+                  {t("tools.bagWeight.rollWeightResult", {
+                    value: fmtFixed(metersToWeightKg, 2),
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              <ResultCard
+                label={t("tools.bagWeight.weightPerBag")}
+                value={`${fmtFixed(result.gramsPerBag, 3)} ${t("tools.common.gram")}`}
+                highlight
+              />
+              <ResultCard
+                label={t("tools.bagWeight.bagsPerKg")}
+                value={`${fmtFixed(result.bagsPerKg, 1)} ${t("tools.common.bag")}`}
+              />
+              <ResultCard
+                label={t("tools.bagWeight.area")}
+                value={`${fmtFixed(result.areaM2, 4)} ${t("tools.common.sqm")}`}
+              />
+              <div className="rounded-xl border p-3 space-y-2">
+                <InputField
+                  label={t("tools.bagWeight.bagsCount")}
+                  value={bagsCount}
+                  onChange={setBagsCount}
+                  step={100}
+                  suffix={t("tools.common.bag")}
+                />
+                <div className="text-sm font-semibold text-primary">
+                  {t("tools.bagWeight.bagsToWeightResult", {
+                    value: fmtFixed(bagsToWeightKg, 2),
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border p-3 space-y-2">
+                <InputField
+                  label={t("tools.bagWeight.weightInput")}
+                  value={weightInputKg}
+                  onChange={setWeightInputKg}
+                  suffix={t("tools.common.kg")}
+                />
+                <div className="text-sm font-semibold text-primary">
+                  {t("tools.bagWeight.weightToBagsResult", {
+                    value: fmtFixed(weightToBags, 0),
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
           <Button onClick={handleSaveRecord} className="w-full">
             <Scale className="h-4 w-4 ml-2" />
             {t("tools.bagWeight.saveRecord")}
@@ -1881,6 +2236,11 @@ function OrderCostCalculator({
           {t("tools.orderCost.useBagWeight")} ({fmtFixed(sharedBagWeightG, 3)}{" "}
           {t("tools.common.gram")})
         </label>
+        {useShared && !(sharedBagWeightG > 0) && (
+          <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+            {t("tools.orderCost.sharedZeroHint")}
+          </div>
+        )}
         {!useShared && (
           <InputField
             label={t("tools.orderCost.bagWeight")}
@@ -2125,6 +2485,11 @@ function OrderCostAdvanced({
             />
             {t("tools.orderCost.useBagWeight")}
           </label>
+          {useShared && !(sharedBagWeightG > 0) && (
+            <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+              {t("tools.orderCost.sharedZeroHint")}
+            </div>
+          )}
           {!useShared && (
             <InputField
               label={t("tools.orderCost.bagWeight")}

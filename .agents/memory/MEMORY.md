@@ -40,3 +40,4 @@
 - [PDF template path traversal](security-fixes.md) — /api/pdf/generate & generatePDFFromTemplate must resolve template paths and reject anything escaping the templates dir (was arbitrary file read for any authed user).
 - [Punching hook/banana detection](punching-hook-detection.md) — overrun % from substring match on punching (hook/علاقي/t-shirt=20%, banana/بنانة=10%, else 5%); new علاقي* variants auto-inherit, no enum.
 - [Dominant color extraction](color-extraction-clustering.md) — extractColors uses LAB weighted k-means + shade-merge → area-share %; ignoreWhite default true (bag substrate), % intentionally may not sum to 100.
+- [Bag-weight calculator types](bag-weight-calculator-types.md) — 6-type exclusion/layer physics; rolls store g/m as gramsPerBag with lengthCm=100; shared weight 0 for rolls means "enter manually".
