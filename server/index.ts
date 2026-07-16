@@ -1099,6 +1099,29 @@ function sanitizeResponseForLogging(response: any): any {
         CREATE INDEX IF NOT EXISTS idx_roll_edit_logs_roll
         ON roll_edit_logs (roll_id)
       `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS quality_inspection_forms (
+          id serial PRIMARY KEY,
+          form_number varchar(50) NOT NULL UNIQUE,
+          template_type varchar(30) NOT NULL,
+          production_order_id integer REFERENCES production_orders(id),
+          machine_id varchar(20) REFERENCES machines(id),
+          operator_id integer REFERENCES users(id),
+          inspector_id integer REFERENCES users(id),
+          shift varchar(20),
+          sample_size integer,
+          items jsonb NOT NULL,
+          overall_result varchar(10) NOT NULL DEFAULT 'pass',
+          notes text,
+          inspected_at timestamp DEFAULT now(),
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_quality_inspection_forms_type
+        ON quality_inspection_forms (template_type)
+      `);
 
       // Idempotent baseline knowledge for each machine family (extruder / printer / cutter).
       // Inserted only when an entry with the same title does not already exist, so it is

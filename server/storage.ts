@@ -93,6 +93,9 @@ import {
   type InsertQualityIssueResponsible,
   type QualityIssueAction,
   type InsertQualityIssueAction,
+  quality_inspection_forms,
+  type QualityInspectionForm,
+  type InsertQualityInspectionForm,
 
   // نظام الخلط المبسط
   mixing_batches,
@@ -758,6 +761,23 @@ export interface IStorage {
   // Quality Control
   getQualityChecksByRoll(rollId: number): Promise<QualityCheck[]>;
   createQualityCheck(check: any): Promise<QualityCheck>;
+
+  // Quality Inspection Forms (نماذج فحص الجودة)
+  getQualityInspectionForms(filters?: {
+    template_type?: string;
+    overall_result?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<any[]>;
+  getQualityInspectionFormById(id: number): Promise<any | null>;
+  createQualityInspectionForm(
+    data: InsertQualityInspectionForm,
+  ): Promise<QualityInspectionForm>;
+  updateQualityInspectionForm(
+    id: number,
+    data: Partial<InsertQualityInspectionForm>,
+  ): Promise<QualityInspectionForm | null>;
+  deleteQualityInspectionForm(id: number): Promise<boolean>;
 
   // Attendance
   getAttendanceByDate(date: string): Promise<any[]>;
@@ -13489,6 +13509,135 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(quality_issues)
       .where(eq(quality_issues.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  private qualityInspectionFormBaseQuery() {
+    const operatorUser = alias(users, "qif_operator");
+    const inspectorUser = alias(users, "qif_inspector");
+    return db
+      .select({
+        id: quality_inspection_forms.id,
+        form_number: quality_inspection_forms.form_number,
+        template_type: quality_inspection_forms.template_type,
+        production_order_id: quality_inspection_forms.production_order_id,
+        machine_id: quality_inspection_forms.machine_id,
+        operator_id: quality_inspection_forms.operator_id,
+        inspector_id: quality_inspection_forms.inspector_id,
+        shift: quality_inspection_forms.shift,
+        sample_size: quality_inspection_forms.sample_size,
+        items: quality_inspection_forms.items,
+        overall_result: quality_inspection_forms.overall_result,
+        notes: quality_inspection_forms.notes,
+        inspected_at: quality_inspection_forms.inspected_at,
+        created_at: quality_inspection_forms.created_at,
+        updated_at: quality_inspection_forms.updated_at,
+        production_order_number: production_orders.production_order_number,
+        machine_name: machines.name,
+        machine_name_ar: machines.name_ar,
+        operator_name: operatorUser.display_name,
+        operator_name_ar: operatorUser.display_name_ar,
+        inspector_name: inspectorUser.display_name,
+        inspector_name_ar: inspectorUser.display_name_ar,
+      })
+      .from(quality_inspection_forms)
+      .leftJoin(
+        production_orders,
+        eq(quality_inspection_forms.production_order_id, production_orders.id),
+      )
+      .leftJoin(machines, eq(quality_inspection_forms.machine_id, machines.id))
+      .leftJoin(
+        operatorUser,
+        eq(quality_inspection_forms.operator_id, operatorUser.id),
+      )
+      .leftJoin(
+        inspectorUser,
+        eq(quality_inspection_forms.inspector_id, inspectorUser.id),
+      );
+  }
+
+  async getQualityInspectionForms(filters?: {
+    template_type?: string;
+    overall_result?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<any[]> {
+    const conditions = [] as any[];
+    if (filters?.template_type)
+      conditions.push(
+        eq(quality_inspection_forms.template_type, filters.template_type),
+      );
+    if (filters?.overall_result)
+      conditions.push(
+        eq(quality_inspection_forms.overall_result, filters.overall_result),
+      );
+    if (filters?.dateFrom)
+      conditions.push(
+        sql`${quality_inspection_forms.inspected_at} >= ${filters.dateFrom}`,
+      );
+    if (filters?.dateTo)
+      conditions.push(
+        sql`${quality_inspection_forms.inspected_at} <= ${filters.dateTo}::date + interval '1 day'`,
+      );
+    let query = this.qualityInspectionFormBaseQuery();
+    const rows = conditions.length
+      ? await query.where(and(...conditions)).orderBy(
+          desc(quality_inspection_forms.id),
+        )
+      : await query.orderBy(desc(quality_inspection_forms.id));
+    return rows;
+  }
+
+  async getQualityInspectionFormById(id: number): Promise<any | null> {
+    const [row] = await this.qualityInspectionFormBaseQuery().where(
+      eq(quality_inspection_forms.id, id),
+    );
+    return row || null;
+  }
+
+  async createQualityInspectionForm(
+    data: InsertQualityInspectionForm,
+  ): Promise<QualityInspectionForm> {
+    // Retry on unique-violation to tolerate concurrent numbering races.
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const [maxNum] = await db
+        .select({
+          max: sql<number>`COALESCE(MAX(CAST(SUBSTRING(form_number FROM 4) AS integer)), 0)`,
+        })
+        .from(quality_inspection_forms);
+      const formNumber = `QF-${String((maxNum?.max || 0) + 1 + attempt).padStart(4, "0")}`;
+      try {
+        const [form] = await db
+          .insert(quality_inspection_forms)
+          .values({ ...data, form_number: formNumber })
+          .returning();
+        return form;
+      } catch (e: any) {
+        lastError = e;
+        if (e?.code !== "23505") throw e;
+      }
+    }
+    throw lastError;
+  }
+
+  async updateQualityInspectionForm(
+    id: number,
+    data: Partial<InsertQualityInspectionForm>,
+  ): Promise<QualityInspectionForm | null> {
+    const [form] = await db
+      .update(quality_inspection_forms)
+      .set({ ...data, updated_at: new Date() })
+      .where(eq(quality_inspection_forms.id, id))
+      .returning();
+    return form || null;
+  }
+
+  async deleteQualityInspectionForm(id: number): Promise<boolean> {
+    const result = await db
+      .delete(quality_inspection_forms)
+      .where(eq(quality_inspection_forms.id, id))
       .returning();
     return result.length > 0;
   }

@@ -4788,6 +4788,57 @@ export type InsertQualityIssueAction = z.infer<
 >;
 export type QualityIssueAction = typeof quality_issue_actions.$inferSelect;
 
+// 📋 نماذج فحص الجودة القابلة للتعبئة
+export const quality_inspection_forms = pgTable("quality_inspection_forms", {
+  id: serial("id").primaryKey(),
+  form_number: varchar("form_number", { length: 50 }).notNull().unique(),
+  template_type: varchar("template_type", { length: 30 }).notNull(), // film / printing / cutting / final_product
+  production_order_id: integer("production_order_id").references(
+    () => production_orders.id,
+  ),
+  machine_id: varchar("machine_id", { length: 20 }).references(
+    () => machines.id,
+  ),
+  operator_id: integer("operator_id").references(() => users.id),
+  inspector_id: integer("inspector_id").references(() => users.id),
+  shift: varchar("shift", { length: 20 }), // morning / evening / night
+  sample_size: integer("sample_size"),
+  // [{ key, result: 'pass'|'fail'|'na', note? }]
+  items: jsonb("items").notNull(),
+  overall_result: varchar("overall_result", { length: 10 })
+    .notNull()
+    .default("pass"), // pass / fail
+  notes: text("notes"),
+  inspected_at: timestamp("inspected_at").defaultNow(),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+export const inspectionItemResultSchema = z.object({
+  key: z.string().min(1),
+  result: z.enum(["pass", "fail", "na"]),
+  note: z.string().optional().nullable(),
+});
+
+export const insertQualityInspectionFormSchema = createInsertSchema(
+  quality_inspection_forms,
+)
+  .omit({
+    id: true,
+    form_number: true,
+    created_at: true,
+    updated_at: true,
+    inspected_at: true,
+  })
+  .extend({
+    items: z.array(inspectionItemResultSchema).min(1),
+  });
+export type InsertQualityInspectionForm = z.infer<
+  typeof insertQualityInspectionFormSchema
+>;
+export type QualityInspectionForm =
+  typeof quality_inspection_forms.$inferSelect;
+
 export const face_registrations = pgTable("face_registrations", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id")

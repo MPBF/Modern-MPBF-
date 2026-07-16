@@ -39,6 +39,7 @@ import {
   canDeleteInArea,
 } from "../utils/roleUtils";
 import PageLayout from "../components/layout/PageLayout";
+import InspectionForms from "../components/quality/InspectionForms";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -461,16 +462,34 @@ export default function Quality() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 h-auto">
+          <TabsList className="grid w-full grid-cols-3 h-auto">
             <TabsTrigger value="issues" className="py-2.5 gap-2">
               <ShieldAlert className="w-4 h-4" />
               سجل المشاكل
+            </TabsTrigger>
+            <TabsTrigger
+              value="inspections"
+              className="py-2.5 gap-2"
+              data-testid="tab-inspections"
+            >
+              <ClipboardList className="w-4 h-4" />
+              نماذج الفحص
             </TabsTrigger>
             <TabsTrigger value="dashboard" className="py-2.5 gap-2">
               <Activity className="w-4 h-4" />
               لوحة التحليل
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="inspections" className="mt-4">
+            <InspectionForms
+              canAdd={canAddQuality}
+              canEdit={canEditQuality}
+              canDelete={canDeleteQuality}
+              usersList={usersList}
+              prodOrders={prodOrders}
+            />
+          </TabsContent>
 
           <TabsContent value="issues" className="space-y-4 mt-4">
             <div className="flex flex-wrap items-center gap-3">

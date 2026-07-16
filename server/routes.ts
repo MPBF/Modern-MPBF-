@@ -130,6 +130,7 @@ import {
   insertCustomerProductSchema,
   insertMasterBatchColorSchema,
   insertQualityIssueSchema,
+  insertQualityInspectionFormSchema,
   insertQualityIssueResponsibleSchema,
   insertQualityIssueActionSchema,
   insertQuickNoteSchema,
@@ -4310,6 +4311,9 @@ export async function registerRoutes(
     "manage_machines",
     "add_machines",
     "edit_machines",
+    "view_quality",
+    "manage_quality",
+    "add_quality",
     "view_production",
     "manage_production",
     "view_film_dashboard",
@@ -7148,6 +7152,124 @@ Input: ${text}`;
       } catch (error: any) {
         console.error("Error updating action:", error);
         res.status(500).json({ message: "خطأ في تحديث الإجراء" });
+      }
+    },
+  );
+
+  // Quality inspection forms (نماذج فحص الجودة)
+  app.get(
+    "/api/quality-inspection-forms",
+    requireAuth,
+    requirePermission(
+      "view_quality",
+      "manage_quality",
+      "add_quality",
+      "edit_quality",
+    ),
+    async (req: AuthRequest, res) => {
+      try {
+        const filters: any = {};
+        if (req.query.template_type)
+          filters.template_type = String(req.query.template_type);
+        if (req.query.overall_result)
+          filters.overall_result = String(req.query.overall_result);
+        if (req.query.dateFrom) filters.dateFrom = String(req.query.dateFrom);
+        if (req.query.dateTo) filters.dateTo = String(req.query.dateTo);
+        const forms = await storage.getQualityInspectionForms(filters);
+        res.json({ success: true, data: forms });
+      } catch (error: any) {
+        console.error("Error fetching inspection forms:", error);
+        res.status(500).json({ message: "خطأ في جلب نماذج الفحص" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/quality-inspection-forms/:id",
+    requireAuth,
+    requirePermission(
+      "view_quality",
+      "manage_quality",
+      "add_quality",
+      "edit_quality",
+    ),
+    async (req: AuthRequest, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const form = await storage.getQualityInspectionFormById(id);
+        if (!form)
+          return res.status(404).json({ message: "لم يتم العثور على النموذج" });
+        res.json({ success: true, data: form });
+      } catch (error: any) {
+        console.error("Error fetching inspection form:", error);
+        res.status(500).json({ message: "خطأ في جلب نموذج الفحص" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/quality-inspection-forms",
+    requireAuth,
+    requirePermission("add_quality", "manage_quality"),
+    async (req: AuthRequest, res) => {
+      try {
+        const parsed = insertQualityInspectionFormSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({
+            message: "بيانات غير صحيحة",
+            errors: parsed.error.flatten().fieldErrors,
+          });
+        }
+        const form = await storage.createQualityInspectionForm(parsed.data);
+        res.status(201).json({ success: true, data: form });
+      } catch (error: any) {
+        console.error("Error creating inspection form:", error);
+        res.status(500).json({ message: "خطأ في حفظ نموذج الفحص" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/quality-inspection-forms/:id",
+    requireAuth,
+    requirePermission("edit_quality", "manage_quality"),
+    async (req: AuthRequest, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const parsed = insertQualityInspectionFormSchema
+          .partial()
+          .safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({
+            message: "بيانات غير صحيحة",
+            errors: parsed.error.flatten().fieldErrors,
+          });
+        }
+        const form = await storage.updateQualityInspectionForm(id, parsed.data);
+        if (!form)
+          return res.status(404).json({ message: "لم يتم العثور على النموذج" });
+        res.json({ success: true, data: form });
+      } catch (error: any) {
+        console.error("Error updating inspection form:", error);
+        res.status(500).json({ message: "خطأ في تحديث نموذج الفحص" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/quality-inspection-forms/:id",
+    requireAuth,
+    requirePermission("delete_quality", "manage_quality"),
+    async (req: AuthRequest, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const deleted = await storage.deleteQualityInspectionForm(id);
+        if (!deleted)
+          return res.status(404).json({ message: "لم يتم العثور على النموذج" });
+        res.json({ success: true });
+      } catch (error: any) {
+        console.error("Error deleting inspection form:", error);
+        res.status(500).json({ message: "خطأ في حذف نموذج الفحص" });
       }
     },
   );
