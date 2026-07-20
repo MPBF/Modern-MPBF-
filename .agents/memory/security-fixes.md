@@ -50,3 +50,5 @@ description: Durable security/authorization patterns and gotchas for this codeba
 ## PDF template path traversal / arbitrary file read
 - `/api/pdf/generate` accepts `templateName` and `templatePath`; both must resolve within `server/services/adobe-pdf/templates` and reject anything escaping it (`path.resolve` then `startsWith(dir + sep)`), else any authed user can read arbitrary server files (fed to Adobe docx merge).
 - `templatePath` branch has no frontend caller — safe to keep constrained (or remove entirely).
+
+- Production mutation routes (roll/cut creation, machine-queue assign, production settings) must carry requirePermission gates, not bare requireAuth; requireAuth-only mutations are recurring privilege-escalation findings — check new production endpoints against this pattern.

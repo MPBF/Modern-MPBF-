@@ -10028,16 +10028,22 @@ Input: ${text}`;
     }
   });
 
-  app.post("/api/machine-queues/assign", requireAuth, async (req, res) => {
+  app.post("/api/machine-queues/assign", requireAuth, requirePermission("edit_production", "manage_production"), async (req, res) => {
     try {
-      const { productionOrderId, machineId, position } = req.body;
-
-      if (!productionOrderId || !machineId || position === undefined) {
+      const assignSchema = z.object({
+        productionOrderId: z.coerce.number().int().positive(),
+        machineId: z.string().min(1),
+        position: z.coerce.number().int().min(0),
+      });
+      const parsed = assignSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res.status(400).json({
           message:
             "بيانات غير كاملة - مطلوب معرف أمر الإنتاج والماكينة والموضع",
+          errors: parsed.error.errors,
         });
       }
+      const { productionOrderId, machineId, position } = parsed.data;
 
       const assignUserId = getAuthUserId(req);
       if (!assignUserId) {
@@ -14300,7 +14306,7 @@ Input: ${text}`;
     }
   });
 
-  app.patch("/api/production/settings", requireAuth, async (req, res) => {
+  app.patch("/api/production/settings", requireAuth, requirePermission("manage_settings"), async (req, res) => {
     try {
       const validationSchema = insertProductionSettingsSchema
         .pick({
@@ -14351,6 +14357,7 @@ Input: ${text}`;
   app.post(
     "/api/rolls",
     requireAuth,
+    requirePermission("add_production", "manage_production"),
     validateRequest({ body: insertRollSchema.omit({ created_by: true }) }),
     async (req, res) => {
       try {
@@ -14516,7 +14523,7 @@ Input: ${text}`;
   );
 
   // Cutting Operations
-  app.post("/api/cuts", requireAuth, async (req, res) => {
+  app.post("/api/cuts", requireAuth, requirePermission("add_production", "manage_production"), async (req, res) => {
     try {
       const validationSchema = insertCutSchema.extend({
         cut_weight_kg: z.coerce

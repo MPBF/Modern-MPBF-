@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Play, Package, Scissors, RefreshCw } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../../hooks/use-auth";
@@ -143,9 +143,11 @@ export default function ProductionTabs({ onCreateRoll }: ProductionTabsProps) {
   const defaultStage = visibleStages.length > 0 ? visibleStages[0].id : "film";
 
   // Update active stage if it's not visible anymore
-  if (!visibleStages.some((stage) => stage.id === activeStage)) {
-    setActiveStage(defaultStage);
-  }
+  useEffect(() => {
+    if (!visibleStages.some((stage) => stage.id === activeStage)) {
+      setActiveStage(defaultStage);
+    }
+  }, [visibleStages, activeStage, defaultStage]);
 
   const getStageName = (key: string) => {
     return t(`production.stageNames.${key}`);
