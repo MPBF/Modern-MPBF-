@@ -336,6 +336,7 @@ import {
   generateMobileToken,
   revokeMobileToken,
   invalidateRolesCache,
+  invalidateUserCache,
   getCachedRoles,
   createMobileSession,
   refreshMobileSession,
@@ -8787,6 +8788,7 @@ Input: ${text}`;
         if (!user) {
           return res.status(404).json({ message: "المستخدم غير موجود" });
         }
+        invalidateUserCache(id);
         const { password: _, ...safeUser } = user;
         res.json(safeUser);
       } catch (error) {
@@ -8835,6 +8837,7 @@ Input: ${text}`;
         }
         const role = await storage.createRole(parseResult.data);
         invalidateRolesCache();
+        invalidateUserCache();
         res.json(role);
       } catch (error) {
         console.error("Role creation error:", error);
@@ -8882,6 +8885,7 @@ Input: ${text}`;
           return res.status(404).json({ message: "الدور غير موجود" });
         }
         invalidateRolesCache();
+        invalidateUserCache();
         res.json(role);
       } catch (error) {
         console.error("Role update error:", error);
@@ -8910,6 +8914,7 @@ Input: ${text}`;
 
         await storage.deleteRole(id);
         invalidateRolesCache();
+        invalidateUserCache();
         res.json({ message: "تم حذف الدور بنجاح" });
       } catch (error) {
         console.error("Role deletion error:", error);
@@ -9867,6 +9872,7 @@ Input: ${text}`;
       try {
         const id = parseRouteParam(req.params.id, "id");
         await storage.deleteUser(id);
+        invalidateUserCache(id);
         res.json({ message: "تم حذف المستخدم بنجاح" });
       } catch (error) {
         console.error("[API Error]", error);

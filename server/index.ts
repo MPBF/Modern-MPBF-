@@ -431,12 +431,21 @@ app.use(
 );
 
 // Apply session authentication middleware - populate req.user from session
-app.use(populateUserFromSession);
+app.use((req, res, next) => {
+  // Only resolve the user for API/MCP requests; static assets and Vite
+  // resources don't need req.user and shouldn't pay for a DB lookup.
+  if (req.path.startsWith("/api") || req.path.startsWith("/mcp")) {
+    return populateUserFromSession(req, res, next);
+  }
+  next();
+});
 
 // 📊 Performance monitoring middleware - tracks API response times and resource usage
 app.use(performanceMonitor);
 
 // Session extension middleware - extends session on any API call with enhanced reliability
+const SESSION_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+const sessionSaveTimestamps = new Map<string, number>();
 app.use((req, res, next) => {
   // Skip session extension for MCP/OAuth routes (uses API key auth)
   if (
@@ -452,18 +461,30 @@ app.use((req, res, next) => {
       // Touch the session to reset expiry with rolling sessions
       req.session.touch();
 
-      // Force save session for PostgreSQL reliability (non-blocking)
-      req.session.save((err: any) => {
-        if (err && !isProduction) {
-          console.warn(`Session save warning on ${req.path}:`, err);
+      // Throttle DB session writes: persist at most once every 5 minutes per
+      // session instead of on every API request (was a write per request).
+      const sid = req.sessionID;
+      const now = Date.now();
+      const lastSave = sessionSaveTimestamps.get(sid) || 0;
+      if (now - lastSave > SESSION_SAVE_INTERVAL_MS) {
+        sessionSaveTimestamps.set(sid, now);
+        if (sessionSaveTimestamps.size > 2000) {
+          const cutoff = now - SESSION_SAVE_INTERVAL_MS;
+          for (const [k, v] of sessionSaveTimestamps) {
+            if (v < cutoff) sessionSaveTimestamps.delete(k);
+          }
         }
-      });
-
-      // Log session extension for debugging (only in development)
-      if (!isProduction && req.path !== "/api/me") {
-        console.log(
-          `🔄 Session extended for user ${req.session.userId} on ${req.path}`,
-        );
+        req.session.save((err: any) => {
+          if (err && !isProduction) {
+            console.warn(`Session save warning on ${req.path}:`, err);
+          }
+        });
+        // Log session extension for debugging (only in development)
+        if (!isProduction && req.path !== "/api/me") {
+          console.log(
+            `🔄 Session extended for user ${req.session.userId} on ${req.path}`,
+          );
+        }
       }
     } else if (
       !req.user &&

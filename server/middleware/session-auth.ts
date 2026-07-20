@@ -253,7 +253,42 @@ export async function populateUserFromSession(
   }
 }
 
-async function resolveUserById(userId: number) {
+const USER_CACHE_TTL_MS = 30_000;
+const userCache = new Map<number, { user: ResolvedUser | null; at: number }>();
+
+type ResolvedUser = {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  role_id: number;
+  department: string | null;
+  status: string;
+  permissions: string[];
+};
+
+export function invalidateUserCache(userId?: number) {
+  if (userId !== undefined) userCache.delete(userId);
+  else userCache.clear();
+}
+
+async function resolveUserById(userId: number): Promise<ResolvedUser | null> {
+  const cached = userCache.get(userId);
+  if (cached && Date.now() - cached.at < USER_CACHE_TTL_MS) {
+    return cached.user;
+  }
+  const resolved = await resolveUserByIdUncached(userId);
+  userCache.set(userId, { user: resolved, at: Date.now() });
+  if (userCache.size > 500) {
+    const cutoff = Date.now() - USER_CACHE_TTL_MS;
+    for (const [k, v] of userCache) {
+      if (v.at < cutoff) userCache.delete(k);
+    }
+  }
+  return resolved;
+}
+
+async function resolveUserByIdUncached(userId: number): Promise<ResolvedUser | null> {
   const user = await storage.getUserById(userId);
   if (!user || user.status !== "active") return null;
 

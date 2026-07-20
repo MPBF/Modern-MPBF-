@@ -52,3 +52,5 @@ description: Durable security/authorization patterns and gotchas for this codeba
 - `templatePath` branch has no frontend caller — safe to keep constrained (or remove entirely).
 
 - Production mutation routes (roll/cut creation, machine-queue assign, production settings) must carry requirePermission gates, not bare requireAuth; requireAuth-only mutations are recurring privilege-escalation findings — check new production endpoints against this pattern.
+
+- Perf: populateUserFromSession is scoped to /api & /mcp paths and resolveUserById has a 30s in-memory user cache (invalidateUserCache on user/role mutations); session extension DB save is throttled to once per 5 min per session. Don't reintroduce per-request DB lookups/writes in these middlewares.
