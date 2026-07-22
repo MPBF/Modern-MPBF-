@@ -14,21 +14,21 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "../components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "../components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -36,17 +36,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "../components/ui/form";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "../components/ui/select";
+import { Skeleton } from "../components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -54,11 +54,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+} from "../components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Textarea } from "../components/ui/textarea";
+import { useToast } from "../hooks/use-toast";
+import { apiRequest, queryClient } from "../lib/queryClient";
 import { hasPermission } from "../../../shared/permissions";
 import { useAuth } from "../hooks/use-auth";
 
