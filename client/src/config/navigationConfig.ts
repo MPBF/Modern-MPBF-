@@ -19,6 +19,7 @@ import {
   Wand2,
   ClipboardList,
   ListOrdered,
+  ShieldAlert,
 } from "lucide-react";
 
 export interface NavigationItem {
@@ -111,6 +112,15 @@ export const navigationItems: NavigationItem[] = [
     icon: Users,
     path: "/hr",
     priority: 9,
+    group: "support",
+  },
+  {
+    name: "مخالفات العمل",
+    name_ar: "مخالفات العمل",
+    name_en: "Work Violations",
+    icon: ShieldAlert,
+    path: "/work-violations",
+    priority: 10,
     group: "support",
   },
   {

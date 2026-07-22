@@ -52,6 +52,9 @@ export type PermissionKey =
   | "manage_leaves"
   | "view_training"
   | "manage_training"
+  | "record_work_violations"
+  | "view_work_violations"
+  | "manage_work_violations"
   | "view_factory_simulation"
   | "manage_factory_simulation"
   | "create_quality_inspections"
@@ -445,6 +448,28 @@ export const PERMISSIONS: Permission[] = [
     name_ar: "إدارة الإجازات",
     category: "الموارد البشرية",
     description: "Approve and manage employee leave requests",
+  },
+  {
+    id: "record_work_violations",
+    name: "Record Work Violations",
+    name_ar: "تسجيل مخالفات العمل",
+    category: "الموارد البشرية",
+    description: "Record work violations for production workers",
+  },
+  {
+    id: "view_work_violations",
+    name: "View Work Violations",
+    name_ar: "عرض مخالفات العمل",
+    category: "الموارد البشرية",
+    description: "View work violation records and reports",
+  },
+  {
+    id: "manage_work_violations",
+    name: "Manage Work Violations",
+    name_ar: "إدارة مخالفات العمل",
+    category: "الموارد البشرية",
+    description:
+      "Edit/delete/waive work violations and manage points and deduction settings",
   },
   {
     id: "view_training",
@@ -1092,6 +1117,12 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/virtual-warehouse": ["view_warehouse", "manage_warehouse"],
   "/inventory": ["view_inventory", "manage_inventory"],
   "/hr": ["view_hr", "manage_hr"],
+  "/work-violations": [
+    "record_work_violations",
+    "view_work_violations",
+    "manage_work_violations",
+    "admin",
+  ],
   "/reports": ["view_reports", "view_production_reports"],
   "/settings": ["manage_settings", "admin"],
   "/definitions": [
@@ -1573,6 +1604,16 @@ export const PERMISSION_TREE: PermissionTreeNode[] = [
         name: "Leaves",
         name_ar: "الإجازات",
         keys: ["manage_leaves"],
+      },
+      {
+        id: "hr.work_violations",
+        name: "Work Violations",
+        name_ar: "مخالفات العمل",
+        keys: [
+          "record_work_violations",
+          "view_work_violations",
+          "manage_work_violations",
+        ],
       },
       {
         id: "hr.training",

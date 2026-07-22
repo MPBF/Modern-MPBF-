@@ -79,6 +79,9 @@ import {
   type MachineQueue,
   type InsertMachineQueue,
   violations,
+  work_violations,
+  work_violation_types,
+  work_violation_settings,
   type Violation,
   rewards,
   employee_custody,
@@ -286,7 +289,18 @@ import {
   type InsertAdminToolDocument,
 } from "@shared/schema";
 import bcrypt from "bcrypt";
-import { eq, desc, and, sql, count, inArray, or, isNull } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  and,
+  sql,
+  count,
+  inArray,
+  or,
+  isNull,
+  gte,
+  lte,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
@@ -4731,10 +4745,27 @@ export class DatabaseStorage implements IStorage {
               sql`${violations.date} BETWEEN ${from} AND ${to}`,
             ),
           );
-        const penaltiesAmount = penaltyRows.reduce(
+        const disciplinaryPenalties = penaltyRows.reduce(
           (sum, r) => sum + Number(r.penalty_amount || 0),
           0,
         );
+
+        // خصومات مخالفات العمل (غير المُعفاة) خلال الشهر
+        const workViolationRows = await db
+          .select({ deduction_amount: work_violations.deduction_amount })
+          .from(work_violations)
+          .where(
+            and(
+              eq(work_violations.employee_id, employeeId),
+              eq(work_violations.waived, false),
+              sql`${work_violations.occurred_at}::date BETWEEN ${from} AND ${to}`,
+            ),
+          );
+        const workViolationPenalties = workViolationRows.reduce(
+          (sum, r) => sum + Number(r.deduction_amount || 0),
+          0,
+        );
+        const penaltiesAmount = disciplinaryPenalties + workViolationPenalties;
 
         const netPay =
           basicPay +
@@ -9128,6 +9159,439 @@ export class DatabaseStorage implements IStorage {
 
   async deleteViolation(id: number): Promise<void> {
     await db.delete(violations).where(eq(violations.id, id));
+  }
+
+  // ===== مخالفات العمل (Work Violations) =====
+
+  async getWorkViolationTypes(): Promise<any[]> {
+    return await db
+      .select()
+      .from(work_violation_types)
+      .orderBy(work_violation_types.sort_order, work_violation_types.id);
+  }
+
+  async updateWorkViolationType(id: number, data: any): Promise<any> {
+    return await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(work_violation_types)
+        .set(data)
+        .where(eq(work_violation_types.id, id))
+        .returning();
+      if (
+        row &&
+        (data.points !== undefined || data.repeat_points !== undefined)
+      ) {
+        // إعادة احتساب كل سلاسل هذا النوع بعد تغيير النقاط
+        const employees = await tx
+          .selectDistinct({ employee_id: work_violations.employee_id })
+          .from(work_violations)
+          .where(eq(work_violations.violation_type_id, id));
+        for (const e of employees) {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(1006, ${e.employee_id})`,
+          );
+          await this.recomputeWorkViolationSeries(tx, e.employee_id, id);
+        }
+      }
+      return row;
+    });
+  }
+
+  async getWorkViolationSettings(): Promise<any> {
+    const [row] = await db
+      .select()
+      .from(work_violation_settings)
+      .where(eq(work_violation_settings.id, 1));
+    if (row) return row;
+    const [created] = await db
+      .insert(work_violation_settings)
+      .values({ id: 1 })
+      .onConflictDoNothing()
+      .returning();
+    return (
+      created ||
+      (
+        await db
+          .select()
+          .from(work_violation_settings)
+          .where(eq(work_violation_settings.id, 1))
+      )[0]
+    );
+  }
+
+  async updateWorkViolationSettings(
+    data: { point_value?: number; repeat_window_days?: number },
+    updatedBy: number | null,
+  ): Promise<any> {
+    await this.getWorkViolationSettings();
+    const set: any = { updated_by: updatedBy, updated_at: new Date() };
+    if (data.point_value !== undefined)
+      set.point_value = data.point_value.toFixed(2);
+    if (data.repeat_window_days !== undefined)
+      set.repeat_window_days = data.repeat_window_days;
+    return await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(work_violation_settings)
+        .set(set)
+        .where(eq(work_violation_settings.id, 1))
+        .returning();
+      // إعادة احتساب كل السلاسل بعد تغيير قيمة النقطة أو نافذة التكرار
+      const pairs = await tx
+        .selectDistinct({
+          employee_id: work_violations.employee_id,
+          violation_type_id: work_violations.violation_type_id,
+        })
+        .from(work_violations);
+      const lockedEmployees = new Set<number>();
+      for (const p of pairs) {
+        if (!lockedEmployees.has(p.employee_id)) {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(1006, ${p.employee_id})`,
+          );
+          lockedEmployees.add(p.employee_id);
+        }
+        await this.recomputeWorkViolationSeries(
+          tx,
+          p.employee_id,
+          p.violation_type_id,
+        );
+      }
+      return row;
+    });
+  }
+
+  // العمال المسموح تسجيل مخالفات عليهم: أقسام الفيلم/الطباعة/التقطيع فقط.
+  // users.section_id عدد صحيح يطابق الجزء الرقمي من sections.id (SEC03 → 3).
+  async getWorkViolationWorkers(): Promise<any[]> {
+    const productionSections = ["SEC03", "SEC04", "SEC05"];
+    const sectionRows = await db
+      .select()
+      .from(sections)
+      .where(inArray(sections.id, productionSections));
+    const numericIds = sectionRows
+      .map((s) => parseInt(String(s.id).replace(/\D/g, ""), 10))
+      .filter((n) => Number.isFinite(n));
+    if (numericIds.length === 0) return [];
+    const sectionNameById = new Map(
+      sectionRows.map((s) => [
+        parseInt(String(s.id).replace(/\D/g, ""), 10),
+        s.name_ar || s.name,
+      ]),
+    );
+    const rows = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        display_name: users.display_name,
+        display_name_ar: users.display_name_ar,
+        section_id: users.section_id,
+      })
+      .from(users)
+      .where(
+        and(eq(users.status, "active"), inArray(users.section_id, numericIds)),
+      )
+      .orderBy(users.section_id, users.display_name_ar);
+    return rows.map((u) => ({
+      ...u,
+      section_name_ar: sectionNameById.get(u.section_id as number) || null,
+    }));
+  }
+
+  // ماكينات أقسام الإنتاج الثلاثة (للربط الاختياري بالمخالفة)
+  async getWorkViolationMachines(): Promise<any[]> {
+    return await db
+      .select({
+        id: machines.id,
+        name: machines.name,
+        name_ar: machines.name_ar,
+        section_id: machines.section_id,
+      })
+      .from(machines)
+      .where(inArray(machines.section_id, ["SEC03", "SEC04", "SEC05"]))
+      .orderBy(machines.section_id, machines.id);
+  }
+
+  async getWorkViolations(filters: {
+    employeeId?: number;
+    from?: Date;
+    to?: Date;
+  }): Promise<any[]> {
+    const employeeUser = alias(users, "wv_employee");
+    const reporterUser = alias(users, "wv_reporter");
+    const waiverUser = alias(users, "wv_waiver");
+    const conditions = [] as any[];
+    if (filters.employeeId)
+      conditions.push(eq(work_violations.employee_id, filters.employeeId));
+    if (filters.from)
+      conditions.push(gte(work_violations.occurred_at, filters.from));
+    if (filters.to)
+      conditions.push(lte(work_violations.occurred_at, filters.to));
+    return await db
+      .select({
+        id: work_violations.id,
+        employee_id: work_violations.employee_id,
+        employee_name: sql<string>`COALESCE(${employeeUser.display_name_ar}, ${employeeUser.display_name}, ${employeeUser.username})`,
+        employee_section_id: employeeUser.section_id,
+        violation_type_id: work_violations.violation_type_id,
+        violation_type_name: work_violation_types.name_ar,
+        occurred_at: work_violations.occurred_at,
+        note: work_violations.note,
+        machine_id: work_violations.machine_id,
+        machine_name: sql<
+          string | null
+        >`COALESCE(${machines.name_ar}, ${machines.name})`,
+        production_order_id: work_violations.production_order_id,
+        repeat_index: work_violations.repeat_index,
+        points: work_violations.points,
+        deduction_amount: work_violations.deduction_amount,
+        waived: work_violations.waived,
+        waived_by: work_violations.waived_by,
+        waived_at: work_violations.waived_at,
+        waive_reason: work_violations.waive_reason,
+        waived_by_name: sql<
+          string | null
+        >`COALESCE(${waiverUser.display_name_ar}, ${waiverUser.display_name}, ${waiverUser.username})`,
+        reported_by: work_violations.reported_by,
+        reported_by_name: sql<
+          string | null
+        >`COALESCE(${reporterUser.display_name_ar}, ${reporterUser.display_name}, ${reporterUser.username})`,
+        created_at: work_violations.created_at,
+      })
+      .from(work_violations)
+      .innerJoin(
+        work_violation_types,
+        eq(work_violations.violation_type_id, work_violation_types.id),
+      )
+      .innerJoin(employeeUser, eq(work_violations.employee_id, employeeUser.id))
+      .leftJoin(reporterUser, eq(work_violations.reported_by, reporterUser.id))
+      .leftJoin(waiverUser, eq(work_violations.waived_by, waiverUser.id))
+      .leftJoin(machines, eq(work_violations.machine_id, machines.id))
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(work_violations.occurred_at), desc(work_violations.id));
+  }
+
+  // يعيد احتساب سلسلة التكرار كاملة لموظف + نوع مخالفة داخل نفس المعاملة
+  // (يُستدعى بعد أي إنشاء/تعديل/حذف/تجاوز حتى تبقى النقاط والخصومات صحيحة)
+  private async recomputeWorkViolationSeries(
+    tx: any,
+    employeeId: number,
+    violationTypeId: number,
+  ): Promise<void> {
+    const [type] = await tx
+      .select()
+      .from(work_violation_types)
+      .where(eq(work_violation_types.id, violationTypeId));
+    if (!type) return;
+    const [settings] = await tx
+      .select()
+      .from(work_violation_settings)
+      .where(eq(work_violation_settings.id, 1));
+    const windowDays = Number(settings?.repeat_window_days || 30);
+    const pointValue = Number(settings?.point_value || 0);
+    const windowMs = windowDays * 24 * 60 * 60 * 1000;
+
+    const rows = await tx
+      .select({
+        id: work_violations.id,
+        occurred_at: work_violations.occurred_at,
+        waived: work_violations.waived,
+        repeat_index: work_violations.repeat_index,
+        points: work_violations.points,
+        deduction_amount: work_violations.deduction_amount,
+      })
+      .from(work_violations)
+      .where(
+        and(
+          eq(work_violations.employee_id, employeeId),
+          eq(work_violations.violation_type_id, violationTypeId),
+        ),
+      )
+      .orderBy(work_violations.occurred_at, work_violations.id);
+
+    const countedTimes: number[] = [];
+    for (const row of rows) {
+      const t = new Date(row.occurred_at).getTime();
+      const priorCount = countedTimes.filter((pt) => pt >= t - windowMs).length;
+      const repeatIndex = priorCount + 1;
+      const points =
+        Number(type.points || 0) +
+        (repeatIndex - 1) * Number(type.repeat_points || 0);
+      const deduction = row.waived
+        ? "0.00"
+        : (Math.round(points * pointValue * 100) / 100).toFixed(2);
+      if (
+        row.repeat_index !== repeatIndex ||
+        row.points !== points ||
+        String(row.deduction_amount) !== deduction
+      ) {
+        await tx
+          .update(work_violations)
+          .set({
+            repeat_index: repeatIndex,
+            points,
+            deduction_amount: deduction,
+          })
+          .where(eq(work_violations.id, row.id));
+      }
+      if (!row.waived) countedTimes.push(t);
+    }
+  }
+
+  async createWorkViolation(
+    data: {
+      employee_id: number;
+      violation_type_id: number;
+      occurred_at: Date;
+      note?: string | null;
+      machine_id?: string | null;
+      production_order_id?: number | null;
+    },
+    reportedBy: number,
+  ): Promise<any> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(1006, ${data.employee_id})`,
+      );
+      const [inserted] = await tx
+        .insert(work_violations)
+        .values({
+          employee_id: data.employee_id,
+          violation_type_id: data.violation_type_id,
+          occurred_at: data.occurred_at,
+          note: data.note ?? null,
+          machine_id: data.machine_id ?? null,
+          production_order_id: data.production_order_id ?? null,
+          reported_by: reportedBy,
+        })
+        .returning();
+      await this.recomputeWorkViolationSeries(
+        tx,
+        data.employee_id,
+        data.violation_type_id,
+      );
+      const [row] = await tx
+        .select()
+        .from(work_violations)
+        .where(eq(work_violations.id, inserted.id));
+      return row;
+    });
+  }
+
+  async updateWorkViolation(id: number, data: any): Promise<any> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(work_violations)
+        .where(eq(work_violations.id, id));
+      if (!existing) throw new Error("المخالفة غير موجودة");
+      const employeeId = data.employee_id ?? existing.employee_id;
+      const typeId = data.violation_type_id ?? existing.violation_type_id;
+      const occurredAt = data.occurred_at
+        ? new Date(data.occurred_at)
+        : existing.occurred_at;
+      const lockIds = Array.from(
+        new Set([existing.employee_id, employeeId]),
+      ).sort((a, b) => a - b);
+      for (const lockId of lockIds) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(1006, ${lockId})`);
+      }
+      await tx
+        .update(work_violations)
+        .set({
+          employee_id: employeeId,
+          violation_type_id: typeId,
+          occurred_at: occurredAt,
+          note: data.note !== undefined ? data.note : existing.note,
+          machine_id:
+            data.machine_id !== undefined
+              ? data.machine_id
+              : existing.machine_id,
+          production_order_id:
+            data.production_order_id !== undefined
+              ? data.production_order_id
+              : existing.production_order_id,
+        })
+        .where(eq(work_violations.id, id));
+      // إعادة احتساب السلسلة القديمة والجديدة إن اختلف الموظف أو النوع
+      const pairs = new Set<string>([
+        `${existing.employee_id}:${existing.violation_type_id}`,
+        `${employeeId}:${typeId}`,
+      ]);
+      for (const pair of Array.from(pairs)) {
+        const [empId, vtId] = pair.split(":").map(Number);
+        await this.recomputeWorkViolationSeries(tx, empId, vtId);
+      }
+      const [row] = await tx
+        .select()
+        .from(work_violations)
+        .where(eq(work_violations.id, id));
+      return row;
+    });
+  }
+
+  async deleteWorkViolation(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(work_violations)
+        .where(eq(work_violations.id, id));
+      if (!existing) return;
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(1006, ${existing.employee_id})`,
+      );
+      await tx.delete(work_violations).where(eq(work_violations.id, id));
+      await this.recomputeWorkViolationSeries(
+        tx,
+        existing.employee_id,
+        existing.violation_type_id,
+      );
+    });
+  }
+
+  async setWorkViolationWaived(
+    id: number,
+    waived: boolean,
+    byUserId: number,
+    reason?: string | null,
+  ): Promise<any> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(work_violations)
+        .where(eq(work_violations.id, id));
+      if (!existing) throw new Error("المخالفة غير موجودة");
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(1006, ${existing.employee_id})`,
+      );
+      await tx
+        .update(work_violations)
+        .set(
+          waived
+            ? {
+                waived: true,
+                waived_by: byUserId,
+                waived_at: new Date(),
+                waive_reason: reason ?? null,
+              }
+            : {
+                waived: false,
+                waived_by: null,
+                waived_at: null,
+                waive_reason: null,
+              },
+        )
+        .where(eq(work_violations.id, id));
+      await this.recomputeWorkViolationSeries(
+        tx,
+        existing.employee_id,
+        existing.violation_type_id,
+      );
+      const [row] = await tx
+        .select()
+        .from(work_violations)
+        .where(eq(work_violations.id, id));
+      return row;
+    });
   }
 
   async getUserRequests(): Promise<any[]> {

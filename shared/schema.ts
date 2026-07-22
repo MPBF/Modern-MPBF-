@@ -1224,6 +1224,59 @@ export const violations = pgTable("violations", {
   reported_by: integer("reported_by").references(() => users.id),
 });
 
+// ⚖️ أنواع مخالفات العمل (أقسام الإنتاج) مع نقاط كل نوع ونقاط التكرار
+export const work_violation_types = pgTable("work_violation_types", {
+  id: serial("id").primaryKey(),
+  name_ar: varchar("name_ar", { length: 200 }).notNull().unique(),
+  points: integer("points").notNull().default(1),
+  repeat_points: integer("repeat_points").notNull().default(1),
+  active: boolean("active").notNull().default(true),
+  sort_order: integer("sort_order").notNull().default(0),
+});
+
+// ⚙️ إعدادات نظام مخالفات العمل (صف واحد id=1): قيمة الخصم لكل نقطة ونافذة التكرار
+export const work_violation_settings = pgTable("work_violation_settings", {
+  id: integer("id").primaryKey().default(1),
+  point_value: decimal("point_value", { precision: 12, scale: 2 })
+    .notNull()
+    .default("0"),
+  repeat_window_days: integer("repeat_window_days").notNull().default(30),
+  updated_by: integer("updated_by").references(() => users.id),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// 📋 سجل مخالفات العمل (النقاط والخصم تُحسب على الخادم فقط)
+export const work_violations = pgTable("work_violations", {
+  id: serial("id").primaryKey(),
+  employee_id: integer("employee_id")
+    .notNull()
+    .references(() => users.id),
+  violation_type_id: integer("violation_type_id")
+    .notNull()
+    .references(() => work_violation_types.id),
+  occurred_at: timestamp("occurred_at").notNull(),
+  note: text("note"),
+  machine_id: varchar("machine_id", { length: 20 }).references(
+    () => machines.id,
+  ),
+  production_order_id: integer("production_order_id").references(
+    () => production_orders.id,
+  ),
+  // محسوبة على الخادم: رقم التكرار خلال النافذة، النقاط، ومبلغ الخصم
+  repeat_index: integer("repeat_index").notNull().default(1),
+  points: integer("points").notNull().default(0),
+  deduction_amount: decimal("deduction_amount", { precision: 12, scale: 2 })
+    .notNull()
+    .default("0"),
+  // التجاوز (الإعفاء من الخصم) مع توثيق من قام به
+  waived: boolean("waived").notNull().default(false),
+  waived_by: integer("waived_by").references(() => users.id),
+  waived_at: timestamp("waived_at"),
+  waive_reason: text("waive_reason"),
+  reported_by: integer("reported_by").references(() => users.id),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
 // 🎁 جدول المكافآت والحوافز لكل موظف
 export const rewards = pgTable("rewards", {
   id: serial("id").primaryKey(),
@@ -2649,6 +2702,52 @@ export const insertViolationSchema = createInsertSchema(violations)
   });
 export const updateViolationSchema = insertViolationSchema.partial();
 export type InsertViolation = z.infer<typeof insertViolationSchema>;
+
+// ⚖️ مخالفات العمل — النقاط/التكرار/الخصم محسوبة على الخادم فقط (لا تُقبل من العميل)
+export const insertWorkViolationSchema = createInsertSchema(work_violations)
+  .omit({
+    id: true,
+    created_at: true,
+    repeat_index: true,
+    points: true,
+    deduction_amount: true,
+    waived: true,
+    waived_by: true,
+    waived_at: true,
+    waive_reason: true,
+    reported_by: true,
+  })
+  .extend({
+    employee_id: z.coerce.number().int().positive(),
+    violation_type_id: z.coerce.number().int().positive(),
+    occurred_at: z.coerce.date(),
+    note: z.preprocess(blankToNull, z.string().max(2000).nullable()).optional(),
+    machine_id: z.preprocess(blankToNull, z.string().max(20).nullable()).optional(),
+    production_order_id: z.preprocess(
+      blankToNull,
+      z.coerce.number().int().positive().nullable(),
+    ).optional(),
+  });
+export const updateWorkViolationSchema = insertWorkViolationSchema.partial();
+export type InsertWorkViolation = z.infer<typeof insertWorkViolationSchema>;
+export type WorkViolation = typeof work_violations.$inferSelect;
+export type WorkViolationType = typeof work_violation_types.$inferSelect;
+export type WorkViolationSettings = typeof work_violation_settings.$inferSelect;
+
+export const updateWorkViolationTypeSchema = z.object({
+  points: z.coerce.number().int().min(0).max(1000).optional(),
+  repeat_points: z.coerce.number().int().min(0).max(1000).optional(),
+  active: z.boolean().optional(),
+});
+
+export const updateWorkViolationSettingsSchema = z.object({
+  point_value: z.coerce.number().min(0).max(1000000).optional(),
+  repeat_window_days: z.coerce.number().int().min(1).max(3650).optional(),
+});
+
+export const waiveWorkViolationSchema = z.object({
+  waive_reason: z.preprocess(blankToNull, z.string().max(2000).nullable()).optional(),
+});
 
 // 🎁 المكافآت
 export const insertRewardSchema = createInsertSchema(rewards)

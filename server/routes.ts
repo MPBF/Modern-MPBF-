@@ -175,6 +175,11 @@ import {
   updateSparePartSchema,
   insertViolationSchema,
   updateViolationSchema,
+  insertWorkViolationSchema,
+  updateWorkViolationSchema,
+  updateWorkViolationTypeSchema,
+  updateWorkViolationSettingsSchema,
+  waiveWorkViolationSchema,
   insertAttendanceWithdrawalSchema,
   createUserApiSchema,
   updateUserSchema,
@@ -13612,6 +13617,265 @@ Input: ${text}`;
       } catch (error) {
         console.error("Error deleting violation:", error);
         res.status(500).json({ message: "خطأ في حذف المخالفة" });
+      }
+    },
+  );
+
+  // ============ Work Violations API (مخالفات العمل) ============
+
+  const WV_READ = requirePermission(
+    "record_work_violations",
+    "view_work_violations",
+    "manage_work_violations",
+  );
+  const WV_RECORD = requirePermission(
+    "record_work_violations",
+    "manage_work_violations",
+  );
+  const WV_MANAGE = requirePermission("manage_work_violations");
+
+  // العمال (أقسام الفيلم/الطباعة/التقطيع فقط)
+  app.get("/api/work-violations/workers", requireAuth, WV_READ, async (_req, res) => {
+    try {
+      res.json(await storage.getWorkViolationWorkers());
+    } catch (error) {
+      console.error("Error fetching work violation workers:", error);
+      res.status(500).json({ message: "خطأ في جلب قائمة العمال" });
+    }
+  });
+
+  // ماكينات أقسام الإنتاج (للاختيار الاختياري عند التسجيل)
+  app.get(
+    "/api/work-violations/machines",
+    requireAuth,
+    WV_READ,
+    async (_req, res) => {
+      try {
+        res.json(await storage.getWorkViolationMachines());
+      } catch (error) {
+        console.error("Error fetching work violation machines:", error);
+        res.status(500).json({ message: "خطأ في جلب قائمة الماكينات" });
+      }
+    },
+  );
+
+  app.get("/api/work-violations/types", requireAuth, WV_READ, async (_req, res) => {
+    try {
+      res.json(await storage.getWorkViolationTypes());
+    } catch (error) {
+      console.error("Error fetching work violation types:", error);
+      res.status(500).json({ message: "خطأ في جلب أنواع المخالفات" });
+    }
+  });
+
+  app.put(
+    "/api/work-violations/types/:id",
+    requireAuth,
+    WV_MANAGE,
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const parsed = updateWorkViolationTypeSchema.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          return res.status(400).json({
+            message: "بيانات نوع المخالفة غير صحيحة",
+            errors: parsed.error.flatten().fieldErrors,
+          });
+        }
+        const row = await storage.updateWorkViolationType(id, parsed.data);
+        if (!row) return res.status(404).json({ message: "نوع المخالفة غير موجود" });
+        res.json(row);
+      } catch (error) {
+        console.error("Error updating work violation type:", error);
+        res.status(500).json({ message: "خطأ في تحديث نوع المخالفة" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/work-violations/settings",
+    requireAuth,
+    WV_READ,
+    async (_req, res) => {
+      try {
+        res.json(await storage.getWorkViolationSettings());
+      } catch (error) {
+        console.error("Error fetching work violation settings:", error);
+        res.status(500).json({ message: "خطأ في جلب إعدادات المخالفات" });
+      }
+    },
+  );
+
+  app.put(
+    "/api/work-violations/settings",
+    requireAuth,
+    WV_MANAGE,
+    async (req, res) => {
+      try {
+        const parsed = updateWorkViolationSettingsSchema.safeParse(
+          req.body ?? {},
+        );
+        if (!parsed.success) {
+          return res.status(400).json({
+            message: "بيانات الإعدادات غير صحيحة",
+            errors: parsed.error.flatten().fieldErrors,
+          });
+        }
+        const row = await storage.updateWorkViolationSettings(
+          parsed.data,
+          getAuthUserId(req) ?? null,
+        );
+        res.json(row);
+      } catch (error) {
+        console.error("Error updating work violation settings:", error);
+        res.status(500).json({ message: "خطأ في تحديث إعدادات المخالفات" });
+      }
+    },
+  );
+
+  app.get("/api/work-violations", requireAuth, WV_READ, async (req, res) => {
+    try {
+      const employeeId = req.query.employee_id
+        ? parseInt(String(req.query.employee_id), 10)
+        : undefined;
+      const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+      const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+      if (
+        (employeeId !== undefined && !Number.isFinite(employeeId)) ||
+        (from && isNaN(from.getTime())) ||
+        (to && isNaN(to.getTime()))
+      ) {
+        return res.status(400).json({ message: "معايير البحث غير صحيحة" });
+      }
+      // نهاية اليوم للتاريخ "إلى" حتى تشمل مخالفات اليوم نفسه
+      if (to) to.setHours(23, 59, 59, 999);
+      res.json(await storage.getWorkViolations({ employeeId, from, to }));
+    } catch (error) {
+      console.error("Error fetching work violations:", error);
+      res.status(500).json({ message: "خطأ في جلب مخالفات العمل" });
+    }
+  });
+
+  app.post("/api/work-violations", requireAuth, WV_RECORD, async (req, res) => {
+    try {
+      const reporterId = getAuthUserId(req);
+      if (!reporterId) return res.status(401).json({ message: "غير مصرح" });
+      const parsed = insertWorkViolationSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "بيانات المخالفة غير صحيحة",
+          errors: parsed.error.flatten().fieldErrors,
+        });
+      }
+      // التأكد أن الموظف من أقسام الإنتاج المسموحة
+      const workers = await storage.getWorkViolationWorkers();
+      if (!workers.some((w: any) => w.id === parsed.data.employee_id)) {
+        return res.status(400).json({
+          message: "لا يمكن تسجيل مخالفة إلا لعمال أقسام الفيلم والطباعة والتقطيع",
+        });
+      }
+      const row = await storage.createWorkViolation(parsed.data, reporterId);
+      res.status(201).json(row);
+    } catch (error) {
+      console.error("Error creating work violation:", error);
+      res.status(500).json({ message: "خطأ في تسجيل المخالفة" });
+    }
+  });
+
+  app.put(
+    "/api/work-violations/:id",
+    requireAuth,
+    WV_MANAGE,
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const parsed = updateWorkViolationSchema.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          return res.status(400).json({
+            message: "بيانات التحديث غير صحيحة",
+            errors: parsed.error.flatten().fieldErrors,
+          });
+        }
+        if (parsed.data.employee_id !== undefined) {
+          const workers = await storage.getWorkViolationWorkers();
+          if (!workers.some((w: any) => w.id === parsed.data.employee_id)) {
+            return res.status(400).json({
+              message:
+                "لا يمكن تسجيل مخالفة إلا لعمال أقسام الفيلم والطباعة والتقطيع",
+            });
+          }
+        }
+        const row = await storage.updateWorkViolation(id, parsed.data);
+        res.json(row);
+      } catch (error: any) {
+        console.error("Error updating work violation:", error);
+        if (error?.message === "المخالفة غير موجودة") {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "خطأ في تحديث المخالفة" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/work-violations/:id",
+    requireAuth,
+    WV_MANAGE,
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        await storage.deleteWorkViolation(id);
+        res.json({ message: "تم حذف المخالفة بنجاح" });
+      } catch (error) {
+        console.error("Error deleting work violation:", error);
+        res.status(500).json({ message: "خطأ في حذف المخالفة" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/work-violations/:id/waive",
+    requireAuth,
+    WV_MANAGE,
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const userId = getAuthUserId(req);
+        if (!userId) return res.status(401).json({ message: "غير مصرح" });
+        const parsed = waiveWorkViolationSchema.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          return res.status(400).json({ message: "بيانات غير صحيحة" });
+        }
+        const row = await storage.setWorkViolationWaived(
+          id,
+          true,
+          userId,
+          parsed.data.waive_reason ?? null,
+        );
+        if (!row) return res.status(404).json({ message: "المخالفة غير موجودة" });
+        res.json(row);
+      } catch (error) {
+        console.error("Error waiving work violation:", error);
+        res.status(500).json({ message: "خطأ في تجاوز المخالفة" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/work-violations/:id/unwaive",
+    requireAuth,
+    WV_MANAGE,
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "id");
+        const userId = getAuthUserId(req);
+        if (!userId) return res.status(401).json({ message: "غير مصرح" });
+        const row = await storage.setWorkViolationWaived(id, false, userId);
+        if (!row) return res.status(404).json({ message: "المخالفة غير موجودة" });
+        res.json(row);
+      } catch (error) {
+        console.error("Error un-waiving work violation:", error);
+        res.status(500).json({ message: "خطأ في إلغاء تجاوز المخالفة" });
       }
     },
   );

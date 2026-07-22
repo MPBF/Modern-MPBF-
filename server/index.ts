@@ -1356,6 +1356,76 @@ function sanitizeResponseForLogging(response: any): any {
       );
     }
 
+    // Ensure Work Violations tables exist and seed the 9 preset types.
+    // Idempotent: CREATE IF NOT EXISTS + ON CONFLICT DO NOTHING seeds.
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS work_violation_types (
+          id serial PRIMARY KEY,
+          name_ar varchar(200) NOT NULL UNIQUE,
+          points integer NOT NULL DEFAULT 1,
+          repeat_points integer NOT NULL DEFAULT 1,
+          active boolean NOT NULL DEFAULT true,
+          sort_order integer NOT NULL DEFAULT 0
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS work_violation_settings (
+          id integer PRIMARY KEY DEFAULT 1,
+          point_value numeric(12,2) NOT NULL DEFAULT '0',
+          repeat_window_days integer NOT NULL DEFAULT 30,
+          updated_by integer REFERENCES users(id),
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS work_violations (
+          id serial PRIMARY KEY,
+          employee_id integer NOT NULL REFERENCES users(id),
+          violation_type_id integer NOT NULL REFERENCES work_violation_types(id),
+          occurred_at timestamp NOT NULL,
+          note text,
+          machine_id varchar(20) REFERENCES machines(id),
+          production_order_id integer REFERENCES production_orders(id),
+          repeat_index integer NOT NULL DEFAULT 1,
+          points integer NOT NULL DEFAULT 0,
+          deduction_amount numeric(12,2) NOT NULL DEFAULT '0',
+          waived boolean NOT NULL DEFAULT false,
+          waived_by integer REFERENCES users(id),
+          waived_at timestamp,
+          waive_reason text,
+          reported_by integer REFERENCES users(id),
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_work_violations_employee
+        ON work_violations (employee_id, occurred_at)
+      `);
+      await db.execute(sql`
+        INSERT INTO work_violation_settings (id) VALUES (1)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await db.execute(sql`
+        INSERT INTO work_violation_types (name_ar, points, repeat_points, sort_order) VALUES
+          ('انسحاب من العمل', 1, 1, 1),
+          ('غياب بدون عذر', 1, 1, 2),
+          ('التوقف عن الإنتاج', 1, 1, 3),
+          ('عدم الإبلاغ عن عطل', 1, 1, 4),
+          ('إنتاج خاطئ', 1, 1, 5),
+          ('مشاجرة', 1, 1, 6),
+          ('عدم اتباع الأوامر', 1, 1, 7),
+          ('عدم التقيد بتعليمات الإنتاج', 1, 1, 8),
+          ('التباطؤ في الإنتاج', 1, 1, 9)
+        ON CONFLICT (name_ar) DO NOTHING
+      `);
+    } catch (wvErr: any) {
+      console.warn(
+        "⚠️ فشل تهيئة جداول مخالفات العمل (سيتم المحاولة لاحقاً):",
+        wvErr?.message,
+      );
+    }
+
     // Ensure customer_products bag-weight columns exist (density + computed metrics).
     // Safe & idempotent: columns added IF NOT EXISTS; density defaults to 0.95.
     try {
