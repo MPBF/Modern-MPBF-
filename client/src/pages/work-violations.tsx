@@ -58,6 +58,7 @@ import {
 } from "../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Textarea } from "../components/ui/textarea";
+import { useCompanyLogo } from "../hooks/use-company-logo";
 import { useToast } from "../hooks/use-toast";
 import { apiRequest, queryClient } from "../lib/queryClient";
 import { hasPermission } from "../../../shared/permissions";
@@ -172,19 +173,22 @@ function openPrint(title: string, bodyHtml: string) {
   .waived { color: #b45309; }
   .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 10px; border-top: 1px solid #e5e7eb; padding-top: 6px; }
 </style></head><body>${bodyHtml}
-<script>window.onload=function(){setTimeout(function(){window.print();},300);}</script></body></html>`);
+<script>window.onload=function(){var imgs=document.images,n=imgs.length,done=0;function go(){setTimeout(function(){window.print();},300);}if(!n){go();return;}for(var i=0;i<n;i++){if(imgs[i].complete){if(++done===n)go();}else{imgs[i].onload=imgs[i].onerror=function(){if(++done===n)go();};}}}</script></body></html>`);
   win.document.close();
 }
 
-function printHeader(title: string, subtitle: string): string {
-  return `<h1>مصنع أكياس البلاستيك الحديث - MPBF</h1><h2>${esc(title)}${subtitle ? " — " + esc(subtitle) : ""}</h2>
+function printHeader(title: string, subtitle: string, logoUrl?: string): string {
+  const logoBlock = logoUrl
+    ? `<div style="text-align:center;margin-bottom:8px;"><img src="${esc(logoUrl)}" alt="شعار المصنع" style="height:64px;max-width:200px;object-fit:contain;" /></div>`
+    : "";
+  return `${logoBlock}<h1>مصنع أكياس البلاستيك الحديث - MPBF</h1><h2>${esc(title)}${subtitle ? " — " + esc(subtitle) : ""}</h2>
   <div class="meta"><span>تاريخ الطباعة: ${esc(new Date().toLocaleString("ar-SA"))}</span></div>`;
 }
 
 const PRINT_FOOTER = `<div class="footer">تم إنشاء هذا المستند آلياً من نظام MPBF</div>`;
 
-function printSingle(v: WvRow) {
-  const body = `${printHeader("نموذج مخالفة عمل", `رقم ${v.id}`)}
+function printSingle(v: WvRow, logoUrl?: string) {
+  const body = `${printHeader("نموذج مخالفة عمل", `رقم ${v.id}`, logoUrl)}
   <div class="box">
     <div class="row"><span class="lbl">اسم العامل:</span><b>${esc(v.employee_name)}</b></div>
     <div class="row"><span class="lbl">نوع المخالفة:</span><b>${esc(v.violation_type_name)}</b></div>
@@ -236,6 +240,7 @@ function rowsTable(rows: WvRow[], managerView: boolean): string {
 
 export default function WorkViolationsPage() {
   const { toast } = useToast();
+  const { logoUrl } = useCompanyLogo();
   const { user } = useAuth();
   const canRecord = hasPermission(user?.permissions, [
     "record_work_violations",
@@ -454,7 +459,7 @@ export default function WorkViolationsPage() {
       : "تقرير مخالفات العمل";
     openPrint(
       title,
-      `${printHeader(title, periodLabel)}${rowsTable(rows, false)}${PRINT_FOOTER}`,
+      `${printHeader(title, periodLabel, logoUrl)}${rowsTable(rows, false)}${PRINT_FOOTER}`,
     );
   };
 
@@ -462,7 +467,7 @@ export default function WorkViolationsPage() {
     const title = "تقرير المدير — مخالفات العمل والخصومات";
     openPrint(
       title,
-      `${printHeader(title, `${filteredEmployeeName ? filteredEmployeeName + " — " : ""}${periodLabel}`)}${rowsTable(rows, true)}${PRINT_FOOTER}`,
+      `${printHeader(title, `${filteredEmployeeName ? filteredEmployeeName + " — " : ""}${periodLabel}`, logoUrl)}${rowsTable(rows, true)}${PRINT_FOOTER}`,
     );
   };
 
@@ -797,7 +802,7 @@ export default function WorkViolationsPage() {
                                 variant="ghost"
                                 size="icon"
                                 title="طباعة النموذج"
-                                onClick={() => printSingle(r)}
+                                onClick={() => printSingle(r, logoUrl)}
                                 data-testid={`button-print-${r.id}`}
                               >
                                 <Printer className="h-4 w-4" />
