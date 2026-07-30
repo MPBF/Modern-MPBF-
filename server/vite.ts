@@ -107,10 +107,13 @@ export function serveStatic(app: Express) {
     </script>
   `;
 
-  app.use("*", (_req, res) => {
-    const indexPath = path.resolve(distPath, "index.html");
+  // Pre-read and transform index.html ONCE at startup rather than on every
+  // request. Synchronous readFileSync on the hot path is unnecessary and a
+  // thrown error (e.g. file gone during a rolling deploy) would produce a 500.
+  const indexPath = path.resolve(distPath, "index.html");
+  let cachedHtml: string;
+  try {
     let html = fs.readFileSync(indexPath, "utf-8");
-
     if (!html.includes('rel="manifest"')) {
       html = html.replace("</head>", `${pwaSnippet}\n</head>`);
     }
@@ -120,8 +123,14 @@ export function serveStatic(app: Express) {
     ) {
       html = html.replace("</body>", `${swSnippet}\n</body>`);
     }
+    cachedHtml = html;
+  } catch (e) {
+    log(`Warning: could not pre-read index.html: ${(e as Error).message}`);
+    cachedHtml = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>MPBF</title></head><body><p style="font-family:system-ui;padding:2rem">جاري تحميل التطبيق… أعد تحميل الصفحة.</p></body></html>`;
+  }
 
+  app.use("*", (_req, res) => {
     res.setHeader("Content-Type", "text/html");
-    res.send(html);
+    res.send(cachedHtml);
   });
 }

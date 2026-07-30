@@ -67,10 +67,15 @@ process.on("unhandledRejection", (reason) => {
 const app = express();
 
 app.use((req: Request, res: Response, next: NextFunction) => {
+  // Health check always responds immediately — even during startup and after
+  // routes are fully registered — so the deployment platform never sees a 500.
+  if (req.path === "/api/health" || req.path === "/health") {
+    return res.status(200).json({ status: "ok" });
+  }
+
   if (!(app as any).__routesReady) {
-    if (req.path === "/api/health") {
-      return res.status(200).send("OK");
-    }
+    // Non-API paths (SPA routes): serve a loading spinner so the browser
+    // shows something while the server finishes initialization.
     if (!req.path.startsWith("/api/")) {
       return res
         .status(200)
@@ -78,6 +83,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
           `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><style>body{font-family:Cairo,system-ui,sans-serif;margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fafafa}.s{width:2rem;height:2rem;border:2px solid #f3f4f6;border-radius:50%;border-top-color:#3984f6;animation:r 1s ease-in-out infinite;margin:0 auto 1rem}@keyframes r{to{transform:rotate(360deg)}}</style></head><body><div style="text-align:center"><div class="s"></div><p style="font-size:.875rem;color:#6b7280">جاري تحميل النظام...</p></div><script>setTimeout(()=>location.reload(),2000)</script></body></html>`,
         );
     }
+    // API calls during startup: return 503 so clients know to retry.
+    // Passing to next() with no handlers registered would leave the request
+    // hanging or produce an unhelpful error.
+    return res
+      .status(503)
+      .set("Retry-After", "5")
+      .json({ message: "Server is starting up, please retry in a moment." });
   }
   next();
 });
