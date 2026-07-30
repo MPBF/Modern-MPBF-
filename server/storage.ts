@@ -6989,70 +6989,81 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      for (const [poId, { weight, item }] of Array.from(mergedByPo)) {
-        const [po] = await db
-          .select()
-          .from(production_orders)
-          .where(eq(production_orders.id, poId));
-        if (!po) {
-          throw new Error(`أمر الإنتاج رقم ${poId} غير موجود`);
-        }
-
-        const received = parseFloat(String(po.warehouse_received_kg || "0"));
-        const delivered = parseFloat(String(po.warehouse_delivered_kg || "0"));
-        const available = received - delivered;
-
-        if (available <= 0) {
-          throw new Error(
-            `لا توجد كمية متاحة للتسليم لأمر الإنتاج ${po.production_order_number}`,
-          );
-        }
-        if (weight > available + 0.01) {
-          throw new Error(
-            `الكمية المطلوبة (${weight} كجم) تتجاوز الكمية المتاحة (${available.toFixed(3)} كجم) لأمر الإنتاج ${po.production_order_number}`,
-          );
-        }
-
-        totalWeight += weight;
-        validatedItems.push({
-          production_order_id: poId,
-          production_order_number: po.production_order_number,
-          weight_kg: weight,
-          product_description: item.product_description || "",
-          customer_id: item.customer_id || data.customer_id,
-          customer_name: item.customer_name || "",
-          order_number: item.order_number || "",
-        });
-      }
-
-      if (validatedItems.length === 0) {
+      if (mergedByPo.size === 0) {
         throw new Error("لم يتم إدخال أي كميات صالحة");
       }
 
-      const voucherData: any = {
-        voucher_number: data.voucher_number,
-        voucher_type: data.voucher_type || "customer_delivery",
-        voucher_date: now,
-        delivery_time: now,
-        quantity: totalWeight.toString(),
-        weight_kg: totalWeight.toString(),
-        unit: data.unit || "kg",
-        notes: data.notes || null,
-        items: JSON.stringify(validatedItems),
-        production_order_id:
-          validatedItems.length === 1
-            ? validatedItems[0].production_order_id
-            : null,
-        customer_id: data.customer_id || validatedItems[0].customer_id || null,
-        driver_name: data.driver_name || null,
-        driver_phone: data.driver_phone || null,
-        vehicle_number: data.vehicle_number || null,
-        delivery_address: data.delivery_address || null,
-        created_by: data.created_by,
-        status: "completed",
-      };
-
+      // ── Transaction: lock each PO row, re-validate under the lock, then update ──
       return await db.transaction(async (tx) => {
+        const validatedItems: any[] = [];
+        let totalWeight = 0;
+
+        for (const [poId, { weight, item }] of Array.from(mergedByPo)) {
+          // Lock the row – serialises concurrent deliveries for the same PO.
+          const lockedRows = await tx.execute(
+            sql`SELECT * FROM production_orders WHERE id = ${poId} FOR UPDATE`,
+          );
+          const po: any = (lockedRows.rows as any[])[0];
+          if (!po) {
+            throw new Error(`أمر الإنتاج رقم ${poId} غير موجود`);
+          }
+
+          // Re-read available quantity under the lock so a concurrent delivery
+          // that already committed will be visible here.
+          const received = parseFloat(String(po.warehouse_received_kg || "0"));
+          const delivered = parseFloat(String(po.warehouse_delivered_kg || "0"));
+          const available = received - delivered;
+
+          if (available <= 0) {
+            throw new Error(
+              `لا توجد كمية متاحة للتسليم لأمر الإنتاج ${po.production_order_number}`,
+            );
+          }
+          if (weight > available + 0.01) {
+            throw new Error(
+              `الكمية المطلوبة (${weight} كجم) تتجاوز الكمية المتاحة (${available.toFixed(3)} كجم) لأمر الإنتاج ${po.production_order_number}`,
+            );
+          }
+
+          totalWeight += weight;
+          validatedItems.push({
+            production_order_id: poId,
+            production_order_number: po.production_order_number,
+            weight_kg: weight,
+            product_description: item.product_description || "",
+            customer_id: item.customer_id || data.customer_id,
+            customer_name: item.customer_name || "",
+            order_number: item.order_number || "",
+          });
+        }
+
+        if (validatedItems.length === 0) {
+          throw new Error("لم يتم إدخال أي كميات صالحة");
+        }
+
+        const voucherData: any = {
+          voucher_number: data.voucher_number,
+          voucher_type: data.voucher_type || "customer_delivery",
+          voucher_date: now,
+          delivery_time: now,
+          quantity: totalWeight.toString(),
+          weight_kg: totalWeight.toString(),
+          unit: data.unit || "kg",
+          notes: data.notes || null,
+          items: JSON.stringify(validatedItems),
+          production_order_id:
+            validatedItems.length === 1
+              ? validatedItems[0].production_order_id
+              : null,
+          customer_id: data.customer_id || validatedItems[0].customer_id || null,
+          driver_name: data.driver_name || null,
+          driver_phone: data.driver_phone || null,
+          vehicle_number: data.vehicle_number || null,
+          delivery_address: data.delivery_address || null,
+          created_by: data.created_by,
+          status: "completed",
+        };
+
         const [v] = await tx
           .insert(finished_goods_vouchers_out)
           .values(voucherData)
