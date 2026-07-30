@@ -907,14 +907,15 @@ export async function registerRoutes(
   // ==========================================================================
   // PUBLIC: Order view endpoint — no auth required (for QR code scanning)
   // ==========================================================================
-  app.get("/api/public/orders/:id", async (req, res) => {
+  app.get("/api/public/orders/:token", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ success: false, message: "معرف الطلب غير صحيح" });
+      const token = req.params.token;
+      // Tokens are 64-char hex strings — reject anything that doesn't look right
+      if (!token || !/^[0-9a-f]{64}$/i.test(token)) {
+        return res.status(400).json({ success: false, message: "رابط الطلب غير صحيح" });
       }
 
-      const order = await storage.getOrderById(id);
+      const order = await storage.getOrderByShareToken(token);
       if (!order) {
         return res.status(404).json({ success: false, message: "الطلب غير موجود" });
       }
@@ -927,7 +928,7 @@ export async function registerRoutes(
       const productionOrdersList = await db
         .select()
         .from(production_orders)
-        .where(eq(production_orders.order_id, id))
+        .where(eq(production_orders.order_id, order.id))
         .orderBy(production_orders.id);
 
       // Fetch customer products for each production order
@@ -14801,7 +14802,10 @@ Input: ${text}`;
           .gt(0, "الوزن يجب أن يكون أكبر من صفر")
           .max(50000, "الوزن يتجاوز 50 طن")
           .transform((v) => Number(v.toFixed(3))),
-        pieces_count: z.coerce.number().positive().optional(),
+        pieces_count: z.preprocess(
+          (v) => (v === "" || v === null || v === undefined ? undefined : v),
+          z.coerce.number().positive().optional(),
+        ),
         cutting_machine_id: z.string().min(1, "يجب اختيار ماكينة القطع"),
       });
 
@@ -14814,6 +14818,16 @@ Input: ${text}`;
       const existingRoll = await storage.getRollFullDetails(validated.roll_id);
       if (!existingRoll) {
         return res.status(404).json({ message: "الرول غير موجود" });
+      }
+
+      // Validate that requested cut weight does not exceed remaining roll weight
+      const rollWeightKg = parseFloat(String(existingRoll.weight_kg || 0));
+      const alreadyCutKg = parseFloat(String(existingRoll.cut_weight_total_kg || 0));
+      const availableKg = rollWeightKg - alreadyCutKg;
+      if (validated.cut_weight_kg > availableKg + 0.001) {
+        return res.status(400).json({
+          message: `الوزن المطلوب (${validated.cut_weight_kg} كجم) يتجاوز الكمية المتاحة في الرول (${availableKg.toFixed(3)} كجم)`,
+        });
       }
 
       // Check if order is paused - block production entry

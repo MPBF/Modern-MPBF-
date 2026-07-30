@@ -11,6 +11,7 @@ type PrintMode = "html" | "pdf" | "standalone";
 
 interface Order {
   id: string;
+  share_token?: string | null;
   order_number: string | number;
   created_at?: string | Date;
   delivery_days?: number;
@@ -256,10 +257,11 @@ export default function OrderPrintTemplate({
   }, [sortedOrders]);
 
   const qrUrl = useMemo(() => {
+    if (!order?.share_token) return null;
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const publicUrl = `${baseUrl}/view/order/${order?.id}`;
+    const publicUrl = `${baseUrl}/view/order/${order.share_token}`;
     return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicUrl)}&color=000000`;
-  }, [order?.id]);
+  }, [order?.share_token]);
 
   // Actions
   const handleDirectPrint = useCallback(async () => {
@@ -485,7 +487,7 @@ export default function OrderPrintTemplate({
                 <div><strong>{t("orders.print.date")}:</strong> {orderDateStr}</div>
                 <div><strong>{t("orders.print.delivery")}:</strong> {deliveryDateStr}</div>
               </div>
-              <img src={qrUrl} alt="QR" width="75" height="75" />
+              {qrUrl && <img src={qrUrl} alt="QR" width="75" height="75" />}
             </div>
           </div>
 

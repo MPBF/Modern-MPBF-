@@ -424,6 +424,7 @@ export const orders = pgTable(
     status: varchar("status", { length: 30 }).notNull().default("waiting"), // ENUM: waiting / on_hold / in_production / paused / cancelled / completed
     previous_status: varchar("previous_status", { length: 30 }),
     notes: text("notes"),
+    share_token: varchar("share_token", { length: 64 }).unique(),
     created_by: integer("created_by").references(() => users.id, {
       onDelete: "set null",
     }), // ON DELETE SET NULL

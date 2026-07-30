@@ -36,10 +36,11 @@ export default function ProductionOrderPrintTemplate({
   useEffect(() => {
     const generateQRCode = async () => {
       try {
+        const shareToken = order?.share_token;
+        if (!shareToken) return; // No token yet — skip QR generation
         const QRCode = (await import("qrcode")).default;
-        const orderId = order?.id || productionOrder.order_id;
         const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-        const publicUrl = orderId ? `${baseUrl}/view/order/${orderId}` : `${baseUrl}/view/order/0`;
+        const publicUrl = `${baseUrl}/view/order/${shareToken}`;
         const qrUrl = await QRCode.toDataURL(publicUrl, {
           width: 120,
           margin: 1,

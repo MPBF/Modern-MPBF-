@@ -1666,6 +1666,25 @@ function sanitizeResponseForLogging(response: any): any {
         pmErr?.message,
       );
     }
+
+    // Ensure orders.share_token column exists for secure public QR links
+    try {
+      await db.execute(sql`
+        ALTER TABLE orders
+        ADD COLUMN IF NOT EXISTS share_token varchar(64) UNIQUE
+      `);
+      // Back-fill existing orders that have no token yet (md5 concat = 64-char hex, no extensions needed)
+      await db.execute(sql`
+        UPDATE orders
+        SET share_token = md5(random()::text || clock_timestamp()::text || id::text)
+                       || md5(random()::text || id::text || clock_timestamp()::text)
+        WHERE share_token IS NULL
+      `);
+      console.log("✅ orders.share_token تم التحقق منه");
+    } catch (shareTokenErr: any) {
+      console.warn("⚠️ فشل تهيئة orders.share_token:", shareTokenErr?.message);
+    }
+
   } catch (error: any) {
     console.error("❌ فشل تهيئة قاعدة البيانات:", error?.message || error);
     if (isProduction) {

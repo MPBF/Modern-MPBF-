@@ -97,8 +97,8 @@ function rawMaterialLabel(v?: string | null) {
 }
 
 export default function ViewOrder() {
-  const params = useParams<{ id: string }>();
-  const orderId = params.id;
+  const params = useParams<{ token: string }>();
+  const orderId = params.token;
 
   const { data, isLoading, isError } = useQuery<any>({
     queryKey: ["/api/public/orders", orderId],

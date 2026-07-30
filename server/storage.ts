@@ -1748,14 +1748,32 @@ export class DatabaseStorage implements IStorage {
           );
         }
 
+        // Generate a cryptographically random share token for the public QR link
+        const crypto = await import("crypto");
+        const shareToken = crypto.randomBytes(32).toString("hex");
+
         const [order] = await db
           .insert(orders)
-          .values(insertOrder as any)
+          .values({ ...insertOrder, share_token: shareToken } as any)
           .returning();
         return order;
       },
       "createOrder",
       "إنشاء طلب جديد",
+    );
+  }
+
+  async getOrderByShareToken(token: string): Promise<NewOrder | undefined> {
+    return withDatabaseErrorHandling(
+      async () => {
+        const [order] = await db
+          .select()
+          .from(orders)
+          .where(eq(orders.share_token as any, token));
+        return order;
+      },
+      "getOrderByShareToken",
+      "جلب الطلب بالرمز المشترك",
     );
   }
 

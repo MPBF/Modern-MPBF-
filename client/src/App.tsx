@@ -201,7 +201,7 @@ function AppRoutes() {
         </Route>
 
         {/* Public order view — no login required (QR code scanning) */}
-        <Route path="/view/order/:id">
+        <Route path="/view/order/:token">
           <ViewOrder />
         </Route>
 
