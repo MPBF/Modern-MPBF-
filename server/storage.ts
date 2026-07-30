@@ -6770,6 +6770,9 @@ export class DatabaseStorage implements IStorage {
     } catch {}
 
     await db.transaction(async (tx) => {
+      // Collect affected production order IDs for post-subtraction status revert.
+      const affectedPoIds: number[] = [];
+
       if (parsedItems.length > 0) {
         for (const item of parsedItems) {
           const itemPoId = item.production_order_id;
@@ -6781,6 +6784,9 @@ export class DatabaseStorage implements IStorage {
                 warehouse_received_kg: sql`GREATEST(0, CAST(${production_orders.warehouse_received_kg} AS NUMERIC) - ${itemWeight})`,
               })
               .where(eq(production_orders.id, itemPoId));
+            if (!affectedPoIds.includes(itemPoId)) {
+              affectedPoIds.push(itemPoId);
+            }
           }
         }
       } else if (poId && totalQty > 0) {
@@ -6790,6 +6796,53 @@ export class DatabaseStorage implements IStorage {
             warehouse_received_kg: sql`GREATEST(0, CAST(${production_orders.warehouse_received_kg} AS NUMERIC) - ${totalQty})`,
           })
           .where(eq(production_orders.id, poId));
+        affectedPoIds.push(poId);
+      }
+
+      // Revert any PO that was 'completed' but is no longer fully received.
+      for (const affectedPoId of affectedPoIds) {
+        const [poRow] = await tx
+          .select({
+            warehouse_received_kg: production_orders.warehouse_received_kg,
+            status: production_orders.status,
+          })
+          .from(production_orders)
+          .where(eq(production_orders.id, affectedPoId));
+
+        if (!poRow || poRow.status !== "completed") continue;
+
+        const newReceived = parseFloat(
+          String(poRow.warehouse_received_kg || "0"),
+        );
+
+        // Compute the total ready weight (rolls at stage='done') for this PO.
+        const rwRes = await tx.execute(sql`
+          SELECT COALESCE(SUM(
+            CASE WHEN (i.name ILIKE '%plastic roll%' OR i.name_ar LIKE '%رولات بلاستيك%')
+              THEN r.weight_kg ELSE r.cut_weight_total_kg END
+          ), 0) AS total_ready_weight
+          FROM rolls r
+          JOIN production_orders po2 ON po2.id = r.production_order_id
+          JOIN customer_products cp  ON cp.id  = po2.customer_product_id
+          LEFT JOIN items i           ON i.id   = cp.item_id
+          WHERE r.production_order_id = ${affectedPoId} AND r.stage = 'done'
+        `);
+        const totalReady = parseFloat(
+          String((rwRes as any).rows?.[0]?.total_ready_weight ?? "0"),
+        );
+
+        // If the warehouse has not yet received the full ready quantity, reopen.
+        if (totalReady > 0 && newReceived < totalReady - 0.01) {
+          await tx
+            .update(production_orders)
+            .set({ status: "active" })
+            .where(
+              and(
+                eq(production_orders.id, affectedPoId),
+                sql`status = 'completed'`,
+              ),
+            );
+        }
       }
 
       if (voucher.item_id && totalQty > 0) {

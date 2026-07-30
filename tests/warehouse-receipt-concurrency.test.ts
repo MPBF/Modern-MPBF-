@@ -235,3 +235,140 @@ describe("warehouse receipt concurrency", () => {
     expect(parseFloat(res.rows[0].warehouse_received_kg)).toBe(8);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Voucher deletion reopens a fully-received order
+// ---------------------------------------------------------------------------
+
+/**
+ * Simulate the critical section of deleteFinishedGoodsVoucherIn:
+ *   subtract weightKg from warehouse_received_kg, then revert the PO
+ *   from 'completed' → 'active' when the warehouse is no longer fully received.
+ */
+async function simulateVoucherDeletion(
+  poId: number,
+  weightKg: number,
+): Promise<{ newReceived: number; status: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Subtract (mirrors GREATEST guard in deleteFinishedGoodsVoucherIn).
+    await client.query(
+      `UPDATE production_orders
+          SET warehouse_received_kg = GREATEST(0, CAST(warehouse_received_kg AS NUMERIC) - $1)
+        WHERE id = $2`,
+      [weightKg, poId],
+    );
+
+    // Re-read the new received value and status.
+    const poRes = await client.query(
+      "SELECT warehouse_received_kg, status FROM production_orders WHERE id = $1",
+      [poId],
+    );
+    const po = poRes.rows[0];
+    const newReceived = parseFloat(po.warehouse_received_kg ?? "0");
+
+    if (po.status === "completed") {
+      // Compute totalReadyWeight for this PO (mirrors storage.ts logic).
+      const rwRes = await client.query(
+        `SELECT COALESCE(SUM(
+            CASE WHEN (i.name ILIKE '%plastic roll%' OR i.name_ar LIKE '%رولات بلاستيك%')
+              THEN r.weight_kg ELSE r.cut_weight_total_kg END
+          ), 0) AS total_ready_weight
+         FROM rolls r
+         JOIN production_orders po2 ON po2.id = r.production_order_id
+         JOIN customer_products cp  ON cp.id  = po2.customer_product_id
+         LEFT JOIN items i           ON i.id   = cp.item_id
+         WHERE r.production_order_id = $1 AND r.stage = 'done'`,
+        [poId],
+      );
+      const totalReady = parseFloat(rwRes.rows[0]?.total_ready_weight ?? "0");
+
+      if (totalReady > 0 && newReceived < totalReady - 0.01) {
+        await client.query(
+          `UPDATE production_orders SET status = 'active'
+            WHERE id = $1 AND status = 'completed'`,
+          [poId],
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+
+    // Return the final state.
+    const finalRes = await client.query(
+      "SELECT warehouse_received_kg, status FROM production_orders WHERE id = $1",
+      [poId],
+    );
+    return {
+      newReceived: parseFloat(finalRes.rows[0].warehouse_received_kg ?? "0"),
+      status: finalRes.rows[0].status,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+describe("warehouse receipt deletion reopens completed order", () => {
+  it("deleting the receipt for a fully-received order reverts it to active", async () => {
+    // Arrange: mark the PO as fully received (10 kg) and completed.
+    await runQuery(
+      `UPDATE production_orders
+          SET warehouse_received_kg = 10, status = 'completed'
+        WHERE id = $1`,
+      [testPoId],
+    );
+
+    // Act: simulate deleting the 10 kg voucher.
+    const { newReceived, status } = await simulateVoucherDeletion(testPoId, 10);
+
+    // Assert: warehouse_received_kg is back to 0, status back to active.
+    expect(newReceived).toBe(0);
+    expect(status).toBe("active");
+  });
+
+  it("deleting a partial receipt on a non-completed order leaves status unchanged", async () => {
+    // Arrange: PO has 6 kg received, still active (not yet fully received).
+    await runQuery(
+      `UPDATE production_orders
+          SET warehouse_received_kg = 6, status = 'active'
+        WHERE id = $1`,
+      [testPoId],
+    );
+
+    // Act: delete a 3 kg voucher.
+    const { newReceived, status } = await simulateVoucherDeletion(testPoId, 3);
+
+    // Assert: only the quantity changes; status stays active.
+    expect(newReceived).toBe(3);
+    expect(status).toBe("active");
+  });
+
+  it("after reopening, the order can accept a new receipt", async () => {
+    // Arrange: fully received → completed.
+    await runQuery(
+      `UPDATE production_orders
+          SET warehouse_received_kg = 10, status = 'completed'
+        WHERE id = $1`,
+      [testPoId],
+    );
+
+    // Delete the voucher → should reopen.
+    const { status: statusAfterDelete } = await simulateVoucherDeletion(testPoId, 10);
+    expect(statusAfterDelete).toBe("active");
+
+    // Now a new receipt for the full 10 kg must succeed.
+    const receiptResult = await simulateReceipt(testPoId, 10, "V-CRC-REOPEN");
+    expect(receiptResult).toBe("ok");
+
+    const res = await runQuery(
+      "SELECT warehouse_received_kg FROM production_orders WHERE id = $1",
+      [testPoId],
+    );
+    expect(parseFloat(res.rows[0].warehouse_received_kg)).toBe(10);
+  });
+});
