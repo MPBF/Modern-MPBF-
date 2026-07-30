@@ -6291,9 +6291,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
 
     if (receiptItems.length > 0) {
-      let totalWeight = 0;
-      const validatedItems: any[] = [];
-
+      // ── Step 1: merge items by PO and pre-validate packaging units (read-only) ──
       const mergedByPo = new Map<number, { weight: number; item: any }>();
       for (const item of receiptItems) {
         const poId =
@@ -6310,51 +6308,22 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      if (mergedByPo.size === 0) {
+        throw new Error("لم يتم إدخال أي كميات صالحة");
+      }
+
+      // Optional packaging unit per receipt line. When provided, validate that
+      // (rolls_per_unit * roll_weight_g/1000) * units_count is within ±2% of
+      // weight_kg. This is read-only so can safely run before the transaction.
+      const packagingMeta = new Map<
+        number,
+        {
+          packagingUnitId: number | null;
+          unitsCount: number | null;
+          packagingUnitName: string | null;
+        }
+      >();
       for (const [poId, { weight, item }] of Array.from(mergedByPo)) {
-        const [po] = await db
-          .select()
-          .from(production_orders)
-          .where(eq(production_orders.id, poId));
-        if (!po) {
-          throw new Error(`أمر الإنتاج رقم ${poId} غير موجود`);
-        }
-
-        // "Ready to receive" basis: plastic-roll products are never cut, so their
-        // ready weight is the produced (done) roll weight; everything else uses
-        // the cut weight. Mirrors getProductionHallOrders so the receipt math
-        // matches what the warehouse user sees in the production hall.
-        const readyWeightResult = await db.execute(sql`
-          SELECT COALESCE(SUM(
-            CASE WHEN (i.name ILIKE '%plastic roll%' OR i.name_ar LIKE '%رولات بلاستيك%')
-              THEN r.weight_kg ELSE r.cut_weight_total_kg END
-          ), 0) AS total_ready_weight
-          FROM rolls r
-          JOIN production_orders po2 ON po2.id = r.production_order_id
-          JOIN customer_products cp ON cp.id = po2.customer_product_id
-          LEFT JOIN items i ON i.id = cp.item_id
-          WHERE r.production_order_id = ${poId} AND r.stage = 'done'
-        `);
-        const totalReadyWeight = parseFloat(
-          String((readyWeightResult.rows[0] as any)?.total_ready_weight || "0"),
-        );
-        const alreadyReceived = parseFloat(
-          String(po.warehouse_received_kg || "0"),
-        );
-        const remaining = totalReadyWeight - alreadyReceived;
-
-        if (remaining <= 0) {
-          throw new Error(
-            `تم استلام كامل الكمية لأمر الإنتاج ${po.production_order_number} مسبقاً`,
-          );
-        }
-        if (weight > remaining + 0.01) {
-          throw new Error(
-            `الكمية المطلوبة (${weight} كجم) تتجاوز الكمية المتبقية (${remaining.toFixed(3)} كجم) لأمر الإنتاج ${po.production_order_number}`,
-          );
-        }
-
-        // Optional packaging unit per receipt line. When provided, validate that
-        // (rolls_per_unit * roll_weight_g/1000) * units_count is within ±2% of weight_kg.
         let packagingUnitId: number | null = null;
         let unitsCount: number | null = null;
         let packagingUnitName: string | null = null;
@@ -6392,71 +6361,156 @@ export class DatabaseStorage implements IStorage {
           unitsCount = rawCount;
           packagingUnitName = pu.name;
         }
-
-        totalWeight += weight;
-        validatedItems.push({
-          production_order_id: poId,
-          production_order_number: po.production_order_number,
-          weight_kg: weight,
-          product_description: item.product_description || "",
-          customer_id: item.customer_id || data.customer_id,
-          customer_name: item.customer_name || "",
-          order_number: item.order_number || "",
-          item_id: item.item_id || data.item_id,
-          packaging_unit_id: packagingUnitId,
-          units_count: unitsCount,
-          packaging_unit_name: packagingUnitName,
-        });
+        packagingMeta.set(poId, { packagingUnitId, unitsCount, packagingUnitName });
       }
 
-      if (validatedItems.length === 0) {
-        throw new Error("لم يتم إدخال أي كميات صالحة");
-      }
+      // ── Step 2: transaction – lock each PO row, re-validate inside the lock,
+      //    update warehouse_received_kg, detect completion ────────────────────
+      const completedPoIds: number[] = [];
 
-      // If a single line and it carries a packaging unit, surface those at the
-      // top level too for easier listing/filtering. Multi-line vouchers keep the
-      // per-item details inside the JSON `items` payload.
-      const singlePackagingUnitId =
-        validatedItems.length === 1 ? validatedItems[0].packaging_unit_id : null;
-      const singleUnitsCount =
-        validatedItems.length === 1 ? validatedItems[0].units_count : null;
+      const voucher = await db.transaction(async (tx) => {
+        const validatedItems: any[] = [];
+        let totalWeight = 0;
+        // Store ready-weight per PO (computed inside lock) so we can reuse it
+        // for the completion check without a second query.
+        const readyWeightByPoId = new Map<number, number>();
 
-      const voucherData: any = {
-        voucher_number: data.voucher_number,
-        voucher_type: data.voucher_type || "production_receipt",
-        voucher_date: now,
-        receipt_time: now,
-        quantity: totalWeight.toString(),
-        weight_kg: totalWeight.toString(),
-        unit: data.unit || "kg",
-        notes: data.notes || null,
-        items: JSON.stringify(validatedItems),
-        production_order_id:
+        for (const [poId, { weight, item }] of Array.from(mergedByPo)) {
+          // Lock the row – serialises concurrent receipts for the same PO.
+          const lockedRows = await tx.execute(
+            sql`SELECT * FROM production_orders WHERE id = ${poId} FOR UPDATE`,
+          );
+          const po: any = (lockedRows.rows as any[])[0];
+          if (!po) {
+            throw new Error(`أمر الإنتاج رقم ${poId} غير موجود`);
+          }
+
+          // "Ready to receive" basis: plastic-roll products are never cut, so
+          // their ready weight is the produced (done) roll weight; everything
+          // else uses the cut weight. Mirrors getProductionHallOrders so the
+          // receipt math matches what the warehouse user sees.
+          const rwResult = await tx.execute(sql`
+            SELECT COALESCE(SUM(
+              CASE WHEN (i.name ILIKE '%plastic roll%' OR i.name_ar LIKE '%رولات بلاستيك%')
+                THEN r.weight_kg ELSE r.cut_weight_total_kg END
+            ), 0) AS total_ready_weight
+            FROM rolls r
+            JOIN production_orders po2 ON po2.id = r.production_order_id
+            JOIN customer_products cp ON cp.id = po2.customer_product_id
+            LEFT JOIN items i ON i.id = cp.item_id
+            WHERE r.production_order_id = ${poId} AND r.stage = 'done'
+          `);
+          const totalReadyWeight = parseFloat(
+            String((rwResult.rows[0] as any)?.total_ready_weight || "0"),
+          );
+          readyWeightByPoId.set(poId, totalReadyWeight);
+
+          const alreadyReceived = parseFloat(
+            String(po.warehouse_received_kg || "0"),
+          );
+          const remaining = totalReadyWeight - alreadyReceived;
+
+          if (remaining <= 0) {
+            throw new Error(
+              `تم استلام كامل الكمية لأمر الإنتاج ${po.production_order_number} مسبقاً`,
+            );
+          }
+          if (weight > remaining + 0.01) {
+            throw new Error(
+              `الكمية المطلوبة (${weight} كجم) تتجاوز الكمية المتبقية (${remaining.toFixed(3)} كجم) لأمر الإنتاج ${po.production_order_number}`,
+            );
+          }
+
+          const meta = packagingMeta.get(poId)!;
+          totalWeight += weight;
+          validatedItems.push({
+            production_order_id: poId,
+            production_order_number: po.production_order_number,
+            weight_kg: weight,
+            product_description: item.product_description || "",
+            customer_id: item.customer_id || data.customer_id,
+            customer_name: item.customer_name || "",
+            order_number: item.order_number || "",
+            item_id: item.item_id || data.item_id,
+            packaging_unit_id: meta.packagingUnitId,
+            units_count: meta.unitsCount,
+            packaging_unit_name: meta.packagingUnitName,
+          });
+        }
+
+        if (validatedItems.length === 0) {
+          throw new Error("لم يتم إدخال أي كميات صالحة");
+        }
+
+        // If a single line and it carries a packaging unit, surface those at the
+        // top level too for easier listing/filtering. Multi-line vouchers keep the
+        // per-item details inside the JSON `items` payload.
+        const singlePackagingUnitId =
           validatedItems.length === 1
-            ? validatedItems[0].production_order_id
-            : null,
-        customer_id: data.customer_id || validatedItems[0].customer_id || null,
-        item_id: data.item_id || validatedItems[0].item_id || null,
-        packaging_unit_id: singlePackagingUnitId,
-        units_count:
-          singleUnitsCount != null ? String(singleUnitsCount) : null,
-        created_by: data.created_by,
-        status: "completed",
-      };
+            ? validatedItems[0].packaging_unit_id
+            : null;
+        const singleUnitsCount =
+          validatedItems.length === 1 ? validatedItems[0].units_count : null;
 
-      return await db.transaction(async (tx) => {
+        const voucherData: any = {
+          voucher_number: data.voucher_number,
+          voucher_type: data.voucher_type || "production_receipt",
+          voucher_date: now,
+          receipt_time: now,
+          quantity: totalWeight.toString(),
+          weight_kg: totalWeight.toString(),
+          unit: data.unit || "kg",
+          notes: data.notes || null,
+          items: JSON.stringify(validatedItems),
+          production_order_id:
+            validatedItems.length === 1
+              ? validatedItems[0].production_order_id
+              : null,
+          customer_id: data.customer_id || validatedItems[0].customer_id || null,
+          item_id: data.item_id || validatedItems[0].item_id || null,
+          packaging_unit_id: singlePackagingUnitId,
+          units_count:
+            singleUnitsCount != null ? String(singleUnitsCount) : null,
+          created_by: data.created_by,
+          status: "completed",
+        };
+
         const [v] = await tx
           .insert(finished_goods_vouchers_in)
           .values(voucherData)
           .returning();
 
         for (const item of validatedItems) {
-          await tx
+          const [updated] = await tx
             .update(production_orders)
             .set({
               warehouse_received_kg: sql`CAST(${production_orders.warehouse_received_kg} AS NUMERIC) + ${item.weight_kg}`,
             })
-            .where(eq(production_orders.id, item.production_order_id));
+            .where(eq(production_orders.id, item.production_order_id))
+            .returning({
+              warehouse_received_kg:
+                production_orders.warehouse_received_kg,
+            });
+
+          // Transition to 'completed' when the full produced quantity has been
+          // received. Uses the ready-weight value captured under the lock to
+          // avoid a second round-trip.
+          const readyKg = readyWeightByPoId.get(item.production_order_id) ?? 0;
+          const newReceived = parseFloat(
+            String(updated?.warehouse_received_kg || "0"),
+          );
+          if (readyKg > 0 && newReceived >= readyKg - 0.01) {
+            await tx
+              .update(production_orders)
+              .set({ status: "completed" })
+              .where(
+                and(
+                  eq(production_orders.id, item.production_order_id),
+                  sql`status <> 'completed'`,
+                ),
+              );
+            completedPoIds.push(item.production_order_id);
+          }
         }
 
         if (data.item_id) {
@@ -6496,79 +6550,156 @@ export class DatabaseStorage implements IStorage {
 
         return v;
       });
+
+      // After the transaction commits, propagate completion to the parent order.
+      for (const poId of completedPoIds) {
+        await this.maybeCompleteParentOrder(poId);
+      }
+
+      return voucher;
     }
 
+    // ── Single-PO path ──────────────────────────────────────────────────────
     const poId = data.production_order_id
       ? typeof data.production_order_id === "string"
         ? parseInt(data.production_order_id)
         : data.production_order_id
       : null;
 
-    if (poId) {
-      const [po] = await db
-        .select()
-        .from(production_orders)
-        .where(eq(production_orders.id, poId));
-      if (!po) {
-        throw new Error("أمر الإنتاج غير موجود");
-      }
-
-      // Plastic-roll products are never cut: their ready weight is the produced
-      // (done) roll weight; everything else uses cut weight. Mirrors
-      // getProductionHallOrders so receipt math matches the production hall view.
-      const readyWeightResult = await db.execute(sql`
-        SELECT COALESCE(SUM(
-          CASE WHEN (i.name ILIKE '%plastic roll%' OR i.name_ar LIKE '%رولات بلاستيك%')
-            THEN r.weight_kg ELSE r.cut_weight_total_kg END
-        ), 0) AS total_ready_weight
-        FROM rolls r
-        JOIN production_orders po2 ON po2.id = r.production_order_id
-        JOIN customer_products cp ON cp.id = po2.customer_product_id
-        LEFT JOIN items i ON i.id = cp.item_id
-        WHERE r.production_order_id = ${poId} AND r.stage = 'done'
-      `);
-      const totalReadyWeight = parseFloat(
-        String((readyWeightResult.rows[0] as any)?.total_ready_weight || "0"),
-      );
-      const alreadyReceived = parseFloat(
-        String(po.warehouse_received_kg || "0"),
-      );
-      const remaining = totalReadyWeight - alreadyReceived;
-      const receiveQty = parseFloat(
-        String(data.weight_kg || data.quantity || "0"),
-      );
-
-      if (remaining <= 0) {
-        throw new Error("تم استلام كامل الكمية لهذا الأمر مسبقاً");
-      }
-      if (receiveQty > remaining) {
-        throw new Error(
-          `الكمية المطلوبة (${receiveQty} كجم) تتجاوز الكمية المتبقية (${remaining} كجم)`,
-        );
-      }
-
-      data.production_order_id = poId;
-    }
-
     data.receipt_time = data.receipt_time || new Date();
 
-    return await db.transaction(async (tx) => {
+    let singleCompletedPoId: number | null = null;
+
+    const voucher = await db.transaction(async (tx) => {
+      if (poId) {
+        // Lock the PO row to serialise concurrent receipts.
+        const lockedRows = await tx.execute(
+          sql`SELECT * FROM production_orders WHERE id = ${poId} FOR UPDATE`,
+        );
+        const po: any = (lockedRows.rows as any[])[0];
+        if (!po) {
+          throw new Error("أمر الإنتاج غير موجود");
+        }
+
+        // Plastic-roll products are never cut: their ready weight is the
+        // produced (done) roll weight; everything else uses cut weight.
+        const readyWeightResult = await tx.execute(sql`
+          SELECT COALESCE(SUM(
+            CASE WHEN (i.name ILIKE '%plastic roll%' OR i.name_ar LIKE '%رولات بلاستيك%')
+              THEN r.weight_kg ELSE r.cut_weight_total_kg END
+          ), 0) AS total_ready_weight
+          FROM rolls r
+          JOIN production_orders po2 ON po2.id = r.production_order_id
+          JOIN customer_products cp ON cp.id = po2.customer_product_id
+          LEFT JOIN items i ON i.id = cp.item_id
+          WHERE r.production_order_id = ${poId} AND r.stage = 'done'
+        `);
+        const totalReadyWeight = parseFloat(
+          String(
+            (readyWeightResult.rows[0] as any)?.total_ready_weight || "0",
+          ),
+        );
+        const alreadyReceived = parseFloat(
+          String(po.warehouse_received_kg || "0"),
+        );
+        const remaining = totalReadyWeight - alreadyReceived;
+        const receiveQty = parseFloat(
+          String(data.weight_kg || data.quantity || "0"),
+        );
+
+        if (remaining <= 0) {
+          throw new Error("تم استلام كامل الكمية لهذا الأمر مسبقاً");
+        }
+        if (receiveQty > remaining) {
+          throw new Error(
+            `الكمية المطلوبة (${receiveQty} كجم) تتجاوز الكمية المتبقية (${remaining} كجم)`,
+          );
+        }
+
+        data.production_order_id = poId;
+
+        const [v] = await tx
+          .insert(finished_goods_vouchers_in)
+          .values(data)
+          .returning();
+
+        const receiveQty2 = parseFloat(
+          String(data.weight_kg || data.quantity || "0"),
+        );
+        const [updated] = await tx
+          .update(production_orders)
+          .set({
+            warehouse_received_kg: sql`CAST(${production_orders.warehouse_received_kg} AS NUMERIC) + ${receiveQty2}`,
+          })
+          .where(eq(production_orders.id, poId))
+          .returning({
+            warehouse_received_kg: production_orders.warehouse_received_kg,
+          });
+
+        // Transition to 'completed' when the full produced quantity has been
+        // received.
+        const newReceived = parseFloat(
+          String(updated?.warehouse_received_kg || "0"),
+        );
+        if (totalReadyWeight > 0 && newReceived >= totalReadyWeight - 0.01) {
+          await tx
+            .update(production_orders)
+            .set({ status: "completed" })
+            .where(
+              and(
+                eq(production_orders.id, poId),
+                sql`status <> 'completed'`,
+              ),
+            );
+          singleCompletedPoId = poId;
+        }
+
+        if (data.item_id) {
+          const qty = parseFloat(
+            String(data.weight_kg || data.quantity || "0"),
+          );
+          const locId = data.location_id
+            ? typeof data.location_id === "string"
+              ? parseInt(data.location_id)
+              : data.location_id
+            : null;
+          const conditions = locId
+            ? and(
+                eq(inventory.item_id, data.item_id),
+                eq(inventory.location_id, locId),
+              )
+            : eq(inventory.item_id, data.item_id);
+          const existing = await tx
+            .select()
+            .from(inventory)
+            .where(conditions as any);
+
+          if (existing.length > 0) {
+            await tx
+              .update(inventory)
+              .set({
+                current_stock: sql`CAST(${inventory.current_stock} AS NUMERIC) + ${qty}`,
+                last_updated: new Date(),
+              })
+              .where(eq(inventory.id, existing[0].id));
+          } else {
+            await tx.insert(inventory).values({
+              item_id: data.item_id,
+              location_id: locId,
+              current_stock: String(qty),
+              unit: "كيلو",
+            } as any);
+          }
+        }
+
+        return v;
+      }
+
+      // No production_order_id on this voucher – plain inventory movement.
       const [v] = await tx
         .insert(finished_goods_vouchers_in)
         .values(data)
         .returning();
-
-      if (poId) {
-        const receiveQty = parseFloat(
-          String(data.weight_kg || data.quantity || "0"),
-        );
-        await tx
-          .update(production_orders)
-          .set({
-            warehouse_received_kg: sql`CAST(${production_orders.warehouse_received_kg} AS NUMERIC) + ${receiveQty}`,
-          })
-          .where(eq(production_orders.id, poId));
-      }
 
       if (data.item_id) {
         const qty = parseFloat(String(data.weight_kg || data.quantity || "0"));
@@ -6608,6 +6739,13 @@ export class DatabaseStorage implements IStorage {
 
       return v;
     });
+
+    // After the transaction commits, propagate completion to the parent order.
+    if (singleCompletedPoId !== null) {
+      await this.maybeCompleteParentOrder(singleCompletedPoId);
+    }
+
+    return voucher;
   }
 
   async deleteFinishedGoodsVoucherIn(id: number): Promise<void> {

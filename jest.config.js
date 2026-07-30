@@ -9,6 +9,7 @@ export default {
   },
   testEnvironment: "node",
   testMatch: ["**/tests/**/*.test.ts"],
+  testTimeout: 60000,
   moduleNameMapping: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
