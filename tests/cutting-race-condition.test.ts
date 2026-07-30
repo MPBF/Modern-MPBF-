@@ -443,3 +443,179 @@ describe("createFinalRoll – transaction atomicity", () => {
     expect(pctIdx).toBeGreaterThan(txIdx);
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. maybeCompleteParentOrder — double-completion guard
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * maybeCompleteParentOrder performs three sequential SELECTs then a conditional
+ * UPDATE … WHERE status='in_production'. The WHERE predicate is the last-resort
+ * guard: even if two concurrent calls both pass the application-level status
+ * check, only one DB row update can succeed (the second sees a non-matching
+ * predicate and affects 0 rows).
+ *
+ * These tests exercise:
+ *  a) the application-level guard (second sequential call bails after seeing
+ *     the order is already 'completed')
+ *  b) the DB-level guard (concurrent calls that both see 'in_production' both
+ *     fire the UPDATE, relying on the WHERE clause to make the second a no-op)
+ *  c) early-exit paths (missing parent order_id, siblings not all done)
+ */
+
+describe("maybeCompleteParentOrder – double-completion guard", () => {
+  const ORDER_ID = 100;
+
+  // The outer beforeEach mocks maybeCompleteParentOrder so completeCutting tests
+  // can stub it out. For THIS suite we need the real implementation, so restore
+  // it after the outer beforeEach has run.
+  beforeEach(() => {
+    jest.spyOn(instance as any, "maybeCompleteParentOrder").mockRestore();
+  });
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  /**
+   * Push the three db.select() results consumed by one maybeCompleteParentOrder
+   * call into dbSelectQueue.
+   *   1. production_orders → { order_id }
+   *   2. production_orders siblings → [{ status }…]
+   *   3. orders parent → { status, order_number }
+   */
+  function pushSelectsForCall(
+    parentStatus: "in_production" | "completed",
+    siblingStatuses: string[] = ["completed"],
+  ): void {
+    state.dbSelectQueue.push([{ order_id: ORDER_ID }]);
+    state.dbSelectQueue.push(siblingStatuses.map((s) => ({ status: s })));
+    state.dbSelectQueue.push([
+      { status: parentStatus, order_number: "O-001" },
+    ]);
+  }
+
+  // ── tests ─────────────────────────────────────────────────────────────────
+
+  it("fires exactly one UPDATE when called sequentially and the second call sees 'completed'", async () => {
+    // First call: parent is 'in_production' → UPDATE issued
+    pushSelectsForCall("in_production");
+
+    // Second call: parent is already 'completed' → application-level guard
+    // (parent.status === 'in_production') is false → no UPDATE issued
+    pushSelectsForCall("completed");
+
+    await (instance as any).maybeCompleteParentOrder(PO_ID);
+    await (instance as any).maybeCompleteParentOrder(PO_ID);
+
+    // db.update is the outer (non-tx) spy from beforeEach
+    expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("concurrent race: WHERE status='in_production' is present in every UPDATE and makes the second a no-op", async () => {
+    // Worst-case race: both concurrent calls complete all three SELECTs before
+    // either issues its UPDATE, so both see parentStatus='in_production'.
+    //
+    // With Promise.all the two async calls interleave at every await point,
+    // meaning the dbSelectQueue is consumed in interleaved order:
+    //   [call1-s1, call2-s1, call1-s2, call2-s2, call1-s3, call2-s3]
+    state.dbSelectQueue.push([{ order_id: ORDER_ID }]);               // call1 PO lookup
+    state.dbSelectQueue.push([{ order_id: ORDER_ID }]);               // call2 PO lookup
+    state.dbSelectQueue.push([{ status: "completed" }]);               // call1 siblings
+    state.dbSelectQueue.push([{ status: "completed" }]);               // call2 siblings
+    state.dbSelectQueue.push([
+      { status: "in_production", order_number: "O-001" },             // call1 parent
+    ]);
+    state.dbSelectQueue.push([
+      { status: "in_production", order_number: "O-001" },             // call2 parent
+    ]);
+
+    // Intercept db.update() so we can:
+    //   a) capture the WHERE condition passed to each UPDATE call
+    //   b) simulate DB-level affected-row semantics: first UPDATE succeeds
+    //      (1 row returned), second is a no-op (0 rows) because the
+    //      WHERE status='in_production' predicate no longer matches.
+    const capturedWhereArgs: any[] = [];
+    const effectiveCompletions: any[] = [];
+
+    jest.spyOn(db, "update").mockImplementation(() => {
+      const chain: any = {};
+      chain.set = () => chain;
+      chain.where = (condition: any) => {
+        capturedWhereArgs.push(condition);
+        // First call commits → return a row. Second call is a no-op → return [].
+        const affectedRows =
+          capturedWhereArgs.length === 1
+            ? [{ id: ORDER_ID, status: "completed" }]
+            : [];
+        if (affectedRows.length > 0) effectiveCompletions.push(affectedRows[0]);
+        return makeChain(affectedRows);
+      };
+      return chain;
+    });
+
+    await Promise.all([
+      (instance as any).maybeCompleteParentOrder(PO_ID),
+      (instance as any).maybeCompleteParentOrder(PO_ID),
+    ]);
+
+    // Both calls reached the UPDATE (they both passed the pre-check).
+    expect(capturedWhereArgs).toHaveLength(2);
+
+    // ── Critical assertion ─────────────────────────────────────────────────
+    // Every UPDATE must carry the `status = 'in_production'` guard predicate.
+    // If the WHERE clause were removed from maybeCompleteParentOrder in
+    // storage.ts, the serialized condition would NOT contain 'in_production'
+    // and this assertion would fail — proving the predicate is the real
+    // concurrency safeguard against double-completion.
+    //
+    // Drizzle SQL objects contain circular refs (column → table → column),
+    // so use a WeakSet-based cycle-safe serializer.
+    function safeStringify(obj: any): string {
+      const seen = new WeakSet();
+      return JSON.stringify(obj, (_key, value) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) return "[Circular]";
+          seen.add(value);
+        }
+        return value;
+      });
+    }
+    for (const condition of capturedWhereArgs) {
+      const serialized = safeStringify(condition);
+      expect(serialized).toContain("in_production");
+    }
+
+    // Only one UPDATE produced an affected row (the second was a DB-level no-op).
+    expect(effectiveCompletions).toHaveLength(1);
+    expect(effectiveCompletions[0]).toMatchObject({ status: "completed" });
+  });
+
+  it("does nothing when not all sibling production orders are completed", async () => {
+    state.dbSelectQueue.push([{ order_id: ORDER_ID }]);
+    state.dbSelectQueue.push([
+      { status: "completed" },
+      { status: "in_production" }, // one sibling still active
+    ]);
+    // No parent select or UPDATE should follow
+
+    await (instance as any).maybeCompleteParentOrder(PO_ID);
+
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the production order has no parent order", async () => {
+    // db.select returns empty array → destructuring gives po = undefined
+    state.dbSelectQueue.push([]);
+
+    await (instance as any).maybeCompleteParentOrder(PO_ID);
+
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the parent order is not 'in_production' (already completed)", async () => {
+    pushSelectsForCall("completed");
+
+    await (instance as any).maybeCompleteParentOrder(PO_ID);
+
+    expect(db.update).not.toHaveBeenCalled();
+  });
+});
