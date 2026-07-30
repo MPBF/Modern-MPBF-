@@ -254,12 +254,19 @@
   }
 
   .btn-primary {
-    background-color: hsl(var(--primary-600));
-    color: hsl(var(--primary-foreground));
-    @apply px-4 py-2 rounded-lg transition-colors font-medium;
+    background: linear-gradient(135deg, #3984f6 0%, #2563eb 100%);
+    box-shadow: 0 4px 14px rgba(57, 132, 246, 0.30);
+    color: #ffffff;
+    border: none;
+    @apply px-4 py-2 rounded-lg transition-all font-semibold;
   }
   .btn-primary:hover {
-    background-color: hsl(var(--primary-500));
+    background: linear-gradient(135deg, #4e95ff 0%, #3b74f5 100%);
+    box-shadow: 0 6px 18px rgba(57, 132, 246, 0.40);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px rgba(57, 132, 246, 0.30);
   }
 
   .btn-success {

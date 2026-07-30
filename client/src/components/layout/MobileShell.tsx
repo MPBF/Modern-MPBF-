@@ -126,13 +126,14 @@ export default function MobileShell() {
   return (
     <>
       {/* Quick Actions Bar - Fixed Bottom */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 shadow-lg">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 shadow-2xl" style={{ background: "#0f2341", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="flex items-center justify-around py-2 px-2">
           {/* Hamburger Menu Button */}
           <Drawer open={isOpen} onOpenChange={setIsOpen}>
             <DrawerTrigger asChild>
               <button
-                className="flex flex-col items-center p-2 min-w-0 text-gray-600 dark:text-gray-400 hover:text-primary"
+                className="flex flex-col items-center p-2 min-w-0 hover:text-white transition-colors"
+                style={{ color: "rgba(255,255,255,0.75)" }}
                 data-testid="mobile-menu-trigger"
               >
                 <Menu className="h-5 w-5 mb-1" />
@@ -283,11 +284,8 @@ export default function MobileShell() {
             return (
               <Link key={item.path} href={item.path}>
                 <button
-                  className={`flex flex-col items-center p-2 min-w-0 transition-colors ${
-                    isActive
-                      ? "text-primary"
-                      : "text-gray-600 dark:text-gray-400 hover:text-primary"
-                  }`}
+                  className="flex flex-col items-center p-2 min-w-0 transition-colors"
+                  style={{ color: isActive ? "#3984f6" : "rgba(255,255,255,0.75)" }}
                   data-testid={`quick-action-${item.path.replace(/\//g, "-")}`}
                 >
                   <Icon className="h-5 w-5 mb-1" />
