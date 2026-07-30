@@ -15221,7 +15221,7 @@ Input: ${text}`;
         res.json({
           productionOrderId,
           cuttingCompleted: isCompleted,
-          status: isCompleted ? "completed" : "in_progress",
+          status: isCompleted ? "completed" : "active",
         });
       } catch (error) {
         console.error("Error checking cutting completion:", error);
@@ -16218,7 +16218,7 @@ Input: ${text}`;
           ...cleanBatchData,
           batch_number: generatedBatchNumber,
           operator_id: req.user!.id,
-          status: "in_progress",
+          status: "completed",
         };
 
         const newBatch = await storage.createMixingBatch(
@@ -18903,7 +18903,7 @@ Input: ${text}`;
         today.setHours(0, 0, 0, 0);
         const result = await db.execute(sql`
         SELECT 
-          COUNT(DISTINCT po.id) FILTER (WHERE po.status = 'in_progress') as active_orders,
+          COUNT(DISTINCT po.id) FILTER (WHERE po.status = 'active') as active_orders,
           COUNT(r.id) FILTER (WHERE r.created_at >= ${today}) as rolls_today,
           COALESCE(SUM(r.weight_kg) FILTER (WHERE r.created_at >= ${today}), 0) as production_kg_today,
           COUNT(DISTINCT po.id) FILTER (WHERE po.status = 'completed' AND po.production_end_time >= ${today}) as completed_today

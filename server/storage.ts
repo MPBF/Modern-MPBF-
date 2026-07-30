@@ -8089,15 +8089,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFinalRoll(data: any): Promise<Roll> {
-    const roll = await this.createRollWithTiming({ ...data, is_last_roll: true });
-    await db
-      .update(production_orders)
-      .set({
-        is_final_roll_created: true,
-        film_completed: true,
-        production_end_time: new Date(),
-      })
-      .where(eq(production_orders.id, data.production_order_id));
+    // Run the roll insert and the production_order flag update in the same
+    // transaction so a partial failure cannot leave the order without
+    // film_completed=true while the roll already exists.
+    // createRollWithTiming accepts an existingTx to reuse the connection;
+    // when it does, the caller is responsible for running
+    // updateProductionOrderCompletionPercentages after the commit.
+    const roll = await db.transaction(async (tx) => {
+      const r = await this.createRollWithTiming(
+        { ...data, is_last_roll: true },
+        tx,
+      );
+      await tx
+        .update(production_orders)
+        .set({
+          is_final_roll_created: true,
+          film_completed: true,
+          production_end_time: new Date(),
+        })
+        .where(eq(production_orders.id, data.production_order_id));
+      return r;
+    });
+    // Recalculate completion percentages now that the transaction has committed
+    await this.updateProductionOrderCompletionPercentages(
+      data.production_order_id,
+    );
     return roll;
   }
 
@@ -9758,55 +9774,84 @@ export class DatabaseStorage implements IStorage {
   ): Promise<any> {
     return withDatabaseErrorHandling(
       async () => {
-        const [roll] = await db
-          .select()
+        // Pre-read the production_order_id so we can acquire the advisory lock
+        // before touching any rows (lock order must be consistent with other paths).
+        const [rollPre] = await db
+          .select({ id: rolls.id, production_order_id: rolls.production_order_id })
           .from(rolls)
           .where(eq(rolls.id, rollId));
-        if (!roll) throw new Error(`الرول ${rollId} غير موجود`);
+        if (!rollPre) throw new Error(`الرول ${rollId} غير موجود`);
 
-        const grossWeight = parseFloat(roll.weight_kg?.toString() || "0");
-        const wasteKg = Math.max(0, grossWeight - netWeight);
+        // Run the roll update + completion check inside a single transaction
+        // guarded by an advisory lock (key 1007 = cutting-completion path).
+        // This prevents two concurrent completions from both seeing 0 remaining
+        // rolls and each trying to close the order / generate a batch number.
+        const { updatedRoll, poId, isOrderCompleted } = await db.transaction(
+          async (tx) => {
+            await tx.execute(
+              sql`SELECT pg_advisory_xact_lock(1007, ${rollPre.production_order_id})`,
+            );
 
-        const updates: any = {
-          stage: "done",
-          cut_completed_at: new Date(),
-          cut_by: operatorId,
-          cut_weight_total_kg: netWeight.toString(),
-          waste_kg: wasteKg.toString(),
-        };
-        if (cuttingMachineId) updates.cutting_machine_id = cuttingMachineId;
+            // Re-read inside the transaction for a consistent snapshot
+            const [roll] = await tx
+              .select()
+              .from(rolls)
+              .where(eq(rolls.id, rollId));
+            if (!roll) throw new Error(`الرول ${rollId} غير موجود`);
 
-        const [updatedRoll] = await db
-          .update(rolls)
-          .set(updates)
-          .where(eq(rolls.id, rollId))
-          .returning();
+            const grossWeight = parseFloat(roll.weight_kg?.toString() || "0");
+            const wasteKg = Math.max(0, grossWeight - netWeight);
 
-        const remainingRolls = await db
-          .select()
-          .from(rolls)
-          .where(
-            and(
-              eq(rolls.production_order_id, roll.production_order_id),
-              inArray(rolls.stage as any, ["film", "printing"]),
-            ),
-          );
+            const updates: any = {
+              stage: "done",
+              cut_completed_at: new Date(),
+              cut_by: operatorId,
+              cut_weight_total_kg: netWeight.toString(),
+              waste_kg: wasteKg.toString(),
+            };
+            if (cuttingMachineId) updates.cutting_machine_id = cuttingMachineId;
 
-        const isOrderCompleted = remainingRolls.length === 0;
+            const [updatedRoll] = await tx
+              .update(rolls)
+              .set(updates)
+              .where(eq(rolls.id, rollId))
+              .returning();
 
-        if (isOrderCompleted) {
-          await db
-            .update(production_orders)
-            .set({ status: "completed" } as any)
-            .where(eq(production_orders.id, roll.production_order_id));
-          invalidateProductionCache();
-          await this.ensureBatchNumber(roll.production_order_id);
-          await this.maybeCompleteParentOrder(roll.production_order_id);
-        }
+            // Check remaining rolls inside the locked transaction — consistent read
+            const remainingRolls = await tx
+              .select({ id: rolls.id })
+              .from(rolls)
+              .where(
+                and(
+                  eq(rolls.production_order_id, roll.production_order_id),
+                  inArray(rolls.stage as any, ["film", "printing"]),
+                ),
+              );
 
-        await this.updateProductionOrderCompletionPercentages(
-          roll.production_order_id,
+            const isOrderCompleted = remainingRolls.length === 0;
+
+            if (isOrderCompleted) {
+              await tx
+                .update(production_orders)
+                .set({ status: "completed" } as any)
+                .where(eq(production_orders.id, roll.production_order_id));
+              invalidateProductionCache();
+            }
+
+            return {
+              updatedRoll,
+              poId: roll.production_order_id,
+              isOrderCompleted,
+            };
+          },
         );
+
+        // These must run AFTER the transaction commits so they see the final state
+        await this.updateProductionOrderCompletionPercentages(poId);
+        if (isOrderCompleted) {
+          await this.ensureBatchNumber(poId);
+          await this.maybeCompleteParentOrder(poId);
+        }
 
         return { ...updatedRoll, is_order_completed: isOrderCompleted };
       },
@@ -10602,7 +10647,7 @@ export class DatabaseStorage implements IStorage {
     data?: any,
   ): Promise<ProductionOrder> {
     return this.updateProductionOrder(productionOrderId, {
-      status: "in_progress",
+      status: "active",
       ...data,
     });
   }
@@ -11124,7 +11169,7 @@ export class DatabaseStorage implements IStorage {
         SELECT ${this.enrichedPoColumns()}
         FROM production_orders po
         ${this.enrichedPoJoins()}
-        WHERE po.status IN ('pending', 'active', 'in_production')
+        WHERE po.status IN ('pending', 'active')
           AND ${completed} IS NOT TRUE
           ${printedFilter}
           AND po.id NOT IN (
@@ -12361,7 +12406,7 @@ export class DatabaseStorage implements IStorage {
       const [active] = await db
         .select({ count: count() })
         .from(production_orders)
-        .where(eq(production_orders.status, "in_progress"));
+        .where(eq(production_orders.status, "active"));
       return { total: total?.count || 0, active: active?.count || 0 };
     }
 
@@ -13457,7 +13502,7 @@ export class DatabaseStorage implements IStorage {
         SELECT ${this.enrichedPoColumns()}
         FROM production_orders po
         ${this.enrichedPoJoins()}
-        WHERE po.status IN ('pending', 'active', 'in_production')
+        WHERE po.status IN ('pending', 'active')
           AND ${completed} IS NOT TRUE
           ${printedFilter}
           AND po.id NOT IN (
