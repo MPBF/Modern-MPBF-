@@ -708,6 +708,7 @@ export interface IStorage {
     previousStatus: string | null,
   ): Promise<void>;
   deleteProductionOrder(id: number): Promise<void>;
+  maybeCompleteParentOrder(productionOrderId: number): Promise<void>;
   getProductionOrdersForPrintingQueue(): Promise<any[]>;
   getProductionOrdersForCuttingQueue(): Promise<any[]>;
   getGroupedCuttingQueue(): Promise<any[]>;
@@ -9864,7 +9865,7 @@ export class DatabaseStorage implements IStorage {
   // completed. Centralizes the rule so every path that completes a production
   // order (cutting completion, roll products that skip cutting, etc.) keeps the
   // order status in sync — not just the production-order PATCH route.
-  private async maybeCompleteParentOrder(
+  async maybeCompleteParentOrder(
     productionOrderId: number,
   ): Promise<void> {
     try {

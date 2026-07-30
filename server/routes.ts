@@ -3313,31 +3313,8 @@ export async function registerRoutes(
           validatedData,
         );
 
-        if (validatedData.status === "completed" && productionOrder?.order_id) {
-          try {
-            const siblingOrders = await storage.getAllProductionOrders({
-              order_id: productionOrder.order_id,
-            });
-            const allCompleted =
-              siblingOrders.length > 0 &&
-              siblingOrders.every((po: any) => po.status === "completed");
-            if (allCompleted) {
-              const parentOrder = await storage.getOrderById(
-                productionOrder.order_id,
-              );
-              if (parentOrder && parentOrder.status === "in_production") {
-                await storage.updateOrderStatus(
-                  productionOrder.order_id,
-                  "completed",
-                );
-                console.log(
-                  `✅ تم إكمال الطلب ${parentOrder.order_number} تلقائياً - جميع أوامر الإنتاج مكتملة`,
-                );
-              }
-            }
-          } catch (autoCompleteError) {
-            console.error("خطأ في الإكمال التلقائي للطلب:", autoCompleteError);
-          }
+        if (validatedData.status === "completed" && productionOrder?.id) {
+          await storage.maybeCompleteParentOrder(productionOrder.id);
         }
 
         res.json(productionOrder);
