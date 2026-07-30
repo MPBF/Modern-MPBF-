@@ -11301,7 +11301,7 @@ export class DatabaseStorage implements IStorage {
       let ordered = [...backlog];
       if (algorithm === "priority") {
         const rank = (s: string) =>
-          s === "in_production" ? 0 : s === "active" ? 1 : 2;
+          s === "active" ? 0 : 1;
         ordered.sort(
           (a, b) =>
             rank(String(a.status)) - rank(String(b.status)) ||

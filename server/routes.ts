@@ -10650,7 +10650,7 @@ Input: ${text}`;
             (po: any) => po.order_id === orderId,
           );
           const activeProdOrders = productionOrders.filter((po: any) =>
-            ["in_progress", "in_production"].includes(po.status),
+            po.status === "active",
           );
 
           if (activeProdOrders.length > 0) {
