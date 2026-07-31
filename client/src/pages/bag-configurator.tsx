@@ -1347,7 +1347,20 @@ export default function BagConfigurator() {
         </div>
 
         {/* 3D Viewer */}
-        <div className="relative bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div
+          className="relative rounded-xl shadow-sm border border-gray-700/60 overflow-hidden"
+          style={{
+            /* Two-level grid: coarse 160px + fine 32px blue-grey lines on dark navy */
+            backgroundColor: "#0d1421",
+            backgroundImage: [
+              "linear-gradient(rgba(80,120,220,0.18) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(80,120,220,0.18) 1px, transparent 1px)",
+              "linear-gradient(rgba(80,120,220,0.07) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(80,120,220,0.07) 1px, transparent 1px)",
+            ].join(","),
+            backgroundSize: "160px 160px, 160px 160px, 32px 32px, 32px 32px",
+          }}
+        >
           <div
             ref={containerRef}
             className="w-full"
