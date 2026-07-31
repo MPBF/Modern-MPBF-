@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { ArrowRight, Printer, Mail, Loader2, FileText } from "lucide-react";
 import { Link } from "wouter";
 
@@ -23,40 +24,42 @@ interface BagColorProps {
 }
 
 const BAG_COLORS: Record<string, BagColorProps> = {
-  "أزرق": { hex: "#0047AB", roughness: 0.4, transmission: 0, metalness: 0.1 },
-  "سماوي": { hex: "#87CEEB", roughness: 0.4, transmission: 0, metalness: 0.1 },
+  "أزرق":     { hex: "#0057D9", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "سماوي":    { hex: "#38BDF8", roughness: 0.3, transmission: 0, metalness: 0.05 },
   "شفاف": {
     hex: "#FFFFFF",
-    roughness: 0.1,
-    transmission: 0.95,
+    roughness: 0.08,
+    transmission: 0.96,
     opacity: 1,
     transparent: true,
-    ior: 1.5,
-    thickness: 0.1,
+    ior: 1.52,
+    thickness: 0.08,
   },
   "ثلجي": {
-    hex: "#FAFAFA",
-    roughness: 0.6,
-    transmission: 0.8,
+    hex: "#EEF6FF",
+    roughness: 0.45,
+    transmission: 0.82,
     opacity: 1,
     transparent: true,
-    ior: 1.2,
-    thickness: 0.5,
+    ior: 1.25,
+    thickness: 0.4,
   },
-  "أبيض": { hex: "#FFFFFF", roughness: 0.4, transmission: 0, metalness: 0 },
-  "أصفر": { hex: "#FFD700", roughness: 0.4, transmission: 0, metalness: 0.1 },
-  "برتقالي": { hex: "#FF8C00", roughness: 0.4, transmission: 0, metalness: 0.1 },
-  "أخضر": { hex: "#008000", roughness: 0.4, transmission: 0, metalness: 0.1 },
-  "ذهبي": { hex: "#D4AF37", roughness: 0.25, transmission: 0, metalness: 0.8 },
-  "رمادي": { hex: "#808080", roughness: 0.5, transmission: 0, metalness: 0.1 },
-  "بني": { hex: "#8B4513", roughness: 0.6, transmission: 0, metalness: 0.1 },
-  "فضي": { hex: "#C0C0C0", roughness: 0.2, transmission: 0, metalness: 0.9 },
-  "بيج": { hex: "#F5F5DC", roughness: 0.5, transmission: 0, metalness: 0 },
-  "عاجي": { hex: "#FFFFF0", roughness: 0.5, transmission: 0, metalness: 0 },
-  "أحمر": { hex: "#DC143C", roughness: 0.4, transmission: 0, metalness: 0.1 },
-  "وردي": { hex: "#FFC0CB", roughness: 0.4, transmission: 0, metalness: 0 },
-  "تركوازي": { hex: "#40E0D0", roughness: 0.4, transmission: 0, metalness: 0.1 },
-  "تفاحي": { hex: "#8DB600", roughness: 0.4, transmission: 0, metalness: 0.1 },
+  "أبيض":     { hex: "#F8F8FF", roughness: 0.35, transmission: 0, metalness: 0 },
+  "أصفر":     { hex: "#FACC15", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "برتقالي":  { hex: "#F97316", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "أخضر":     { hex: "#16A34A", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "ذهبي":     { hex: "#D4AF37", roughness: 0.18, transmission: 0, metalness: 0.85 },
+  "رمادي":    { hex: "#6B7280", roughness: 0.5, transmission: 0, metalness: 0.08 },
+  "بني":      { hex: "#92400E", roughness: 0.55, transmission: 0, metalness: 0.05 },
+  "فضي":      { hex: "#CBD5E1", roughness: 0.15, transmission: 0, metalness: 0.92 },
+  "بيج":      { hex: "#E8D5B7", roughness: 0.45, transmission: 0, metalness: 0 },
+  "عاجي":     { hex: "#F5F0E8", roughness: 0.45, transmission: 0, metalness: 0 },
+  "أحمر":     { hex: "#DC2626", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "وردي":     { hex: "#EC4899", roughness: 0.3, transmission: 0, metalness: 0 },
+  "تركوازي":  { hex: "#06B6D4", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "تفاحي":    { hex: "#84CC16", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "أرجواني":  { hex: "#9333EA", roughness: 0.3, transmission: 0, metalness: 0.05 },
+  "أسود":     { hex: "#1C1C1C", roughness: 0.35, transmission: 0, metalness: 0.1  },
 };
 
 const LIGHT_COLORS = new Set(["شفاف", "ثلجي", "أبيض", "عاجي"]);
@@ -106,6 +109,7 @@ export default function BagConfigurator() {
   const [printSize, setPrintSize] = useState(80);
   const [printImgSize, setPrintImgSize] = useState(150);
   const [imageVersion, setImageVersion] = useState(0);
+  const [materialType, setMaterialType] = useState<"HDPE" | "LDPE">("HDPE");
 
   // Customer report state
   const [customerName, setCustomerName] = useState("");
@@ -329,11 +333,20 @@ export default function BagConfigurator() {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // ACESFilmic tone mapping → vivid, cinematic color reproduction
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // Room environment — adds realistic reflections to clearcoat/plastic surface
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -343,27 +356,48 @@ export default function BagConfigurator() {
     controls.target.set(0, 0, 0);
     controlsRef.current = controls;
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(50, 60, 40);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.bias = -0.001;
-    scene.add(dirLight);
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    backLight.position.set(-50, 30, -50);
-    scene.add(backLight);
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    // ── Lighting: studio 3-point + rim + top specular ──
+    // Soft ambient fill
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+    // Key light — upper front-right, warm white
+    const keyLight = new THREE.DirectionalLight(0xfff8f0, 2.2);
+    keyLight.position.set(55, 90, 65);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.001;
+    scene.add(keyLight);
+
+    // Fill light — upper front-left, cool blue-white
+    const fillLight = new THREE.DirectionalLight(0xd8e8ff, 0.9);
+    fillLight.position.set(-45, 35, 55);
+    scene.add(fillLight);
+
+    // Rim / edge light — behind, defines plastic edges
+    const rimLight = new THREE.DirectionalLight(0xffffff, 1.1);
+    rimLight.position.set(-15, 15, -70);
+    scene.add(rimLight);
+
+    // Top specular — creates gloss hotspot on flat surfaces
+    const topSpec = new THREE.DirectionalLight(0xffffff, 0.7);
+    topSpec.position.set(0, 120, 10);
+    scene.add(topSpec);
+
+    // Hemisphere — sky warm / ground dark
+    const hemiLight = new THREE.HemisphereLight(0xfff0e0, 0x223344, 0.45);
     hemiLight.position.set(0, 100, 0);
     scene.add(hemiLight);
 
-    // Materials
+    // Materials — HDPE defaults (adjusted by materialType effect below)
     bagMaterialRef.current = new THREE.MeshPhysicalMaterial({
       side: THREE.DoubleSide,
-      clearcoat: 0.5,
-      clearcoatRoughness: 0.2,
+      roughness: 0.52,
+      clearcoat: 0.40,
+      clearcoatRoughness: 0.35,
+      specularIntensity: 0.7,
+      reflectivity: 0.5,
+      envMapIntensity: 0.8,
     });
 
     // Print canvas / texture
@@ -693,6 +727,30 @@ export default function BagConfigurator() {
     }
   }, [type, width, height, gusset]);
 
+  // ---- Apply plastic material type (HDPE / LDPE) ----
+  useEffect(() => {
+    const mat = bagMaterialRef.current;
+    if (!mat) return;
+    if (materialType === "LDPE") {
+      // LDPE — high gloss, smooth, slightly more transparent
+      mat.roughness = 0.14;
+      mat.clearcoat = 0.92;
+      mat.clearcoatRoughness = 0.07;
+      mat.specularIntensity = 1.0;
+      mat.reflectivity = 0.6;
+      mat.envMapIntensity = 1.1;
+    } else {
+      // HDPE — semi-matte, slightly rough, more opaque feel
+      mat.roughness = 0.52;
+      mat.clearcoat = 0.38;
+      mat.clearcoatRoughness = 0.38;
+      mat.specularIntensity = 0.65;
+      mat.reflectivity = 0.45;
+      mat.envMapIntensity = 0.75;
+    }
+    mat.needsUpdate = true;
+  }, [materialType]);
+
   // ---- Apply color material ----
   useEffect(() => {
     const bagMaterial = bagMaterialRef.current;
@@ -703,8 +761,12 @@ export default function BagConfigurator() {
     if (!cProps) return;
 
     bagMaterial.color.set(cProps.hex);
-    bagMaterial.roughness = cProps.roughness;
+    // Metalness from color (gold/silver override), roughness kept by materialType
     bagMaterial.metalness = cProps.metalness ?? 0;
+    // Only override roughness for metallic colors; let materialType control plastic roughness
+    if ((cProps.metalness ?? 0) > 0.4) {
+      bagMaterial.roughness = cProps.roughness;
+    }
 
     if (cProps.transparent) {
       bagMaterial.transparent = true;
@@ -719,10 +781,10 @@ export default function BagConfigurator() {
     }
     bagMaterial.needsUpdate = true;
 
-    printMaterial.roughness = cProps.roughness;
+    printMaterial.roughness = bagMaterial.roughness;
     printMaterial.metalness = cProps.metalness ?? 0;
     printMaterial.needsUpdate = true;
-  }, [colorName]);
+  }, [colorName, materialType]);
 
   // ---- Update print canvas ----
   useEffect(() => {
@@ -854,9 +916,65 @@ export default function BagConfigurator() {
               </div>
             </div>
 
-            {/* 2. Dimensions */}
+            {/* 1b. Material Type */}
+            <div className="space-y-3">
+              {stepHeader(2, "نوع المادة الخام")}
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    {
+                      id: "HDPE" as const,
+                      label: "HDPE",
+                      labelAr: "عالي الكثافة",
+                      desc: "سطح خشن، مقاوم، أكياس خفيفة",
+                      accent: "border-blue-500 bg-blue-50 dark:bg-blue-900/30",
+                    },
+                    {
+                      id: "LDPE" as const,
+                      label: "LDPE",
+                      labelAr: "منخفض الكثافة",
+                      desc: "سطح ناعم ولامع، مرن وقوي",
+                      accent: "border-green-500 bg-green-50 dark:bg-green-900/30",
+                    },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMaterialType(m.id)}
+                    className={`flex flex-col items-start gap-1 p-3 border-2 rounded-xl text-right transition-all ${
+                      materialType === m.id
+                        ? m.accent + " shadow-md"
+                        : "border-gray-200 dark:border-gray-600 hover:border-blue-300 bg-white dark:bg-gray-800"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-bold text-blue-700 dark:text-blue-400 text-sm">
+                        {m.label}
+                      </span>
+                      {materialType === m.id && (
+                        <span className="text-green-600 text-xs">✓</span>
+                      )}
+                    </div>
+                    <div className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
+                      {m.labelAr}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 leading-tight">
+                      {m.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {materialType === "LDPE"
+                  ? "⚡ LDPE: سطح لامع عالي الجودة — المجسم يعكس الضوء كالبلاستيك الحقيقي"
+                  : "🏗️ HDPE: سطح شبه مطفي — أقل لمعاناً، أكثر قوة ومقاومة"}
+              </p>
+            </div>
+
+            {/* 3. Dimensions */}
             <div className="space-y-4">
-              {stepHeader(2, "المقاسات بالسم")}
+              {stepHeader(3, "المقاسات بالسم")}
 
               {[
                 {
@@ -902,7 +1020,7 @@ export default function BagConfigurator() {
 
             {/* 3. Bag Color */}
             <div className="space-y-3">
-              {stepHeader(3, "لون الكيس الأساسي")}
+              {stepHeader(4, "لون الكيس الأساسي")}
               <div className="flex flex-wrap gap-2">
                 {colorEntries.map(([name, props]) => {
                   const active = colorName === name;
@@ -937,7 +1055,7 @@ export default function BagConfigurator() {
 
             {/* 4. Print Colors */}
             <div className="space-y-4 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              {stepHeader(4, "تفاصيل الطباعة", "purple")}
+              {stepHeader(5, "تفاصيل الطباعة", "purple")}
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 اختر عدد ألوان الطباعة المطلوبة على الكيس
               </p>
@@ -999,7 +1117,7 @@ export default function BagConfigurator() {
 
             {/* 5. Print Design */}
             <div className="space-y-4 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              {stepHeader(5, "تصميم الطباعة الحية", "green")}
+              {stepHeader(6, "تصميم الطباعة الحية", "green")}
 
               <div className="flex gap-2">
                 {[
@@ -1088,7 +1206,7 @@ export default function BagConfigurator() {
 
             {/* 6. Customer Report & Email */}
             <div className="space-y-3 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              {stepHeader(6, "تقرير العميل وإرسال للإدارة", "blue")}
+              {stepHeader(7, "تقرير العميل وإرسال للإدارة", "blue")}
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 اطبع تقريراً واضحاً بمواصفات الكيس وصورته، أو أرسله للإدارة عبر
                 البريد الإلكتروني
