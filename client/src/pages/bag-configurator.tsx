@@ -9,7 +9,7 @@ import PageLayout from "../components/layout/PageLayout";
 import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast";
 
-type BagType = "tshirt" | "diecut" | "softloop" | "none";
+type BagType = "tshirt" | "diecut" | "dastarkhan" | "none";
 type PrintMode = "text" | "image";
 
 interface BagColorProps {
@@ -65,10 +65,10 @@ const BAG_COLORS: Record<string, BagColorProps> = {
 const LIGHT_COLORS = new Set(["شفاف", "ثلجي", "أبيض", "عاجي"]);
 
 const BAG_TYPE_OPTIONS: Array<{ value: BagType; label: string }> = [
-  { value: "tshirt", label: "علاق" },
-  { value: "diecut", label: "بنانة" },
-  { value: "softloop", label: "مقبض شريطي" },
-  { value: "none", label: "بدون مقبض" },
+  { value: "tshirt",     label: "علاق"       },
+  { value: "diecut",     label: "بنانة"      },
+  { value: "dastarkhan", label: "مفرش سفرة"  },
+  { value: "none",       label: "بدون مقبض" },
 ];
 
 export default function BagConfigurator() {
@@ -110,6 +110,7 @@ export default function BagConfigurator() {
   const [printImgSize, setPrintImgSize] = useState(150);
   const [imageVersion, setImageVersion] = useState(0);
   const [materialType, setMaterialType] = useState<"HDPE" | "LDPE">("HDPE");
+  const [repeatCount, setRepeatCount] = useState(3);
 
   // Customer report state
   const [customerName, setCustomerName] = useState("");
@@ -541,6 +542,15 @@ export default function BagConfigurator() {
     }
   }
 
+  // Auto-set dimensions & gusset when switching to dastarkhan
+  useEffect(() => {
+    if (type === "dastarkhan") {
+      setWidth(100);
+      setHeight(110);
+      setGusset(0);
+    }
+  }, [type]);
+
   // Mirror state into a ref for use in the rAF callback (avoids stale closure)
   const stateRef = useRef({ w: width, h: height, g: gusset });
   useEffect(() => {
@@ -570,29 +580,22 @@ export default function BagConfigurator() {
 
     const hw = width / 2;
     const hh = height / 2;
-    const d = gusset > 0 ? gusset : 0.2;
+    // dastarkhan is flat — give it a tiny paper-thin depth
+    const d = type === "dastarkhan" ? 0.1 : (gusset > 0 ? gusset : 0.2);
     const hd = d / 2;
-
-    const shape = new THREE.Shape();
-    shape.moveTo(-hw, -hh);
-    shape.lineTo(hw, -hh);
 
     const handleHeight = 10;
     const handleWidth = width * 0.25;
 
-    if (type === "tshirt") {
-      shape.lineTo(hw, hh + handleHeight);
-      shape.lineTo(hw - handleWidth, hh + handleHeight);
-      shape.lineTo(hw - handleWidth, hh);
-      shape.lineTo(-hw + handleWidth, hh);
-      shape.lineTo(-hw + handleWidth, hh + handleHeight);
-      shape.lineTo(-hw, hh + handleHeight);
-      shape.lineTo(-hw, -hh);
-    } else {
-      shape.lineTo(hw, hh);
-      shape.lineTo(-hw, hh);
-      shape.lineTo(-hw, -hh);
-    }
+    // ── Front/back face shape ──────────────────────────────────────────────
+    // tshirt: body only (rectangle); handles are separate meshes → hollow neck
+    // all others: plain rectangle
+    const shape = new THREE.Shape();
+    shape.moveTo(-hw, -hh);
+    shape.lineTo(hw, -hh);
+    shape.lineTo(hw, hh);
+    shape.lineTo(-hw, hh);
+    shape.lineTo(-hw, -hh);
 
     if (type === "diecut") {
       const holePath = new THREE.Path();
@@ -605,22 +608,15 @@ export default function BagConfigurator() {
 
     const shapeGeo = new THREE.ShapeGeometry(shape, 32);
 
-    // ShapeGeometry assigns raw (x,y) world coords as UVs, which makes the
-    // print texture sample only a tiny 1cm×1cm corner of the canvas. We
-    // recompute UVs so the 1024×1024 print canvas maps across the whole
-    // shape's bounding rectangle.
+    // Recompute UVs: map the bounding box of the face shape to [0,1]
     {
       const pos = shapeGeo.attributes.position as THREE.BufferAttribute;
-      const minX = -hw;
-      const maxX = hw;
-      const minY = -hh;
-      const maxY = type === "tshirt" ? hh + handleHeight : hh;
-      const dx = maxX - minX || 1;
-      const dy = maxY - minY || 1;
+      const dx = hw * 2 || 1;
+      const dy = hh * 2 || 1;
       const uvs = new Float32Array(pos.count * 2);
       for (let i = 0; i < pos.count; i++) {
-        uvs[i * 2] = (pos.getX(i) - minX) / dx;
-        uvs[i * 2 + 1] = (pos.getY(i) - minY) / dy;
+        uvs[i * 2]     = (pos.getX(i) + hw) / dx;
+        uvs[i * 2 + 1] = (pos.getY(i) + hh) / dy;
       }
       shapeGeo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     }
@@ -632,7 +628,7 @@ export default function BagConfigurator() {
     bagGroup.add(frontMesh);
 
     const printMesh = new THREE.Mesh(shapeGeo, printMaterial);
-    printMesh.position.z = hd;
+    printMesh.position.z = hd + 0.01;
     bagGroup.add(printMesh);
 
     const backMesh = new THREE.Mesh(shapeGeo, bagMaterial);
@@ -642,6 +638,28 @@ export default function BagConfigurator() {
     backMesh.receiveShadow = true;
     bagGroup.add(backMesh);
 
+    // ── Tshirt: separate handle meshes (leaves the neck gap hollow) ────────
+    if (type === "tshirt") {
+      const addHandlePair = (cx: number) => {
+        const hGeo = new THREE.PlaneGeometry(handleWidth, handleHeight);
+        const cy = hh + handleHeight / 2;
+
+        const hf = new THREE.Mesh(hGeo, bagMaterial);
+        hf.position.set(cx, cy, hd);
+        hf.castShadow = true;
+
+        const hb = new THREE.Mesh(hGeo, bagMaterial);
+        hb.position.set(cx, cy, -hd);
+        hb.rotation.y = Math.PI;
+        hb.castShadow = true;
+
+        bagGroup.add(hf, hb);
+      };
+      addHandlePair(-hw + handleWidth / 2);  // left handle
+      addHandlePair( hw - handleWidth / 2);  // right handle
+    }
+
+    // ── Wall helper ────────────────────────────────────────────────────────
     const addWall = (
       w: number,
       h: number,
@@ -661,41 +679,26 @@ export default function BagConfigurator() {
       bagGroup.add(mesh);
     };
 
-    // Bottom
-    addWall(width, d, 0, -hh, 0, Math.PI / 2, 0);
-
-    if (type === "tshirt") {
-      const sideHeight = height + handleHeight;
-      const centerY = (-hh + (hh + handleHeight)) / 2;
-      addWall(d, sideHeight, -hw, centerY, 0, 0, Math.PI / 2);
-      addWall(d, sideHeight, hw, centerY, 0, 0, Math.PI / 2);
+    // ── Walls by type ──────────────────────────────────────────────────────
+    if (type === "dastarkhan") {
+      // Flat tablecloth: no gusset walls — just the two faces above
+    } else if (type === "tshirt") {
+      const sideH = height + handleHeight;
+      const cY    = (-hh + hh + handleHeight) / 2;  // ≡ handleHeight/2
+      addWall(width, d, 0, -hh, 0, Math.PI / 2, 0); // bottom
+      addWall(d, sideH, -hw, cY, 0, 0, Math.PI / 2); // left outer side
+      addWall(d, sideH,  hw, cY, 0, 0, Math.PI / 2); // right outer side
+      // handle tops
       addWall(handleWidth, d, -hw + handleWidth / 2, hh + handleHeight, 0, Math.PI / 2, 0);
-      addWall(handleWidth, d, hw - handleWidth / 2, hh + handleHeight, 0, Math.PI / 2, 0);
-      addWall(d, handleHeight, hw - handleWidth, hh + handleHeight / 2, 0, 0, Math.PI / 2);
+      addWall(handleWidth, d,  hw - handleWidth / 2, hh + handleHeight, 0, Math.PI / 2, 0);
+      // handle inner sides (neck walls)
+      addWall(d, handleHeight,  hw - handleWidth, hh + handleHeight / 2, 0, 0, Math.PI / 2);
       addWall(d, handleHeight, -hw + handleWidth, hh + handleHeight / 2, 0, 0, Math.PI / 2);
-      addWall(width - handleWidth * 2, d, 0, hh, 0, Math.PI / 2, 0);
+      // NO wall at shoulder level → neck opening is hollow (open bag mouth)
     } else {
-      addWall(d, height, -hw, 0, 0, 0, Math.PI / 2);
-      addWall(d, height, hw, 0, 0, 0, Math.PI / 2);
-    }
-
-    if (type === "softloop") {
-      const loopRadius = width * 0.15;
-      const tubeRadius = 0.6;
-      const loopGeo = new THREE.TorusGeometry(
-        loopRadius,
-        tubeRadius,
-        8,
-        32,
-        Math.PI,
-      );
-      const handleFront = new THREE.Mesh(loopGeo, bagMaterial);
-      handleFront.position.set(0, hh, hd);
-      handleFront.castShadow = true;
-      const handleBack = new THREE.Mesh(loopGeo, bagMaterial);
-      handleBack.position.set(0, hh, -hd);
-      handleBack.castShadow = true;
-      bagGroup.add(handleFront, handleBack);
+      addWall(width, d, 0, -hh, 0, Math.PI / 2, 0); // bottom
+      addWall(d, height, -hw, 0, 0, 0, Math.PI / 2); // left side
+      addWall(d, height,  hw, 0, 0, 0, Math.PI / 2); // right side
     }
 
     // Update measurement lines
@@ -795,43 +798,90 @@ export default function BagConfigurator() {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, 1024, 1024);
-    const yOffset = type === "tshirt" ? 620 : 512;
 
-    if (printMode === "text") {
-      if (printText.trim() !== "") {
-        ctx.fillStyle = printColor;
-        ctx.font = `bold ${printSize * 2}px Tajawal, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(printText, 512, yOffset);
-      }
-    } else if (printMode === "image" && loadedImageRef.current) {
-      const img = loadedImageRef.current;
-      const maxDim = printImgSize * 4;
-      let w = img.width;
-      let h = img.height;
-      const scale = Math.min(maxDim / w, maxDim / h);
-      w *= scale;
-      h *= scale;
+    const isDastarkhan = type === "dastarkhan";
 
-      ctx.drawImage(img, 512 - w / 2, yOffset - h / 2, w, h);
+    // For tablecloth: tile the pattern repeatCount × repeatCount times in the canvas
+    const tileCountX = isDastarkhan ? repeatCount : 1;
+    const tileCountY = isDastarkhan ? repeatCount : 1;
+    const tileW = 1024 / tileCountX;
+    const tileH = 1024 / tileCountY;
 
-      try {
-        const imgData = ctx.getImageData(0, 0, 1024, 1024);
-        const data = imgData.data;
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i] > 235 && data[i + 1] > 235 && data[i + 2] > 235) {
-            data[i + 3] = 0;
-          }
+    // Scale factor so each tile gets a properly-sized element
+    const scale = 1 / Math.max(tileCountX, tileCountY);
+
+    const drawInTile = (cx: number, cy: number) => {
+      if (printMode === "text") {
+        if (printText.trim() !== "") {
+          ctx.fillStyle = printColor;
+          const fontSize = isDastarkhan
+            ? Math.max(20, Math.round(printSize * 2 * scale))
+            : printSize * 2;
+          ctx.font = `bold ${fontSize}px Tajawal, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(printText, cx, cy);
         }
-        ctx.putImageData(imgData, 0, 0);
-      } catch {
-        // ignore (e.g., tainted canvas)
+      } else if (printMode === "image" && loadedImageRef.current) {
+        const img = loadedImageRef.current;
+        const maxDim = isDastarkhan
+          ? printImgSize * 4 * scale
+          : printImgSize * 4;
+        let iw = img.width;
+        let ih = img.height;
+        const s = Math.min(maxDim / iw, maxDim / ih);
+        iw *= s;
+        ih *= s;
+        ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih);
+      }
+    };
+
+    if (isDastarkhan) {
+      // Draw N×N tiled grid directly in the canvas
+      ctx.save();
+      for (let row = 0; row < tileCountY; row++) {
+        for (let col = 0; col < tileCountX; col++) {
+          const cx = col * tileW + tileW / 2;
+          const cy = row * tileH + tileH / 2;
+          drawInTile(cx, cy);
+        }
+      }
+      ctx.restore();
+
+      // Remove white bg from image tiles
+      if (printMode === "image" && loadedImageRef.current) {
+        try {
+          const imgData = ctx.getImageData(0, 0, 1024, 1024);
+          const data = imgData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 235 && data[i + 1] > 235 && data[i + 2] > 235) {
+              data[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        } catch { /* tainted canvas */ }
+      }
+    } else {
+      // Standard single-print placement
+      const yOffset = type === "tshirt" ? 620 : 512;
+      drawInTile(512, yOffset);
+
+      if (printMode === "image" && loadedImageRef.current) {
+        try {
+          const imgData = ctx.getImageData(0, 0, 1024, 1024);
+          const data = imgData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 235 && data[i + 1] > 235 && data[i + 2] > 235) {
+              data[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        } catch { /* tainted canvas */ }
       }
     }
 
     tex.needsUpdate = true;
-  }, [type, printMode, printText, printColor, printSize, printImgSize, imageVersion]);
+  }, [type, printMode, printText, printColor, printSize, printImgSize, imageVersion, repeatCount]);
 
   const onUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -981,23 +1031,27 @@ export default function BagConfigurator() {
                   label: "العرض (Width)",
                   value: width,
                   set: setWidth,
-                  min: 15,
-                  max: 60,
+                  min: type === "dastarkhan" ? 30 : 15,
+                  max: type === "dastarkhan" ? 150 : 60,
                 },
                 {
                   label: "الطول (Height)",
                   value: height,
                   set: setHeight,
-                  min: 20,
-                  max: 80,
+                  min: type === "dastarkhan" ? 30 : 20,
+                  max: type === "dastarkhan" ? 200 : 80,
                 },
-                {
-                  label: "الطية / العمق (Gusset)",
-                  value: gusset,
-                  set: setGusset,
-                  min: 0,
-                  max: 25,
-                },
+                ...(type !== "dastarkhan"
+                  ? [
+                      {
+                        label: "الطية / العمق (Gusset)",
+                        value: gusset,
+                        set: setGusset,
+                        min: 0,
+                        max: 25,
+                      },
+                    ]
+                  : []),
               ].map((d) => (
                 <div key={d.label}>
                   <div className="flex justify-between text-sm mb-1">
@@ -1016,6 +1070,30 @@ export default function BagConfigurator() {
                   />
                 </div>
               ))}
+
+              {type === "dastarkhan" && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <label className="font-medium text-amber-800 dark:text-amber-300">
+                      عدد تكرار التصميم
+                    </label>
+                    <span className="font-bold text-amber-700 dark:text-amber-400">
+                      {repeatCount} × {repeatCount}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={8}
+                    value={repeatCount}
+                    onChange={(e) => setRepeatCount(parseInt(e.target.value))}
+                    className="w-full accent-amber-500"
+                  />
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    التصميم سيتكرر {repeatCount * repeatCount} مرة على سطح المفرش
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* 3. Bag Color */}
