@@ -801,32 +801,21 @@ export default function BagConfigurator() {
 
     const isDastarkhan = type === "dastarkhan";
 
-    // For tablecloth: tile the pattern repeatCount × repeatCount times in the canvas
-    const tileCountX = isDastarkhan ? repeatCount : 1;
-    const tileCountY = isDastarkhan ? repeatCount : 1;
-    const tileW = 1024 / tileCountX;
-    const tileH = 1024 / tileCountY;
+    // Scale factor for a single horizontal strip element
+    const borderScale = isDastarkhan ? 1 / Math.max(repeatCount, 1) : 1;
 
-    // Scale factor so each tile gets a properly-sized element
-    const scale = 1 / Math.max(tileCountX, tileCountY);
-
-    const drawInTile = (cx: number, cy: number) => {
+    const drawElement = (cx: number, cy: number, scale: number) => {
       if (printMode === "text") {
         if (printText.trim() !== "") {
           ctx.fillStyle = printColor;
-          const fontSize = isDastarkhan
-            ? Math.max(20, Math.round(printSize * 2 * scale))
-            : printSize * 2;
-          ctx.font = `bold ${fontSize}px Tajawal, sans-serif`;
+          ctx.font = `bold ${Math.max(18, Math.round(printSize * 2 * scale))}px Tajawal, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(printText, cx, cy);
         }
       } else if (printMode === "image" && loadedImageRef.current) {
         const img = loadedImageRef.current;
-        const maxDim = isDastarkhan
-          ? printImgSize * 4 * scale
-          : printImgSize * 4;
+        const maxDim = printImgSize * 4 * scale;
         let iw = img.width;
         let ih = img.height;
         const s = Math.min(maxDim / iw, maxDim / ih);
@@ -837,18 +826,25 @@ export default function BagConfigurator() {
     };
 
     if (isDastarkhan) {
-      // Draw N×N tiled grid directly in the canvas
+      // Border height: ~18% of canvas on each side
+      const borderH = Math.round(1024 * 0.18);
+      const tileW   = 1024 / repeatCount;
+
       ctx.save();
-      for (let row = 0; row < tileCountY; row++) {
-        for (let col = 0; col < tileCountX; col++) {
-          const cx = col * tileW + tileW / 2;
-          const cy = row * tileH + tileH / 2;
-          drawInTile(cx, cy);
-        }
+      // Top border: repeat horizontally, middle of top band
+      for (let col = 0; col < repeatCount; col++) {
+        const cx = col * tileW + tileW / 2;
+        drawElement(cx, borderH / 2, borderScale);
       }
+      // Bottom border: repeat horizontally, middle of bottom band
+      for (let col = 0; col < repeatCount; col++) {
+        const cx = col * tileW + tileW / 2;
+        drawElement(cx, 1024 - borderH / 2, borderScale);
+      }
+      // Middle stays empty
       ctx.restore();
 
-      // Remove white bg from image tiles
+      // Remove white bg from image elements
       if (printMode === "image" && loadedImageRef.current) {
         try {
           const imgData = ctx.getImageData(0, 0, 1024, 1024);
@@ -864,7 +860,7 @@ export default function BagConfigurator() {
     } else {
       // Standard single-print placement
       const yOffset = type === "tshirt" ? 620 : 512;
-      drawInTile(512, yOffset);
+      drawElement(512, yOffset, 1);
 
       if (printMode === "image" && loadedImageRef.current) {
         try {
