@@ -82,6 +82,8 @@
    Light and Dark themes are untouched.
    ========================================================================== */
 .theme-blue {
+  --heading-color: hsl(224, 82%, 36%);
+
   --background: hsl(210, 45%, 97%);
   --foreground: hsl(222, 65%, 11%);
   --muted: hsl(210, 40%, 91%);
@@ -255,6 +257,13 @@
   h1, h2, h3 {
     color: var(--heading-color);
     font-weight: 700;
+  }
+
+  /* Card titles — extends brand color to shadcn CardTitle (renders as <div>,
+     not an h-tag). Placed in @layer base so Tailwind utility classes
+     (text-green-600, text-white, etc.) in className still override this. */
+  [data-slot="card-title"] {
+    color: var(--heading-color);
   }
 }
 
