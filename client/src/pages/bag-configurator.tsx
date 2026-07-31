@@ -826,22 +826,40 @@ export default function BagConfigurator() {
     };
 
     if (isDastarkhan) {
-      // Border height: ~18% of canvas on each side
-      const borderH = Math.round(1024 * 0.18);
-      const tileW   = 1024 / repeatCount;
+      // المفرش: 110cm ارتفاع → 1024px إجمالي  (9.31 px/cm)
+      // • فارغ 5cm من الأعلى  → 0 .. topMargin
+      // • طباعة عليا           → topMargin .. midStart
+      // • فارغ 10cm وسط        → midStart .. midEnd
+      // • طباعة سفلية          → midEnd .. botMargin
+      // • فارغ 5cm من الأسفل  → botMargin .. 1024
+      const PX_PER_CM = 1024 / 110;
+      const topMargin = Math.round(5  * PX_PER_CM);          // ~46px
+      const midStart  = Math.round(50 * PX_PER_CM);          // ~465px
+      const midEnd    = Math.round(60 * PX_PER_CM);          // ~559px
+      const botMargin = Math.round(105 * PX_PER_CM);         // ~978px
+
+      const topBandCy = Math.round((topMargin + midStart) / 2); // وسط الشريط العلوي
+      const botBandCy = Math.round((midEnd + botMargin) / 2);   // وسط الشريط السفلي
+
+      // الشريط يأخذ الارتفاع الكامل للمنطقة — الحجم يتناسب مع عرض الخلية
+      const bandH       = midStart - topMargin;   // ارتفاع المنطقة (~419px)
+      const tileW       = 1024 / repeatCount;
+      // حجم العنصر: يتناسب مع أصغر بُعد (عرض الخلية أو ارتفاع الشريط)
+      const tileFitScale = Math.min(tileW, bandH) / 1024;
+      const drawScale    = tileFitScale * Math.max(repeatCount, 1);
 
       ctx.save();
-      // Top border: repeat horizontally, middle of top band
+      // الشريط العلوي: تكرار أفقي
       for (let col = 0; col < repeatCount; col++) {
         const cx = col * tileW + tileW / 2;
-        drawElement(cx, borderH / 2, borderScale);
+        drawElement(cx, topBandCy, drawScale);
       }
-      // Bottom border: repeat horizontally, middle of bottom band
+      // الشريط السفلي: تكرار أفقي
       for (let col = 0; col < repeatCount; col++) {
         const cx = col * tileW + tileW / 2;
-        drawElement(cx, 1024 - borderH / 2, borderScale);
+        drawElement(cx, botBandCy, drawScale);
       }
-      // Middle stays empty
+      // الوسط (10cm) والحواف (5cm) تبقى فارغة
       ctx.restore();
 
       // Remove white bg from image elements
@@ -1074,7 +1092,7 @@ export default function BagConfigurator() {
                       عدد تكرار التصميم
                     </label>
                     <span className="font-bold text-amber-700 dark:text-amber-400">
-                      {repeatCount} × {repeatCount}
+                      {repeatCount} عمود
                     </span>
                   </div>
                   <input
@@ -1086,7 +1104,7 @@ export default function BagConfigurator() {
                     className="w-full accent-amber-500"
                   />
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    التصميم سيتكرر {repeatCount * repeatCount} مرة على سطح المفرش
+                    يتكرر {repeatCount} مرة في الشريط العلوي و{repeatCount} مرة في الشريط السفلي
                   </p>
                 </div>
               )}
