@@ -25,6 +25,8 @@
   --ring: hsl(221, 83%, 53%);
   --radius: 0.5rem;
 
+  --heading-color: #0f2341;
+
   --primary-50: hsl(214, 100%, 97%);
   --primary-500: hsl(217, 91%, 60%);
   --primary-600: hsl(221, 83%, 53%);
@@ -51,6 +53,8 @@
 }
 
 .dark {
+  --heading-color: hsl(0, 0%, 98%);
+
   --background: hsl(240, 10%, 3.9%);
   --foreground: hsl(0, 0%, 98%);
   --muted: hsl(240, 3.7%, 15.9%);
@@ -243,6 +247,15 @@
     margin-right: calc(var(--tw-space-x) * var(--tw-space-x-reverse));
     margin-left: calc(var(--tw-space-x) * calc(1 - var(--tw-space-x-reverse)));
   }
+
+  /* Brand navy headings — light theme only.
+     .dark overrides via --heading-color, .theme-blue overrides with a
+     higher-specificity (.theme-blue h1) rule defined below, so neither
+     is affected by this block. */
+  h1, h2, h3 {
+    color: var(--heading-color);
+    font-weight: 700;
+  }
 }
 
 @layer components {
@@ -392,6 +405,14 @@
   .chat-bubble-assistant {
     @apply bg-muted text-foreground rounded-lg p-3 max-w-xs;
   }
+}
+
+/* Light theme only: subtle navy tint on data table headers.
+   Dark theme and Professional Blue each provide their own thead styling. */
+:root:not(.dark):not(.theme-blue) .table-header {
+  background-color: hsl(220, 40%, 95%);
+  color: #0f2341;
+  font-weight: 700;
 }
 
 @layer utilities {
