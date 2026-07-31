@@ -1040,50 +1040,35 @@ export default function BagConfigurator() {
             <div className="space-y-4">
               {stepHeader(3, "المقاسات بالسم")}
 
-              {[
-                {
-                  label: "العرض (Width)",
-                  value: width,
-                  set: setWidth,
-                  min: type === "dastarkhan" ? 30 : 15,
-                  max: type === "dastarkhan" ? 150 : 60,
-                },
-                {
-                  label: "الطول (Height)",
-                  value: height,
-                  set: setHeight,
-                  min: type === "dastarkhan" ? 30 : 20,
-                  max: type === "dastarkhan" ? 200 : 80,
-                },
-                ...(type !== "dastarkhan"
-                  ? [
-                      {
-                        label: "الطية / العمق (Gusset)",
-                        value: gusset,
-                        set: setGusset,
-                        min: 0,
-                        max: 25,
-                      },
-                    ]
-                  : []),
-              ].map((d) => (
-                <div key={d.label}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <label>{d.label}</label>
-                    <span className="font-bold text-blue-600">
-                      {d.value} سم
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={d.min}
-                    max={d.max}
-                    value={d.value}
-                    onChange={(e) => d.set(parseInt(e.target.value))}
-                    className="w-full accent-blue-600"
-                  />
+              {type === "dastarkhan" ? (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 flex items-center justify-between">
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-300">المقاس الثابت</span>
+                  <span className="font-bold text-blue-700 dark:text-blue-400 text-lg">100 × 110 سم</span>
                 </div>
-              ))}
+              ) : (
+                [
+                  { label: "العرض (Width)", value: width, set: setWidth, min: 15, max: 60 },
+                  { label: "الطول (Height)", value: height, set: setHeight, min: 20, max: 80 },
+                  { label: "الطية / العمق (Gusset)", value: gusset, set: setGusset, min: 0, max: 25 },
+                ].map((d) => (
+                  <div key={d.label}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <label>{d.label}</label>
+                      <span className="font-bold text-blue-600">
+                        {d.value} سم
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={d.min}
+                      max={d.max}
+                      value={d.value}
+                      onChange={(e) => d.set(parseInt(e.target.value))}
+                      className="w-full accent-blue-600"
+                    />
+                  </div>
+                ))
+              )}
 
               {type === "dastarkhan" && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 space-y-2">
