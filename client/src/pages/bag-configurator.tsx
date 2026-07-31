@@ -413,7 +413,11 @@ export default function BagConfigurator() {
     printMaterialRef.current = new THREE.MeshPhysicalMaterial({
       map: printTexture,
       transparent: true,
-      opacity: 0.85,
+      opacity: 1.0,
+      roughness: 0.90,          // حبر الفليكسو مطفي تماماً
+      metalness: 0,             // لا انعكاس معدني على الحبر
+      envMapIntensity: 0.04,    // حد أدنى من البيئة
+      clearcoat: 0,             // لا طبقة لامعة فوق الطباعة
       polygonOffset: true,
       polygonOffsetFactor: -1,
       depthWrite: false,
@@ -548,8 +552,22 @@ export default function BagConfigurator() {
       setWidth(100);
       setHeight(110);
       setGusset(0);
+      setPrintImgSize(60);   // حجم أصغر افتراضياً للسفرة
+      setPrintSize(35);
+      setRepeatCount(4);
     }
   }, [type]);
+
+  // ربط التكرار عكسياً بحجم الطباعة في مفرش السفرة
+  useEffect(() => {
+    if (type !== "dastarkhan") return;
+    const size    = printMode === "image" ? printImgSize : printSize;
+    const minSize = printMode === "image" ? 50 : 20;
+    const maxSize = printMode === "image" ? 400 : 250;
+    const norm  = Math.max(0, Math.min(1, (size - minSize) / (maxSize - minSize)));
+    const count = Math.max(1, Math.round(6 - norm * 5));   // 6→1 بزيادة الحجم
+    setRepeatCount(count);
+  }, [printImgSize, printSize, printMode, type]);
 
   // Mirror state into a ref for use in the rAF callback (avoids stale closure)
   const stateRef = useRef({ w: width, h: height, g: gusset });
@@ -784,8 +802,10 @@ export default function BagConfigurator() {
     }
     bagMaterial.needsUpdate = true;
 
-    printMaterial.roughness = bagMaterial.roughness;
-    printMaterial.metalness = cProps.metalness ?? 0;
+    // الطباعة الفليكسو دائماً مطفية ومعتمة — لا تورث خصائص الكيس اللامع
+    printMaterial.roughness = 0.90;
+    printMaterial.metalness = 0;
+    printMaterial.envMapIntensity = 0.04;
     printMaterial.needsUpdate = true;
   }, [colorName, materialType]);
 
@@ -801,21 +821,23 @@ export default function BagConfigurator() {
 
     const isDastarkhan = type === "dastarkhan";
 
-    // Scale factor for a single horizontal strip element
-    const borderScale = isDastarkhan ? 1 / Math.max(repeatCount, 1) : 1;
-
-    const drawElement = (cx: number, cy: number, scale: number) => {
+    // drawElement: يرسم عنصر الطباعة (نص أو صورة) مع حد أقصى بالبكسل
+    // maxElemPx: الحد الأقصى لطول/عرض العنصر بالبكسل (لمنع التداخل في السفرة)
+    const drawElement = (cx: number, cy: number, scale: number, maxElemPx = Infinity) => {
       if (printMode === "text") {
         if (printText.trim() !== "") {
           ctx.fillStyle = printColor;
-          ctx.font = `bold ${Math.max(18, Math.round(printSize * 2 * scale))}px Tajawal, sans-serif`;
+          const rawSize = Math.max(18, Math.round(printSize * 2 * scale));
+          const fontSize = Math.min(rawSize, Math.round(maxElemPx * 0.75));
+          ctx.font = `bold ${fontSize}px Tajawal, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(printText, cx, cy);
         }
       } else if (printMode === "image" && loadedImageRef.current) {
         const img = loadedImageRef.current;
-        const maxDim = printImgSize * 4 * scale;
+        const rawDim = printImgSize * 4 * scale;
+        const maxDim = Math.min(rawDim, maxElemPx * 0.92);
         let iw = img.width;
         let ih = img.height;
         const s = Math.min(maxDim / iw, maxDim / ih);
@@ -841,23 +863,23 @@ export default function BagConfigurator() {
       const topBandCy = Math.round((topMargin + midStart) / 2); // وسط الشريط العلوي
       const botBandCy = Math.round((midEnd + botMargin) / 2);   // وسط الشريط السفلي
 
-      // الشريط يأخذ الارتفاع الكامل للمنطقة — الحجم يتناسب مع عرض الخلية
-      const bandH       = midStart - topMargin;   // ارتفاع المنطقة (~419px)
-      const tileW       = 1024 / repeatCount;
-      // حجم العنصر: يتناسب مع أصغر بُعد (عرض الخلية أو ارتفاع الشريط)
-      const tileFitScale = Math.min(tileW, bandH) / 1024;
-      const drawScale    = tileFitScale * Math.max(repeatCount, 1);
+      const bandH = midStart - topMargin;   // ارتفاع المنطقة (~419px)
+      const tileW = 1024 / repeatCount;
 
+      // الحد الأقصى للعنصر = أصغر بُعد للخلية (عرض أو ارتفاع) — لمنع التداخل
+      const maxElemPx = Math.min(tileW, bandH);
+
+      // scale=1 ثابتة لأن الحد maxElemPx يتحكم في الحجم الفعلي
       ctx.save();
       // الشريط العلوي: تكرار أفقي
       for (let col = 0; col < repeatCount; col++) {
         const cx = col * tileW + tileW / 2;
-        drawElement(cx, topBandCy, drawScale);
+        drawElement(cx, topBandCy, 1, maxElemPx);
       }
       // الشريط السفلي: تكرار أفقي
       for (let col = 0; col < repeatCount; col++) {
         const cx = col * tileW + tileW / 2;
-        drawElement(cx, botBandCy, drawScale);
+        drawElement(cx, botBandCy, 1, maxElemPx);
       }
       // الوسط (10cm) والحواف (5cm) تبقى فارغة
       ctx.restore();
