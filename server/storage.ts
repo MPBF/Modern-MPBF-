@@ -298,6 +298,7 @@ import {
   inArray,
   or,
   isNull,
+  isNotNull,
   gte,
   lte,
 } from "drizzle-orm";
@@ -3440,6 +3441,32 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
+  // يبحث عن آخر تسجيل دخول مفتوح (لم يُسجَّل خروجه بعد) خلال الـ 24 ساعة الماضية.
+  // يُستخدم لدعم موظفي الوردية الليلية الذين يدخلون قبل منتصف الليل ويخرجون بعده.
+  async findOpenCheckIn(userId: number): Promise<Attendance | null> {
+    return withDatabaseErrorHandling(
+      async () => {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const [record] = await db
+          .select()
+          .from(attendance)
+          .where(
+            and(
+              eq(attendance.user_id, userId),
+              isNotNull(attendance.check_in_time),
+              isNull(attendance.check_out_time),
+              sql`${attendance.check_in_time} >= ${cutoff.toISOString()}`,
+            ),
+          )
+          .orderBy(desc(attendance.check_in_time))
+          .limit(1);
+        return record ?? null;
+      },
+      "findOpenCheckIn",
+      `جلب تسجيل الدخول المفتوح للمستخدم ${userId}`,
+    );
+  }
+
   async getDailyAttendanceStatus(userId: number, date: string): Promise<any> {
     const records = await db
       .select()
@@ -3448,6 +3475,46 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(attendance.created_at));
 
     if (records.length === 0) {
+      // لم توجد سجلات لهذا اليوم — تحقق من وجود وردية ليلية مفتوحة من اليوم السابق
+      const openRecord = await this.findOpenCheckIn(userId);
+      if (openRecord && String(openRecord.date) !== date) {
+        // الموظف دخل قبل منتصف الليل ولم يخرج بعد — جلب كل سجلات ذلك اليوم
+        const shiftRecords = await db
+          .select()
+          .from(attendance)
+          .where(
+            and(
+              eq(attendance.user_id, userId),
+              eq(attendance.date, openRecord.date as string),
+            ),
+          )
+          .orderBy(desc(attendance.created_at));
+        const shiftLatest = shiftRecords[0];
+        return {
+          status: shiftLatest.status,
+          currentStatus: shiftLatest.status,
+          hasCheckedIn: shiftRecords.some((r) => r.status === "حاضر"),
+          hasStartedLunch: shiftRecords.some(
+            (r) => r.status === "في الاستراحة",
+          ),
+          hasEndedLunch: shiftRecords.some((r) => r.status === "يعمل"),
+          hasCheckedOut: false,
+          check_in_time:
+            shiftRecords.find((r) => r.status === "حاضر")?.check_in_time ||
+            shiftLatest.check_in_time,
+          check_out_time: null,
+          lunch_start_time:
+            shiftRecords.find((r) => r.status === "في الاستراحة")
+              ?.lunch_start_time || null,
+          lunch_end_time:
+            shiftRecords.find((r) => r.status === "يعمل")?.lunch_end_time ||
+            null,
+          work_hours: shiftLatest.work_hours,
+          records: shiftRecords,
+          crossesMidnight: true,        // علم: الوردية تعبر منتصف الليل
+          openShiftDate: openRecord.date, // تاريخ تسجيل الدخول الأصلي
+        };
+      }
       return {
         status: "غائب",
         currentStatus: "غائب",

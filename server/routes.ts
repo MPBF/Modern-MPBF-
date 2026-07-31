@@ -12263,6 +12263,20 @@ Input: ${text}`;
           distance_from_factory: Math.round(closestDistance),
         };
 
+        // =============== دعم الوردية الليلية ===============
+        // عند تسجيل الخروج: إذا لم يكن هناك دخول مفتوح لتاريخ اليوم،
+        // نبحث عن آخر دخول مفتوح خلال الـ 24 ساعة الماضية.
+        // إذا وُجد في يوم سابق، نستخدم تاريخه لربط الخروج بنفس وردية الدخول.
+        if (status === "مغادر") {
+          const openRecord = await storage.findOpenCheckIn(req.body.user_id);
+          if (
+            openRecord &&
+            String(openRecord.date) !== String(attendanceData.date)
+          ) {
+            attendanceData.date = openRecord.date;
+          }
+        }
+
         const attendance = await storage.createAttendance(attendanceData);
 
         // Send attendance notification asynchronously (fire-and-forget)
