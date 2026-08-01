@@ -220,47 +220,47 @@ export default function Warehouse() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1 p-1 sm:inline-flex sm:flex-nowrap sm:h-10">
+        <TabsList className="flex flex-wrap h-auto gap-1.5 p-1.5 sm:inline-flex sm:flex-nowrap bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
           <TabsTrigger
             value="production-hall"
-            className="bg-amber-50 dark:bg-amber-950 text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <Factory className="h-4 w-4 ml-1 shrink-0" />
+            <Factory className="h-4 w-4 shrink-0" />
             {t("warehouse.tabs.productionHall")}
           </TabsTrigger>
           <TabsTrigger
             value="finished-goods"
-            className="bg-blue-50 dark:bg-blue-950 text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <Package className="h-4 w-4 ml-1 shrink-0" />
+            <Package className="h-4 w-4 shrink-0" />
             {t("warehouse.tabs.finishedGoods")}
           </TabsTrigger>
           <TabsTrigger
             value="raw-materials"
-            className="bg-green-50 dark:bg-green-950 text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-green-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <Boxes className="h-4 w-4 ml-1 shrink-0" />
+            <Boxes className="h-4 w-4 shrink-0" />
             {t("warehouse.tabs.rawMaterials")}
           </TabsTrigger>
           <TabsTrigger
             value="industrial-waste"
-            className="bg-orange-50 dark:bg-orange-950 text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <Recycle className="h-4 w-4 ml-1 shrink-0" />
+            <Recycle className="h-4 w-4 shrink-0" />
             {t("warehouse.tabs.industrialWaste")}
           </TabsTrigger>
           <TabsTrigger
             value="definitions"
-            className="bg-purple-50 dark:bg-purple-950 text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <Settings className="h-4 w-4 ml-1 shrink-0" />
+            <Settings className="h-4 w-4 shrink-0" />
             {t("warehouse.tabs.definitions")}
           </TabsTrigger>
           <TabsTrigger
             value="reports"
-            className="bg-gray-50 dark:bg-gray-950 text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-gray-700 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <BarChart3 className="h-4 w-4 ml-1 shrink-0" />
+            <BarChart3 className="h-4 w-4 shrink-0" />
             {t("warehouse.tabs.reports")}
           </TabsTrigger>
         </TabsList>
@@ -328,19 +328,19 @@ function FinishedGoodsSection({
   return (
     <div className="space-y-4">
       <Tabs defaultValue="fp-del" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1 p-1 sm:inline-flex sm:flex-nowrap sm:h-10">
+        <TabsList className="flex flex-wrap h-auto gap-1.5 p-1.5 sm:inline-flex sm:flex-nowrap bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
           <TabsTrigger
             value="fp-del"
-            className="text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <Truck className="h-4 w-4 ml-1 shrink-0" />
+            <Truck className="h-4 w-4 shrink-0" />
             {t("warehouse.production.fpDelVouchers")}
           </TabsTrigger>
           <TabsTrigger
             value="fp-rec"
-            className="text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <ArrowDownToLine className="h-4 w-4 ml-1 shrink-0" />
+            <ArrowDownToLine className="h-4 w-4 shrink-0" />
             {t("warehouse.production.fpRecVouchers")}
           </TabsTrigger>
         </TabsList>
@@ -1043,19 +1043,19 @@ function RawMaterialsSection({
   return (
     <div className="space-y-4">
       <Tabs defaultValue="rm-rec" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1 p-1 sm:inline-flex sm:flex-nowrap sm:h-10">
+        <TabsList className="flex flex-wrap h-auto gap-1.5 p-1.5 sm:inline-flex sm:flex-nowrap bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
           <TabsTrigger
             value="rm-rec"
-            className="text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-green-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <ArrowDownToLine className="h-4 w-4 ml-1 shrink-0" />
+            <ArrowDownToLine className="h-4 w-4 shrink-0" />
             {t("warehouse.production.rmRecVouchers")}
           </TabsTrigger>
           <TabsTrigger
             value="rm-del"
-            className="text-xs px-2 py-1.5 sm:text-sm sm:px-3"
+            className="data-[state=active]:bg-green-600 data-[state=active]:text-white data-[state=active]:shadow-md text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 text-xs px-2.5 py-1.5 sm:text-sm sm:px-3 rounded-lg font-medium transition-all gap-1"
           >
-            <ArrowUpFromLine className="h-4 w-4 ml-1 shrink-0" />
+            <ArrowUpFromLine className="h-4 w-4 shrink-0" />
             {t("warehouse.production.rmDelVouchers")}
           </TabsTrigger>
         </TabsList>

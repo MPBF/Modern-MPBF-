@@ -2530,7 +2530,7 @@ export default function Definitions() {
           >
             <div className="w-full overflow-x-auto sm:overflow-visible -mx-1 sm:mx-0 px-1 sm:px-0 [scrollbar-width:thin]">
               <TabsList
-                className="flex sm:grid w-max sm:w-full h-auto p-1 bg-white rounded-lg border border-gray-200 shadow-sm gap-1 flex-nowrap whitespace-nowrap"
+                className="flex sm:grid w-max sm:w-full h-auto p-1.5 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm gap-1.5 flex-nowrap whitespace-nowrap"
                 dir="rtl"
                 style={{
                   gridTemplateColumns: `repeat(${Math.min(accessibleTabs.length, 9)}, minmax(0, 1fr))`,
@@ -2540,9 +2540,7 @@ export default function Definitions() {
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
-                    className="data-[state=active]:bg-white data-[state=active]:text-blue-600
-                                 text-gray-600 hover:text-blue-600 px-3 py-2 text-xs sm:text-sm font-medium
-                                 transition-all duration-200 rounded-md flex-shrink-0 sm:flex-1 sm:min-w-0"
+                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:font-bold text-gray-600 dark:text-gray-300 hover:text-blue-700 hover:bg-white dark:hover:bg-gray-700 px-3 py-2 text-xs sm:text-sm font-medium transition-all duration-200 rounded-lg flex-shrink-0 sm:flex-1 sm:min-w-0"
                   >
                     {t(tab.labelKey)}
                   </TabsTrigger>
@@ -2722,33 +2720,33 @@ export default function Definitions() {
 
                       {/* Desktop Table View */}
                       <div className="hidden md:block overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                        <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                          <thead className="bg-blue-50 dark:bg-gray-800/80">
                             <tr>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.customers.code")}
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.customers.nameAr")}
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.customers.name")}
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.customers.plateDrawerCode")}
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.customers.phone")}
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.print.representative")}
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.customers.actions")}
                               </th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                             {(() => {
                               const filteredCustomers = getFilteredCustomers();
                               const paginatedCustomers = paginateData(
@@ -2759,24 +2757,24 @@ export default function Definitions() {
                                 paginatedCustomers.map((customer: any) => (
                                   <tr
                                     key={customer.id}
-                                    className="hover:bg-gray-50"
+                                    className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors"
                                   >
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       {customer.id}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       {customer.name_ar || "-"}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       {customer.name || "-"}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       {customer.plate_drawer_code || "-"}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       {customer.phone || "-"}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       {(() => {
                                         if (!Array.isArray(salesReps))
                                           return "-";
@@ -2791,7 +2789,7 @@ export default function Definitions() {
                                           : "-";
                                       })()}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                       <div className="flex items-center justify-center gap-2">
                                         <Button
                                           variant="outline"
@@ -2945,27 +2943,27 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.id")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameAr")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameEn")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.code")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.actions")}
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {(() => {
                             const filteredCategories = getFilteredCategories();
                             const paginatedCategories = paginateData(
@@ -2976,21 +2974,21 @@ export default function Definitions() {
                               paginatedCategories.map((category: any) => (
                                 <tr
                                   key={category.id}
-                                  className="hover:bg-gray-50"
+                                  className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors"
                                 >
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {category.id}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {category.name_ar || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {category.name || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {category.code || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     <div className="flex items-center justify-center gap-2">
                                       {canEditCategories && (
                                       <Button
@@ -3092,27 +3090,27 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.id")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameAr")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameEn")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.description")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.actions")}
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {(() => {
                             const filteredSections = getFilteredSections();
                             const paginatedSections = paginateData(
@@ -3123,21 +3121,21 @@ export default function Definitions() {
                               paginatedSections.map((section: any) => (
                                 <tr
                                   key={section.id}
-                                  className="hover:bg-gray-50"
+                                  className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors"
                                 >
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {section.id}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {section.name_ar || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {section.name || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {section.description || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     <div className="flex items-center justify-center gap-2">
                                       {canEditSections && (
                                         <Button
@@ -3234,27 +3232,27 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.id")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameAr")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameEn")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.category")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.actions")}
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {(() => {
                             const filteredItems = getFilteredItems();
                             const paginatedItems = paginateData(
@@ -3263,20 +3261,20 @@ export default function Definitions() {
                             );
                             return paginatedItems.length > 0 ? (
                               paginatedItems.map((item: any) => (
-                                <tr key={item.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                <tr key={item.id} className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {item.id}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {item.name_ar || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {item.name || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {item.category_id || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     <div className="flex items-center justify-center gap-2">
                                       {canEditItems && (
                                         <Button
@@ -3383,8 +3381,8 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
                             <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                               {t("definitions.table.id")}
@@ -3421,7 +3419,7 @@ export default function Definitions() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {(() => {
                             const filteredCustomerProducts =
                               getFilteredCustomerProducts();
@@ -3447,7 +3445,7 @@ export default function Definitions() {
                                 return (
                                   <tr
                                     key={product.id}
-                                    className="hover:bg-gray-50"
+                                    className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors"
                                   >
                                     <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
                                       {product.id}
@@ -3732,22 +3730,22 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.id")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameAr")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameEn")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.type")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.active")}
                             </th>
                             <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
@@ -3771,12 +3769,12 @@ export default function Definitions() {
                                 ({t("common.kgPerHour")})
                               </span>
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.actions")}
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {(() => {
                             const filteredMachines = getFilteredMachines();
                             const paginatedMachines = paginateData(
@@ -3787,18 +3785,18 @@ export default function Definitions() {
                               paginatedMachines.map((machine: any) => (
                                 <tr
                                   key={machine.id}
-                                  className="hover:bg-gray-50"
+                                  className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors"
                                 >
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {machine.id}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {machine.name_ar || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {machine.name || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {machine.type || "-"}
                                   </td>
                                   <td
@@ -3860,7 +3858,7 @@ export default function Definitions() {
                                         )
                                       : "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     <div className="flex items-center justify-center gap-2">
                                       {canEditMachines && (
                                       <Button
@@ -4004,30 +4002,30 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.id")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.username")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.name")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.section")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.role")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.actions")}
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {(() => {
                             const filteredUsers = getFilteredUsers();
                             const paginatedUsers = paginateData(
@@ -4036,17 +4034,17 @@ export default function Definitions() {
                             );
                             return paginatedUsers.length > 0 ? (
                               paginatedUsers.map((user: any) => (
-                                <tr key={user.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                <tr key={user.id} className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {user.id}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {user.username || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {user.display_name || user.name || "-"}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {(() => {
                                       if (!user.section_id) return "-";
                                       if (!Array.isArray(sections))
@@ -4063,7 +4061,7 @@ export default function Definitions() {
                                         : `${user.section_id}`;
                                     })()}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     {(() => {
                                       if (!user.role_id) return "-";
                                       const role =
@@ -4076,7 +4074,7 @@ export default function Definitions() {
                                         : "-";
                                     })()}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
                                     <div className="flex items-center justify-center gap-2">
                                       {canEditUsers && (
                                       <Button
@@ -4197,33 +4195,33 @@ export default function Definitions() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                        <thead className="bg-blue-50 dark:bg-gray-800/80">
                           <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.code")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.masterBatch.color")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameAr")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.nameEn")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.masterBatch.supplier")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.masterBatch.status")}
                             </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                               {t("definitions.table.actions")}
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                           {masterBatchColorsData.length > 0 ? (
                             masterBatchColorsData
                               .filter((color: any) => {
@@ -4251,7 +4249,7 @@ export default function Definitions() {
                                   : !color.is_active;
                               })
                               .map((color: any) => (
-                                <tr key={color.id} className="hover:bg-gray-50">
+                                <tr key={color.id} className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors">
                                   <td className="px-6 py-4 text-center text-sm font-medium text-gray-900">
                                     {color.id}
                                   </td>
@@ -7764,7 +7762,7 @@ function PackagingUnitsManagerDialog({
 
         <div className="mt-2 border rounded-md overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-blue-50 dark:bg-gray-800/80">
               <tr>
                 <th className="text-right p-2">
                   {t("definitions.items.packagingUnits.name")}

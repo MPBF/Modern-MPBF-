@@ -981,20 +981,29 @@ export default function Orders() {
         className="space-y-6"
         dir="rtl"
       >
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-          <TabsTrigger value="orders" data-testid="tab-orders">
-            <FileText className="h-4 w-4 ml-2" />
+        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid h-auto p-1.5 gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+          <TabsTrigger
+            value="orders"
+            data-testid="tab-orders"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:font-bold text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-all gap-2"
+          >
+            <FileText className="h-4 w-4" />
             <span>{t("navigation.orders")}</span>
           </TabsTrigger>
           <TabsTrigger
             value="production-orders"
             data-testid="tab-production-orders"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:font-bold text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-all gap-2"
           >
-            <ClipboardCheck className="h-4 w-4 ml-2" />
+            <ClipboardCheck className="h-4 w-4" />
             <span>{t("navigation.productionOrders")}</span>
           </TabsTrigger>
-          <TabsTrigger value="rolls" data-testid="tab-rolls">
-            <Package className="h-4 w-4 ml-2" />
+          <TabsTrigger
+            value="rolls"
+            data-testid="tab-rolls"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:font-bold text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-all gap-2"
+          >
+            <Package className="h-4 w-4" />
             <span>{t("navigation.rolls")}</span>
           </TabsTrigger>
         </TabsList>
