@@ -115,15 +115,6 @@ export const navigationItems: NavigationItem[] = [
     group: "support",
   },
   {
-    name: "مخالفات العمل",
-    name_ar: "مخالفات العمل",
-    name_en: "Work Violations",
-    icon: ShieldAlert,
-    path: "/work-violations",
-    priority: 10,
-    group: "support",
-  },
-  {
     name: "المستودع",
     name_ar: "المستودع",
     name_en: "Warehouse",

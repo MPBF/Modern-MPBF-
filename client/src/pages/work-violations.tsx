@@ -14,7 +14,6 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import PageLayout from "../components/layout/PageLayout";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -472,7 +471,7 @@ export default function WorkViolationsPage() {
   };
 
   return (
-    <PageLayout>
+    <>
       <div className="space-y-4 max-w-full overflow-x-hidden" dir="rtl">
       <div className="flex items-center gap-2">
         <ShieldAlert className="h-6 w-6 text-red-600" />
@@ -1015,7 +1014,7 @@ export default function WorkViolationsPage() {
         </DialogContent>
       </Dialog>
       </div>
-    </PageLayout>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Users, CalendarDays, BarChart3, ClipboardList } from "lucide-react";
+import { Users, CalendarDays, BarChart3, ClipboardList, ShieldAlert } from "lucide-react";
 
 import PageLayout from "../components/layout/PageLayout";
 import EmployeeDirectory from "../components/hr/EmployeeDirectory";
@@ -8,6 +8,7 @@ import EmployeeFile from "../components/hr/EmployeeFile";
 import ShiftRoster from "../components/hr/ShiftRoster";
 import AttendanceReport from "../components/hr/AttendanceReport";
 import DailyAttendance from "../components/hr/DailyAttendance";
+import WorkViolationsPage from "./work-violations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useLanguage } from "../contexts/LanguageContext";
 
@@ -50,6 +51,10 @@ export default function HR() {
               <BarChart3 className="h-4 w-4 ml-1" />
               {L("تقرير الحضور", "Attendance Report")}
             </TabsTrigger>
+            <TabsTrigger value="violations" data-testid="tab-hr-violations">
+              <ShieldAlert className="h-4 w-4 ml-1" />
+              {L("مخالفات العمل", "Work Violations")}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="directory">
@@ -63,6 +68,9 @@ export default function HR() {
           </TabsContent>
           <TabsContent value="report">
             <AttendanceReport />
+          </TabsContent>
+          <TabsContent value="violations">
+            <WorkViolationsPage />
           </TabsContent>
         </Tabs>
       )}
