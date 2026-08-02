@@ -198,6 +198,7 @@ export default function Definitions() {
   const canEditMachines = canEditInTab(user, "machines");
   const canAddUsers = canAddInTab(user, "users");
   const canEditUsers = canEditInTab(user, "users");
+  const canDeleteUsers = isAdmin;
   const canAddMasterBatch = canAddInTab(user, "master-batch-colors");
   const canEditMasterBatch = canEditInTab(user, "master-batch-colors");
   const canDeleteMasterBatch = isAdmin;
@@ -247,6 +248,15 @@ export default function Definitions() {
       document.removeEventListener("wheel", preventWheel);
     };
   }, []);
+
+  // تحديد متعدد للمستخدمين
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
+  const toggleUserSelect = (id: number) =>
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   // Pagination states for each tab
   const [currentPages, setCurrentPages] = useState({
@@ -2204,6 +2214,41 @@ export default function Definitions() {
     },
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: number) =>
+      fetch(`/api/users/${id}`, { method: "DELETE" }).then((res) => {
+        if (!res.ok) throw new Error("فشل حذف المستخدم");
+        return res.json();
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "تم حذف المستخدم بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في حذف المستخدم", variant: "destructive" });
+    },
+  });
+
+  const bulkDeleteUsersMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/users/${id}`, { method: "DELETE" }).then((r) => {
+            if (!r.ok) throw new Error(`فشل حذف ${id}`);
+          }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setSelectedUserIds(new Set());
+      toast({ title: "تم حذف المستخدمين المحددين بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في الحذف الجماعي", variant: "destructive" });
+    },
+  });
+
   // Master batch color mutations
   const createMasterBatchColorMutation = useMutation({
     mutationFn: (data: any) => {
@@ -4001,161 +4046,230 @@ export default function Definitions() {
                       </p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
-                        <thead className="bg-blue-50 dark:bg-gray-800/80">
-                          <tr>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
-                              {t("definitions.table.id")}
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
-                              {t("definitions.table.username")}
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
-                              {t("definitions.table.name")}
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
-                              {t("definitions.table.section")}
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
-                              {t("definitions.table.role")}
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
-                              {t("definitions.table.actions")}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                          {(() => {
-                            const filteredUsers = getFilteredUsers();
-                            const paginatedUsers = paginateData(
-                              filteredUsers,
-                              currentPages.users,
-                            );
-                            return paginatedUsers.length > 0 ? (
-                              paginatedUsers.map((user: any) => (
-                                <tr key={user.id} className="hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors">
-                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
-                                    {user.id}
-                                  </td>
-                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
-                                    {user.username || "-"}
-                                  </td>
-                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
-                                    {user.display_name || user.name || "-"}
-                                  </td>
-                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
-                                    {(() => {
-                                      if (!user.section_id) return "-";
-                                      if (!Array.isArray(sections))
-                                        return `${user.section_id}`;
-                                      const section = sections.find(
-                                        (s: any) =>
-                                          s.id === user.section_id ||
-                                          s.id === String(user.section_id) ||
-                                          s.id ===
-                                            `SEC${String(user.section_id).padStart(2, "0")}`,
-                                      );
-                                      return section
-                                        ? section.name_ar || section.name
-                                        : `${user.section_id}`;
-                                    })()}
-                                  </td>
-                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
-                                    {(() => {
-                                      if (!user.role_id) return "-";
-                                      const role =
-                                        Array.isArray(roles) &&
-                                        roles.find(
-                                          (r: any) => r.id === user.role_id,
+                    <div className="space-y-3">
+                      {/* شريط الحذف الجماعي */}
+                      {canDeleteUsers && selectedUserIds.size > 0 && (
+                        <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2.5">
+                          <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                            تم تحديد {selectedUserIds.size} مستخدم
+                          </span>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-gray-600 border-gray-300 h-8"
+                              onClick={() => setSelectedUserIds(new Set())}
+                            >
+                              إلغاء التحديد
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-8 gap-1.5"
+                              disabled={bulkDeleteUsersMutation.isPending}
+                              onClick={() => {
+                                if (confirm(`هل تريد حذف ${selectedUserIds.size} مستخدم؟ هذا الإجراء لا يمكن التراجع عنه.`)) {
+                                  bulkDeleteUsersMutation.mutate(Array.from(selectedUserIds));
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              حذف المحددين
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700">
+                          <thead className="bg-blue-50 dark:bg-gray-800/80">
+                            <tr>
+                              {canDeleteUsers && (
+                                <th className="px-3 py-3 text-center border-r border-blue-200 dark:border-gray-600 w-10">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                    checked={
+                                      (() => {
+                                        const filtered = getFilteredUsers();
+                                        const paginated = paginateData(filtered, currentPages.users);
+                                        return paginated.length > 0 && paginated.every((u: any) => selectedUserIds.has(u.id));
+                                      })()
+                                    }
+                                    onChange={(e) => {
+                                      const filtered = getFilteredUsers();
+                                      const paginated = paginateData(filtered, currentPages.users);
+                                      setSelectedUserIds((prev) => {
+                                        const next = new Set(prev);
+                                        paginated.forEach((u: any) =>
+                                          e.target.checked ? next.add(u.id) : next.delete(u.id)
                                         );
-                                      return role
-                                        ? role.name_ar || role.name
-                                        : "-";
-                                    })()}
-                                  </td>
-                                  <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center border-r border-gray-100 dark:border-gray-700 last:border-r-0">
-                                    <div className="flex items-center justify-center gap-2">
-                                      {canEditUsers && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          setEditingItem(user);
-                                          setUserForm({
-                                            username: user.username || "",
-                                            display_name:
-                                              user.display_name || "",
-                                            display_name_ar:
-                                              user.display_name_ar || "",
-                                            password: "",
-                                            phone: user.phone || "",
-                                            role_id: user.role_id
-                                              ? `ROLE${String(user.role_id).padStart(2, "0")}`
-                                              : "none",
-                                            section_id: (() => {
-                                              if (!user.section_id)
-                                                return "none";
-                                              const sectionMapping: {
-                                                [key: number]: string;
-                                              } = {
-                                                1: "SEC01",
-                                                2: "SEC02",
-                                                3: "SEC03",
-                                                4: "SEC04",
-                                                5: "SEC05",
-                                                6: "SEC06",
-                                                7: "SEC07",
-                                              };
-                                              return (
-                                                sectionMapping[
-                                                  user.section_id
-                                                ] || "none"
-                                              );
-                                            })(),
-                                            status: user.status || "active",
-                                          });
-                                          setSelectedTab("users");
-                                          setShowPassword(false);
-                                          setIsDialogOpen(true);
-                                        }}
-                                      >
-                                        <Edit className="w-4 h-4" />
-                                      </Button>
+                                        return next;
+                                      });
+                                    }}
+                                    title="تحديد الكل"
+                                  />
+                                </th>
+                              )}
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
+                                {t("definitions.table.id")}
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
+                                {t("definitions.table.username")}
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
+                                {t("definitions.table.name")}
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
+                                {t("definitions.table.section")}
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
+                                {t("definitions.table.role")}
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide last:border-r-0">
+                                {t("definitions.table.actions")}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            {(() => {
+                              const filteredUsers = getFilteredUsers();
+                              const paginatedUsers = paginateData(filteredUsers, currentPages.users);
+                              return paginatedUsers.length > 0 ? (
+                                paginatedUsers.map((u: any) => {
+                                  const isSelected = selectedUserIds.has(u.id);
+                                  return (
+                                    <tr
+                                      key={u.id}
+                                      className={`transition-colors ${isSelected ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-blue-50/60 dark:hover:bg-gray-800/60"}`}
+                                    >
+                                      {canDeleteUsers && (
+                                        <td className="px-3 py-3 text-center border-r border-gray-100 dark:border-gray-700">
+                                          <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                            checked={isSelected}
+                                            onChange={() => toggleUserSelect(u.id)}
+                                          />
+                                        </td>
                                       )}
-                                    </div>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100 text-center border-r border-gray-100 dark:border-gray-700">
+                                        {u.id}
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
+                                        {u.username || "-"}
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
+                                        {u.display_name || u.name || "-"}
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
+                                        {(() => {
+                                          if (!u.section_id) return "-";
+                                          if (!Array.isArray(sections)) return `${u.section_id}`;
+                                          const section = sections.find(
+                                            (s: any) =>
+                                              s.id === u.section_id ||
+                                              s.id === String(u.section_id) ||
+                                              s.id === `SEC${String(u.section_id).padStart(2, "0")}`,
+                                          );
+                                          return section ? section.name_ar || section.name : `${u.section_id}`;
+                                        })()}
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
+                                        {(() => {
+                                          if (!u.role_id) return "-";
+                                          const role = Array.isArray(roles) && roles.find((r: any) => r.id === u.role_id);
+                                          return role ? role.name_ar || role.name : "-";
+                                        })()}
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center">
+                                        <div className="flex items-center justify-center gap-2">
+                                          {canEditUsers && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                              title="تعديل"
+                                              onClick={() => {
+                                                setEditingItem(u);
+                                                setUserForm({
+                                                  username: u.username || "",
+                                                  display_name: u.display_name || "",
+                                                  display_name_ar: u.display_name_ar || "",
+                                                  password: "",
+                                                  phone: u.phone || "",
+                                                  role_id: u.role_id
+                                                    ? `ROLE${String(u.role_id).padStart(2, "0")}`
+                                                    : "none",
+                                                  section_id: (() => {
+                                                    if (!u.section_id) return "none";
+                                                    const m: { [k: number]: string } = {
+                                                      1: "SEC01", 2: "SEC02", 3: "SEC03",
+                                                      4: "SEC04", 5: "SEC05", 6: "SEC06", 7: "SEC07",
+                                                    };
+                                                    return m[u.section_id] || "none";
+                                                  })(),
+                                                  status: u.status || "active",
+                                                });
+                                                setSelectedTab("users");
+                                                setShowPassword(false);
+                                                setIsDialogOpen(true);
+                                              }}
+                                            >
+                                              <Edit className="w-4 h-4" />
+                                            </Button>
+                                          )}
+                                          {canDeleteUsers && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                              title="حذف"
+                                              disabled={deleteUserMutation.isPending}
+                                              onClick={() => {
+                                                if (confirm(`حذف المستخدم "${u.display_name_ar || u.display_name || u.username}"؟`)) {
+                                                  deleteUserMutation.mutate(u.id);
+                                                }
+                                              }}
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              ) : (
+                                <tr>
+                                  <td
+                                    colSpan={canDeleteUsers ? 7 : 6}
+                                    className="px-6 py-8 text-center text-gray-500"
+                                  >
+                                    {t("definitions.noSearchResults")}
                                   </td>
                                 </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td
-                                  colSpan={5}
-                                  className="px-6 py-8 text-center text-gray-500"
-                                >
-                                  {t("definitions.noSearchResults")}
-                                </td>
-                              </tr>
+                              );
+                            })()}
+                          </tbody>
+                        </table>
+                        {(() => {
+                          const filteredUsers = getFilteredUsers();
+                          const totalPages = getTotalPages(filteredUsers.length);
+                          if (totalPages > 1) {
+                            return (
+                              <PaginationComponent
+                                currentPage={currentPages.users}
+                                totalPages={totalPages}
+                                onPageChange={(page) => updatePage("users", page)}
+                                totalItems={filteredUsers.length}
+                                itemsPerPage={itemsPerPage}
+                              />
                             );
-                          })()}
-                        </tbody>
-                      </table>
-                      {(() => {
-                        const filteredUsers = getFilteredUsers();
-                        const totalPages = getTotalPages(filteredUsers.length);
-                        if (totalPages > 1) {
-                          return (
-                            <PaginationComponent
-                              currentPage={currentPages.users}
-                              totalPages={totalPages}
-                              onPageChange={(page) => updatePage("users", page)}
-                              totalItems={filteredUsers.length}
-                              itemsPerPage={itemsPerPage}
-                            />
-                          );
-                        }
-                        return null;
-                      })()}
+                          }
+                          return null;
+                        })()}
+                      </div>
                     </div>
                   )}
                 </CardContent>
