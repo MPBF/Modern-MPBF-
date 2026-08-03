@@ -40,6 +40,9 @@ export default defineConfig(async () => {
       hmr: {
         overlay: false, // تعطيل ErrorOverlay
       },
+      watch: {
+        ignored: ['**/.cache/**', '**/.local/**', '**/node_modules/**'],
+      },
     },
     optimizeDeps: {
       exclude: ["@replit/vite-plugin-runtime-error-modal"],
