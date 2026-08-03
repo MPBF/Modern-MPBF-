@@ -554,7 +554,7 @@ export default function BagConfigurator() {
       setGusset(0);
       setPrintImgSize(60);   // حجم أصغر افتراضياً للسفرة
       setPrintSize(35);
-      setRepeatCount(4);
+      setRepeatCount(2);
     }
   }, [type]);
 
@@ -715,8 +715,31 @@ export default function BagConfigurator() {
       // NO wall at shoulder level → neck opening is hollow (open bag mouth)
     } else {
       addWall(width, d, 0, -hh, 0, Math.PI / 2, 0); // bottom
-      addWall(d, height, -hw, 0, 0, 0, Math.PI / 2); // left side
-      addWall(d, height,  hw, 0, 0, 0, Math.PI / 2); // right side
+
+      if (gusset > 0) {
+        // Gusset fold: replace flat side walls with V-shaped accordion panels.
+        // Each side = two PlaneGeometry panels meeting at a crease that points
+        // outward from the bag's side edge, giving a realistic fold appearance.
+        const panelW = hd * Math.SQRT2; // diagonal panel width = gusset/2 × √2
+        const addGussetPanel = (cx: number, cz: number, ry: number) => {
+          const geo = new THREE.PlaneGeometry(panelW, height);
+          const mesh = new THREE.Mesh(geo, bagMaterial);
+          mesh.position.set(cx, 0, cz);
+          mesh.rotation.y = ry;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          bagGroup.add(mesh);
+        };
+        //  Left side:  crease at x=-(hw+hd), z=0
+        addGussetPanel(-(hw + hd / 2),  hd / 2, -Math.PI / 4);       // left-front panel
+        addGussetPanel(-(hw + hd / 2), -hd / 2, -3 * Math.PI / 4);   // left-back panel
+        //  Right side: crease at x=+(hw+hd), z=0
+        addGussetPanel( (hw + hd / 2),  hd / 2,  Math.PI / 4);       // right-front panel
+        addGussetPanel( (hw + hd / 2), -hd / 2,  3 * Math.PI / 4);   // right-back panel
+      } else {
+        addWall(d, height, -hw, 0, 0, 0, Math.PI / 2); // left side (no gusset)
+        addWall(d, height,  hw, 0, 0, 0, Math.PI / 2); // right side (no gusset)
+      }
     }
 
     // Update measurement lines
@@ -1069,8 +1092,8 @@ export default function BagConfigurator() {
                 </div>
               ) : (
                 [
-                  { label: "العرض (Width)", value: width, set: setWidth, min: 15, max: 60 },
-                  { label: "الطول (Height)", value: height, set: setHeight, min: 20, max: 80 },
+                  { label: "العرض (Width)", value: width, set: setWidth, min: 15, max: 75 },
+                  { label: "الطول (Height)", value: height, set: setHeight, min: 20, max: 100 },
                   { label: "الطية / العمق (Gusset)", value: gusset, set: setGusset, min: 0, max: 25 },
                 ].map((d) => (
                   <div key={d.label}>
