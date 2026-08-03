@@ -84,6 +84,10 @@ export default function BagConfigurator() {
   const printMaterialRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
   const printCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const printTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const backPrintMaterialRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
+  const backPrintCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const backPrintTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const backPrintMeshRef = useRef<THREE.Mesh | null>(null);
   const measurementLinesRef = useRef<{
     w: THREE.Line;
     h: THREE.Line;
@@ -102,7 +106,8 @@ export default function BagConfigurator() {
   const [gusset, setGusset] = useState(10);
   const [colorName, setColorName] = useState<string>("أزرق");
   const [printColorsCount, setPrintColorsCount] = useState(1);
-  const [thicknessMicrons, setThicknessMicrons] = useState(20);
+  const [thicknessMicrons, setThicknessMicrons] = useState(50);
+  const [printSides, setPrintSides] = useState<1 | 2>(1);
   const [printMode, setPrintMode] = useState<PrintMode>("text");
   const [printText, setPrintText] = useState("علامتك التجارية");
   const [printColor, setPrintColor] = useState("#000000");
@@ -410,19 +415,29 @@ export default function BagConfigurator() {
     printTexture.colorSpace = THREE.SRGBColorSpace;
     printTextureRef.current = printTexture;
 
-    printMaterialRef.current = new THREE.MeshPhysicalMaterial({
-      map: printTexture,
+    const printMatProps = {
       transparent: true,
       opacity: 1.0,
-      roughness: 0.90,          // حبر الفليكسو مطفي تماماً
-      metalness: 0,             // لا انعكاس معدني على الحبر
-      envMapIntensity: 0.04,    // حد أدنى من البيئة
-      clearcoat: 0,             // لا طبقة لامعة فوق الطباعة
+      roughness: 0.90,
+      metalness: 0,
+      envMapIntensity: 0.04,
+      clearcoat: 0,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       depthWrite: false,
       side: THREE.DoubleSide,
-    });
+    };
+    printMaterialRef.current = new THREE.MeshPhysicalMaterial({ map: printTexture, ...printMatProps });
+
+    // Back print canvas / texture / material
+    const backPrintCanvas = document.createElement("canvas");
+    backPrintCanvas.width = 1024;
+    backPrintCanvas.height = 1024;
+    backPrintCanvasRef.current = backPrintCanvas;
+    const backPrintTexture = new THREE.CanvasTexture(backPrintCanvas);
+    backPrintTexture.colorSpace = THREE.SRGBColorSpace;
+    backPrintTextureRef.current = backPrintTexture;
+    backPrintMaterialRef.current = new THREE.MeshPhysicalMaterial({ map: backPrintTexture, ...printMatProps });
 
     // Measurement lines
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
@@ -492,6 +507,7 @@ export default function BagConfigurator() {
         }
       });
       printTexture.dispose();
+      backPrintTexture.dispose();
       sceneRef.current = null;
       cameraRef.current = null;
       rendererRef.current = null;
@@ -500,6 +516,10 @@ export default function BagConfigurator() {
       bagMaterialRef.current = null;
       printMaterialRef.current = null;
       printTextureRef.current = null;
+      backPrintMaterialRef.current = null;
+      backPrintTextureRef.current = null;
+      backPrintCanvasRef.current = null;
+      backPrintMeshRef.current = null;
       measurementLinesRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -649,6 +669,17 @@ export default function BagConfigurator() {
     printMesh.position.z = hd + 0.01;
     bagGroup.add(printMesh);
 
+    // Back print mesh — visibility toggled by printSides
+    const backPrintMat = backPrintMaterialRef.current;
+    if (backPrintMat) {
+      const backPrintMesh = new THREE.Mesh(shapeGeo, backPrintMat);
+      backPrintMesh.position.z = -(hd + 0.01);
+      backPrintMesh.rotation.y = Math.PI;
+      backPrintMesh.visible = printSides === 2;
+      bagGroup.add(backPrintMesh);
+      backPrintMeshRef.current = backPrintMesh;
+    }
+
     const backMesh = new THREE.Mesh(shapeGeo, bagMaterial);
     backMesh.position.z = -hd;
     backMesh.rotation.y = Math.PI;
@@ -770,6 +801,13 @@ export default function BagConfigurator() {
       }
     }
   }, [type, width, height, gusset]);
+
+  // ---- Toggle back-print visibility when printSides changes ----
+  useEffect(() => {
+    if (backPrintMeshRef.current) {
+      backPrintMeshRef.current.visible = printSides === 2;
+    }
+  }, [printSides]);
 
   // ---- Apply plastic material type (HDPE / LDPE) ----
   useEffect(() => {
@@ -940,6 +978,22 @@ export default function BagConfigurator() {
     }
 
     tex.needsUpdate = true;
+
+    // Mirror front canvas → back canvas (horizontal flip so text reads correctly from behind)
+    const backCanvas = backPrintCanvasRef.current;
+    const backTex = backPrintTextureRef.current;
+    if (backCanvas && backTex) {
+      const bctx = backCanvas.getContext("2d");
+      if (bctx) {
+        bctx.clearRect(0, 0, 1024, 1024);
+        bctx.save();
+        bctx.translate(1024, 0);
+        bctx.scale(-1, 1);
+        bctx.drawImage(canvas, 0, 0);
+        bctx.restore();
+        backTex.needsUpdate = true;
+      }
+    }
   }, [type, printMode, printText, printColor, printSize, printImgSize, imageVersion, repeatCount]);
 
   const onUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1241,6 +1295,25 @@ export default function BagConfigurator() {
             <div className="space-y-4 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               {stepHeader(6, "تصميم الطباعة الحية", "green")}
 
+              {/* جهة الطباعة */}
+              <div className="flex gap-2">
+                {([1, 2] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPrintSides(s)}
+                    className={`flex-1 text-center p-2 border rounded transition text-sm font-medium ${
+                      printSides === s
+                        ? "bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600"
+                    }`}
+                  >
+                    {s === 1 ? "🖨 وجه واحد" : "🖨 وجهين"}
+                  </button>
+                ))}
+              </div>
+
+              {/* نوع المحتوى */}
               <div className="flex gap-2">
                 {[
                   { mode: "text" as PrintMode, label: "إضافة نص" },
@@ -1328,9 +1401,9 @@ export default function BagConfigurator() {
 
             {/* 6. Customer Report & Email */}
             <div className="space-y-3 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              {stepHeader(7, "تقرير العميل وإرسال للإدارة", "blue")}
+              {stepHeader(7, "طباعة تقرير و إرسال اشعار للمبيعات", "blue")}
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                اطبع تقريراً واضحاً بمواصفات الكيس وصورته، أو أرسله للإدارة عبر
+                اطبع تقريراً واضحاً بمواصفات الكيس وصورته، أو أرسله للمبيعات عبر
                 البريد الإلكتروني
               </p>
 
