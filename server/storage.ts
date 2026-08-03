@@ -11431,8 +11431,24 @@ export class DatabaseStorage implements IStorage {
       stage === "printing" ? sql`AND cp.is_printed = true` : sql``;
 
     const { states } = await this.getStageMachineStates(stage);
-    // Only machines with a usable production rate can receive work.
-    const usable = states.filter((s) => s.rate > 0);
+    // Excluded machines (by ID) are skipped for auto-distribution but remain
+    // visible on the board. Accepts an array, a comma-separated string, or a
+    // JSON-encoded array so the same param works from both GET (query string)
+    // and POST (JSON body) callers.
+    const rawExcluded = params?.excludedMachineIds;
+    const excludedIds = new Set<string>(
+      Array.isArray(rawExcluded)
+        ? rawExcluded.map(String)
+        : typeof rawExcluded === "string" && rawExcluded
+          ? rawExcluded.startsWith("[")
+            ? (JSON.parse(rawExcluded) as string[]).map(String)
+            : rawExcluded.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [],
+    );
+    // Only machines with a usable production rate (and not excluded) can receive work.
+    const usable = states.filter(
+      (s) => s.rate > 0 && !excludedIds.has(String(s.machine.id)),
+    );
 
     const backlog = (
       await db.execute(sql`
@@ -14002,9 +14018,20 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Suggest a queue ordering for one machine that minimizes color/setup
-  // changes. Returns the queue items in the recommended order.
-  async suggestQueueOrder(machineId: string, stage: string): Promise<any[]> {
+  // Suggest a queue ordering for one machine.
+  //
+  // sortMethod controls the ordering strategy:
+  //   "similarity"  (default) — Material → Color → Size/Width/Thickness.
+  //                             Stage-specific sub-ordering within each group.
+  //   "throughput"            — Material → quantity_kg desc → Color.
+  //                             Run biggest batches first to maximise throughput.
+  //   "color_first"           — Clear products first → Color cluster →
+  //                             Material → Width.  Minimises ink/colour changes.
+  async suggestQueueOrder(
+    machineId: string,
+    stage: string,
+    sortMethod: string = "similarity",
+  ): Promise<any[]> {
     const info = this.getStageInfo(stage);
     if (!info) throw new Error("مرحلة غير صالحة");
     const { completedCol } = info;
@@ -14026,6 +14053,14 @@ export class DatabaseStorage implements IStorage {
 
     const items = rows.map((r) => this.mapEnrichedRow(r));
 
+    // ── field-extraction helpers ──────────────────────────────────────────
+    const matOf = (r: any) => String(r.raw_material ?? "").trim().toUpperCase();
+    const colorOf = (r: any) => String(r.master_batch_id ?? "").trim();
+    const widthOf = (r: any) => parseFloat(String(r.width ?? "")) || 0;
+    const thickOf = (r: any) =>
+      parseFloat(String(r.universal_thickness ?? r.thickness ?? "")) || 0;
+    const kgOf = (r: any) =>
+      parseFloat(String(r.final_quantity_kg ?? r.quantity_kg ?? "")) || 0;
     const colorSig = (r: any) =>
       [
         ...(Array.isArray(r.front_print_colors) ? r.front_print_colors : []),
@@ -14038,39 +14073,198 @@ export class DatabaseStorage implements IStorage {
     const withIndex = items.map((it, idx) => ({ it, idx }));
     let sorted: typeof withIndex;
 
-    if (stage === "film") {
+    // ── sort strategies ───────────────────────────────────────────────────
+
+    if (sortMethod === "throughput") {
+      // Primary: material type (keeps machine mono-material).
+      // Secondary: quantity desc — run the heaviest batches first to
+      //            maximise machine throughput before setup changes.
+      // Tertiary: colour cluster, then stable index.
+      sorted = withIndex.sort((a, b) => {
+        const aMat = matOf(a.it);
+        const bMat = matOf(b.it);
+        if (aMat !== bMat) return aMat.localeCompare(bMat);
+        const aKg = kgOf(a.it);
+        const bKg = kgOf(b.it);
+        if (aKg !== bKg) return bKg - aKg; // descending
+        const aC = colorOf(a.it);
+        const bC = colorOf(b.it);
+        if (aC !== bC) return aC.localeCompare(bC);
+        return a.idx - b.idx;
+      });
+    } else if (sortMethod === "color_first") {
+      // Primary: clear/transparent products first (no colour change needed).
+      // Secondary: colour cluster — group identical colours regardless of size.
+      // Tertiary: material, then width ascending, then stable index.
       sorted = withIndex.sort((a, b) => {
         const aClear = this.isClearProduct(a.it) ? 0 : 1;
         const bClear = this.isClearProduct(b.it) ? 0 : 1;
         if (aClear !== bClear) return aClear - bClear;
-        const aKey = String(a.it.master_batch_id ?? "");
-        const bKey = String(b.it.master_batch_id ?? "");
-        if (aKey !== bKey) return aKey.localeCompare(bKey);
-        return a.idx - b.idx;
-      });
-    } else if (stage === "printing") {
-      sorted = withIndex.sort((a, b) => {
-        if (a.it.print_colors_count !== b.it.print_colors_count)
-          return a.it.print_colors_count - b.it.print_colors_count;
-        const aSig = colorSig(a.it);
-        const bSig = colorSig(b.it);
-        if (aSig !== bSig) return aSig.localeCompare(bSig);
-        return a.idx - b.idx;
+        const aC = colorOf(a.it);
+        const bC = colorOf(b.it);
+        if (aC !== bC) return aC.localeCompare(bC);
+        const aMat = matOf(a.it);
+        const bMat = matOf(b.it);
+        if (aMat !== bMat) return aMat.localeCompare(bMat);
+        return widthOf(a.it) - widthOf(b.it) || a.idx - b.idx;
       });
     } else {
-      // cutting / default: cluster by size then material.
-      sorted = withIndex.sort((a, b) => {
-        const aKey = String(a.it.size_caption ?? "");
-        const bKey = String(b.it.size_caption ?? "");
-        if (aKey !== bKey) return aKey.localeCompare(bKey);
-        const aMat = String(a.it.raw_material ?? "");
-        const bMat = String(b.it.raw_material ?? "");
-        if (aMat !== bMat) return aMat.localeCompare(bMat);
-        return a.idx - b.idx;
-      });
+      // ── similarity (default) — Material → Colour → Size ─────────────
+      // Stage-specific sub-ordering within each material+colour group.
+      if (stage === "film") {
+        sorted = withIndex.sort((a, b) => {
+          // 1. Raw material type (HDPE before LDPE etc.)
+          const aMat = matOf(a.it);
+          const bMat = matOf(b.it);
+          if (aMat !== bMat) return aMat.localeCompare(bMat);
+          // 2. Clear/transparent products first within the same material
+          const aClear = this.isClearProduct(a.it) ? 0 : 1;
+          const bClear = this.isClearProduct(b.it) ? 0 : 1;
+          if (aClear !== bClear) return aClear - bClear;
+          // 3. Colour cluster (master_batch_id)
+          const aC = colorOf(a.it);
+          const bC = colorOf(b.it);
+          if (aC !== bC) return aC.localeCompare(bC);
+          // 4. Width ascending (minimises die-head adjustment)
+          const aW = widthOf(a.it);
+          const bW = widthOf(b.it);
+          if (aW !== bW) return aW - bW;
+          // 5. Thickness ascending, then stable index
+          return thickOf(a.it) - thickOf(b.it) || a.idx - b.idx;
+        });
+      } else if (stage === "printing") {
+        sorted = withIndex.sort((a, b) => {
+          // 1. Raw material
+          const aMat = matOf(a.it);
+          const bMat = matOf(b.it);
+          if (aMat !== bMat) return aMat.localeCompare(bMat);
+          // 2. Print colour count ascending (fewer → more minimises setup)
+          const aPc = a.it.print_colors_count ?? 0;
+          const bPc = b.it.print_colors_count ?? 0;
+          if (aPc !== bPc) return aPc - bPc;
+          // 3. Colour-signature cluster
+          const aSig = colorSig(a.it);
+          const bSig = colorSig(b.it);
+          if (aSig !== bSig) return aSig.localeCompare(bSig);
+          // 4. Width ascending, then stable index
+          return widthOf(a.it) - widthOf(b.it) || a.idx - b.idx;
+        });
+      } else {
+        // cutting / default
+        sorted = withIndex.sort((a, b) => {
+          // 1. Raw material
+          const aMat = matOf(a.it);
+          const bMat = matOf(b.it);
+          if (aMat !== bMat) return aMat.localeCompare(bMat);
+          // 2. Colour cluster
+          const aC = colorOf(a.it);
+          const bC = colorOf(b.it);
+          if (aC !== bC) return aC.localeCompare(bC);
+          // 3. Size caption cluster
+          const aKey = String(a.it.size_caption ?? "");
+          const bKey = String(b.it.size_caption ?? "");
+          if (aKey !== bKey) return aKey.localeCompare(bKey);
+          // 4. Width ascending, then stable index
+          return widthOf(a.it) - widthOf(b.it) || a.idx - b.idx;
+        });
+      }
     }
 
     return sorted.map((s) => s.it);
+  }
+
+  // Return historical production patterns for a machine based on completed
+  // rolls. Used by the frontend "learning insight" badge to show operators
+  // what the machine historically produces most (dominant material, width
+  // range, top colours). Pure read — no mutations.
+  async getQueueLearningInsights(
+    machineId: string,
+    stage: string,
+  ): Promise<any> {
+    const info = this.getStageInfo(stage);
+    if (!info) return null;
+
+    // Map stage → the roll column that records which machine was used.
+    const machineCol =
+      stage === "film"
+        ? "film_machine_id"
+        : stage === "printing"
+          ? "printing_machine_id"
+          : "cutting_machine_id";
+
+    const rows = (
+      await db.execute(sql`
+        SELECT
+          cp.raw_material,
+          cp.master_batch_id,
+          mb.name_ar   AS master_batch_name_ar,
+          mb.name      AS master_batch_name,
+          mb.color_hex AS master_batch_color_hex,
+          cp.width,
+          COUNT(r.id)  AS roll_count
+        FROM rolls r
+        JOIN production_orders po ON po.id = r.production_order_id
+        JOIN customer_products  cp ON cp.id = po.customer_product_id
+        LEFT JOIN master_batch_colors mb ON mb.id = cp.master_batch_id
+        WHERE r.${sql.raw(machineCol)} = ${machineId}
+        GROUP BY
+          cp.raw_material, cp.master_batch_id,
+          mb.name_ar, mb.name, mb.color_hex, cp.width
+        ORDER BY roll_count DESC
+      `)
+    ).rows as any[];
+
+    if (rows.length === 0) return null;
+
+    const matCounts = new Map<string, number>();
+    const colorMap = new Map<
+      string,
+      { name_ar: string; name: string; hex: string; count: number }
+    >();
+    const widths: number[] = [];
+
+    for (const r of rows) {
+      const mat = String(r.raw_material ?? "").trim();
+      const cnt = Number(r.roll_count) || 0;
+      if (mat) matCounts.set(mat, (matCounts.get(mat) || 0) + cnt);
+
+      const colorId = String(r.master_batch_id ?? "").trim();
+      if (colorId) {
+        const ex = colorMap.get(colorId);
+        if (ex) ex.count += cnt;
+        else
+          colorMap.set(colorId, {
+            name_ar: r.master_batch_name_ar,
+            name: r.master_batch_name,
+            hex: r.master_batch_color_hex,
+            count: cnt,
+          });
+      }
+
+      const w = parseFloat(String(r.width ?? ""));
+      if (!isNaN(w) && w > 0) {
+        // Push one entry per roll to weight the average correctly.
+        for (let i = 0; i < cnt; i++) widths.push(w);
+      }
+    }
+
+    const dominantMaterial =
+      [...matCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const topColors = [...colorMap.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 3)
+      .map(([id, v]) => ({ id, ...v }));
+    const minWidth = widths.length > 0 ? Math.round(Math.min(...widths)) : null;
+    const maxWidth = widths.length > 0 ? Math.round(Math.max(...widths)) : null;
+    const totalRolls = [...matCounts.values()].reduce((a, b) => a + b, 0);
+
+    return {
+      dominantMaterial,
+      topColors,
+      widthRange:
+        minWidth !== null ? { min: minWidth, max: maxWidth } : null,
+      totalRolls,
+    };
   }
 
   async getMachineUtilizationStats(

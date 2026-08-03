@@ -10417,13 +10417,55 @@ Input: ${text}`;
             .status(400)
             .json({ message: "مطلوب معرف الماكينة والمرحلة" });
         }
-        const suggestion = await storage.suggestQueueOrder(machineId, stage);
+        const sortMethod = String(req.query.sortMethod || "similarity");
+        const validSortMethods = ["similarity", "throughput", "color_first"];
+        const safeSortMethod = validSortMethods.includes(sortMethod)
+          ? sortMethod
+          : "similarity";
+        const suggestion = await storage.suggestQueueOrder(
+          machineId,
+          stage,
+          safeSortMethod,
+        );
         res.json({ data: suggestion });
       } catch (error: any) {
         console.error("Error suggesting queue order:", error);
         res
           .status(400)
           .json({ message: error?.message || "خطأ في اقتراح ترتيب الطابور" });
+      }
+    },
+  );
+
+  // Historical production patterns per machine — "learning insights" for the
+  // operator board. Returns dominant material, top colours, and width range
+  // derived from completed rolls on that machine.
+  app.get(
+    "/api/production-queues/machine-insights/:machineId",
+    requireAuth,
+    requirePermission(
+      "view_production",
+      "manage_production",
+      "view_orders",
+      "manage_orders",
+    ),
+    async (req, res) => {
+      try {
+        const stage = String(req.query.stage || "");
+        const machineId = req.params.machineId;
+        if (!VALID_QUEUE_STAGES.includes(stage) || !machineId) {
+          return res
+            .status(400)
+            .json({ message: "مطلوب معرف الماكينة والمرحلة" });
+        }
+        const insights = await storage.getQueueLearningInsights(
+          machineId,
+          stage,
+        );
+        res.json({ data: insights });
+      } catch (error: any) {
+        console.error("Error getting machine insights:", error);
+        res.status(500).json({ message: "خطأ في جلب بيانات التعلم" });
       }
     },
   );

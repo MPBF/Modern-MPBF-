@@ -35,6 +35,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../ui/dialog";
+import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Progress } from "../ui/progress";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
@@ -111,6 +112,18 @@ export default function SmartDistributionModal({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [selectedAlgorithm, setSelectedAlgorithm] = useState("balanced");
+  // Machines in this set are skipped by auto-distribution but remain visible.
+  const [excludedMachineIds, setExcludedMachineIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggleMachineExclusion = (id: string) => {
+    setExcludedMachineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const [hybridParams, setHybridParams] = useState({
     loadWeight: 30,
     capacityWeight: 30,
@@ -169,8 +182,10 @@ export default function SmartDistributionModal({
         stage,
         selectedAlgorithm,
         hybridParams,
+        [...excludedMachineIds].sort().join(","),
       ],
       queryFn: async () => {
+        const excluded = [...excludedMachineIds].join(",");
         const params = new URLSearchParams({
           stage,
           algorithm: selectedAlgorithm,
@@ -182,6 +197,7 @@ export default function SmartDistributionModal({
                 typeWeight: String(hybridParams.typeWeight),
               }
             : {}),
+          ...(excluded ? { excludedMachineIds: excluded } : {}),
         });
         const response = await fetch(
           `/api/machine-queues/distribution-preview?${params}`,
@@ -213,6 +229,9 @@ export default function SmartDistributionModal({
             params: {
               stage,
               ...(selectedAlgorithm === "hybrid" ? hybridParams : {}),
+              ...(excludedMachineIds.size > 0
+                ? { excludedMachineIds: [...excludedMachineIds] }
+                : {}),
             },
           }),
         },
@@ -443,6 +462,57 @@ export default function SmartDistributionModal({
                         step={10}
                       />
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+              {/* Machine exclusion section */}
+              {capacityStats?.data && capacityStats.data.length > 0 && (
+                <Card className="mt-4 border-dashed">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Factory className="h-4 w-4 text-muted-foreground" />
+                      استثناء ماكينات من التوزيع التلقائي
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-xs text-muted-foreground mb-3">
+                      الماكينات المستثناة تبقى مرئية في اللوحة لكنها لا تستقبل
+                      طلبات جديدة من التوزيع الذكي.
+                    </p>
+                    {capacityStats.data.map((stat: MachineCapacityStat) => {
+                      const id = String(stat.machineId);
+                      const checked = excludedMachineIds.has(id);
+                      return (
+                        <div
+                          key={id}
+                          className="flex items-center gap-2 py-1"
+                          data-testid={`exclude-machine-${id}`}
+                        >
+                          <Checkbox
+                            id={`excl-${id}`}
+                            checked={checked}
+                            onCheckedChange={() => toggleMachineExclusion(id)}
+                          />
+                          <label
+                            htmlFor={`excl-${id}`}
+                            className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                          >
+                            <span>
+                              {stat.machineNameAr || stat.machineName}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {stat.orderCount} طلب · {Math.round(stat.utilizationPercentage)}%
+                            </span>
+                          </label>
+                        </div>
+                      );
+                    })}
+                    {excludedMachineIds.size > 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {excludedMachineIds.size} ماكينة مستثناة من التوزيع
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               )}

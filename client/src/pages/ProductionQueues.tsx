@@ -33,6 +33,7 @@ import {
   X,
   Loader2,
   MonitorPlay,
+  Brain,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -99,6 +100,7 @@ interface BoardOrder {
   item_name?: string;
   item_name_ar?: string;
   size_caption?: string;
+  width?: string;
   thickness?: string;
   raw_material?: string;
   is_printed?: boolean;
@@ -185,15 +187,21 @@ function OrderDetails({
           {customer}
         </div>
       )}
-      {(order.size_caption || order.thickness) && (
+      {(order.size_caption || order.width || order.thickness) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
           {order.size_caption && (
             <span className="font-bold text-red-600 dark:text-red-400">
               {order.size_caption}
             </span>
           )}
-          {order.size_caption && order.thickness && (
-            <span className="text-muted-foreground/50">•</span>
+          {order.width && (
+            <span
+              className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400"
+              title="عرض الفيلم (سم)"
+            >
+              <Ruler className="h-3 w-3" />
+              {formatNumber(parseFloat(order.width) || 0)} سم
+            </span>
           )}
           {order.thickness && (
             <span
@@ -201,7 +209,7 @@ function OrderDetails({
               title={t("production.queues.thickness")}
               aria-label={t("production.queues.thickness")}
             >
-              <Ruler className="h-3 w-3" />
+              <Layers className="h-3 w-3" />
               {formatNumber(parseFloat(order.thickness) || 0)}
             </span>
           )}
@@ -364,11 +372,19 @@ function StatLine({
   );
 }
 
+const SORT_METHOD_LABELS: Record<string, string> = {
+  similarity: "تشابه",
+  throughput: "إنتاجية",
+  color_first: "لون أولاً",
+};
+
 function MachineColumn({
   machine,
   stage,
   t,
   ln,
+  sortMethod,
+  onSortMethodChange,
   onReorder,
   onRemove,
   onSuggest,
@@ -377,6 +393,8 @@ function MachineColumn({
   stage: Stage;
   t: (k: string) => string;
   ln: (a?: string | null, e?: string | null) => string;
+  sortMethod: string;
+  onSortMethodChange: (m: string) => void;
   onReorder: (machineId: string, orderedQueueIds: number[]) => void;
   onRemove: (queueId: number) => void;
   onSuggest: (machine: BoardMachine) => void;
@@ -405,11 +423,54 @@ function MachineColumn({
     ? new Date(machine.stats.projectedFinish).toLocaleDateString()
     : "—";
 
+  // ── Queue summary (computed from current queue) ───────────────────────
+  const queueMaterials = Array.from(
+    new Set(
+      machine.queue
+        .map((q) => (q.raw_material || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const queueColors = Array.from(
+    new Set(machine.queue.map((q) => q.master_batch_id).filter(Boolean)),
+  );
+  const queueWidths = machine.queue
+    .map((q) => parseFloat(String(q.width || "")))
+    .filter((v) => !isNaN(v) && v > 0);
+  const widthRange =
+    queueWidths.length > 0
+      ? { min: Math.round(Math.min(...queueWidths)), max: Math.round(Math.max(...queueWidths)) }
+      : null;
+  const colorChanges = machine.queue.reduce((changes, item, idx, arr) => {
+    if (idx === 0) return 0;
+    return (
+      changes +
+      (item.master_batch_id !== arr[idx - 1].master_batch_id ? 1 : 0)
+    );
+  }, 0);
+
+  // ── Historical learning insights ──────────────────────────────────────
+  const { data: insightResp } = useQuery<{ data: any }>({
+    queryKey: [
+      "/api/production-queues/machine-insights",
+      machine.id,
+      stage,
+    ],
+    queryFn: async () => {
+      const res = await apiRequest(
+        `/api/production-queues/machine-insights/${encodeURIComponent(
+          machine.id,
+        )}?stage=${stage}`,
+        { method: "GET" },
+      );
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const insights = insightResp?.data;
+
   return (
-    <Card
-      className="w-full"
-      data-testid={`column-machine-${machine.id}`}
-    >
+    <Card className="w-full" data-testid={`column-machine-${machine.id}`}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center justify-between">
           <span className="flex items-center gap-2">
@@ -418,6 +479,8 @@ function MachineColumn({
           </span>
           <span className="text-sm">{statusIcon}</span>
         </CardTitle>
+
+        {/* Production stats */}
         <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
           <StatLine
             icon={<Package className="h-3 w-3" />}
@@ -446,18 +509,111 @@ function MachineColumn({
             }
           />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-2 gap-1"
-          disabled={machine.queue.length < 2}
-          onClick={() => onSuggest(machine)}
-          data-testid={`suggest-${machine.id}`}
-        >
-          <Sparkles className="h-3 w-3" />
-          {t("production.queues.smartSuggest")}
-        </Button>
+
+        {/* Queue summary bar — material / width range / colour changes */}
+        {machine.queue.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs mt-1.5 pt-1.5 border-t">
+            {queueMaterials.map((mat) => (
+              <Badge
+                key={mat}
+                variant="outline"
+                className="px-1.5 py-0 text-orange-700 border-orange-300 bg-orange-50 dark:text-orange-300 dark:bg-orange-950/30"
+              >
+                {mat}
+              </Badge>
+            ))}
+            {widthRange && (
+              <span className="flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-medium">
+                <Ruler className="h-3 w-3" />
+                {widthRange.min === widthRange.max
+                  ? `${widthRange.min}`
+                  : `${widthRange.min}–${widthRange.max}`}{" "}
+                سم
+              </span>
+            )}
+            {queueColors.length > 0 && (
+              <span className="flex items-center gap-0.5 text-muted-foreground">
+                <Palette className="h-3 w-3" />
+                {queueColors.length}{" "}
+                {queueColors.length === 1 ? "لون" : "ألوان"}
+                {colorChanges > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400 mr-1">
+                    · {colorChanges} تغيير
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Historical learning insight */}
+        {insights && insights.totalRolls > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs mt-1 pt-1 border-t border-dashed text-muted-foreground">
+            <Brain className="h-3 w-3 text-purple-500 flex-shrink-0" />
+            <span className="text-purple-600 dark:text-purple-400 font-medium">
+              {insights.totalRolls} رول منجز
+            </span>
+            {insights.dominantMaterial && (
+              <Badge variant="secondary" className="px-1.5 py-0 text-xs">
+                {insights.dominantMaterial}
+              </Badge>
+            )}
+            {insights.topColors?.[0] && (
+              <span className="flex items-center gap-1">
+                {insights.topColors[0].hex && (
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-gray-300 flex-shrink-0"
+                    style={{ backgroundColor: insights.topColors[0].hex }}
+                  />
+                )}
+                <span>
+                  {insights.topColors[0].name_ar ||
+                    insights.topColors[0].name ||
+                    insights.topColors[0].id}
+                </span>
+              </span>
+            )}
+            {insights.widthRange && (
+              <span>
+                {insights.widthRange.min === insights.widthRange.max
+                  ? `${insights.widthRange.min} سم`
+                  : `${insights.widthRange.min}–${insights.widthRange.max} سم`}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Sort method selector + Smart suggest button */}
+        <div className="flex gap-1 mt-2">
+          <Select value={sortMethod} onValueChange={onSortMethodChange}>
+            <SelectTrigger
+              className="h-7 text-xs flex-1"
+              data-testid={`sort-method-${machine.id}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(SORT_METHOD_LABELS).map(([val, label]) => (
+                <SelectItem key={val} value={val} className="text-xs">
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 h-7 text-xs whitespace-nowrap"
+            disabled={machine.queue.length < 2}
+            onClick={() => onSuggest(machine)}
+            data-testid={`suggest-${machine.id}`}
+          >
+            <Sparkles className="h-3 w-3" />
+            ترتيب
+          </Button>
+        </div>
       </CardHeader>
+
       <CardContent className="pt-0">
         <ScrollArea className="h-[260px] pr-1">
           <SortableContext items={items} strategy={verticalListSortingStrategy}>
@@ -656,6 +812,8 @@ function StageBoard({ stage }: { stage: Stage }) {
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [distributeOpen, setDistributeOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  // Shared sort method for all machine columns on this stage board.
+  const [sortMethod, setSortMethod] = useState("similarity");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -864,7 +1022,7 @@ function StageBoard({ stage }: { stage: Stage }) {
       const res = await apiRequest(
         `/api/production-queues/suggest?machineId=${encodeURIComponent(
           machine.id,
-        )}&stage=${stage}`,
+        )}&stage=${stage}&sortMethod=${encodeURIComponent(sortMethod)}`,
         { method: "GET" },
       );
       const json = await res.json();
@@ -963,6 +1121,8 @@ function StageBoard({ stage }: { stage: Stage }) {
                   stage={stage}
                   t={t}
                   ln={ln}
+                  sortMethod={sortMethod}
+                  onSortMethodChange={setSortMethod}
                   onReorder={handleReorder}
                   onRemove={handleRemove}
                   onSuggest={openSuggestion}
