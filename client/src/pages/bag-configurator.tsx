@@ -106,8 +106,8 @@ export default function BagConfigurator() {
   const [printMode, setPrintMode] = useState<PrintMode>("text");
   const [printText, setPrintText] = useState("علامتك التجارية");
   const [printColor, setPrintColor] = useState("#000000");
-  const [printSize, setPrintSize] = useState(80);
-  const [printImgSize, setPrintImgSize] = useState(150);
+  const [printSize, setPrintSize] = useState(30);
+  const [printImgSize, setPrintImgSize] = useState(80);
   const [imageVersion, setImageVersion] = useState(0);
   const [materialType, setMaterialType] = useState<"HDPE" | "LDPE">("HDPE");
   const [repeatCount, setRepeatCount] = useState(3);

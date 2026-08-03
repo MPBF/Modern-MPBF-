@@ -1285,9 +1285,8 @@ export default function Definitions() {
   }, [customerProductForm.category_id, categories, editingItem]);
 
   // Auto-calculate cutting length from printing cylinder (skip for sufra categories and "no printing" where it's manual)
-  // Skip when editing an existing product to preserve saved values
+  // Runs both on create and edit so changing the cylinder always updates the length
   React.useEffect(() => {
-    if (editingItem) return;
     // أثناء الربط من القاعدة القديمة نُبقي طول القطع المعبأ مسبقاً كما هو
     if (legacyMapRef.current) return;
     const selectedCat = Array.isArray(categories)
@@ -5523,7 +5522,30 @@ export default function Definitions() {
                               : null;
                             const catName = selectedCategory?.name_ar || "";
 
-                            if (catName === "أكياس علاقي") {
+                            // عند التعديل: إذا لم تُحمَّل الفئات بعد أو كانت القيمة المحفوظة
+                            // لا تظهر ضمن خيارات الفئة الحالية، نعرض جميع الخيارات لضمان
+                            // عرض القيمة المحفوظة بشكل صحيح
+                            const currentPunching = customerProductForm.punching || "بدون";
+                            const halaqi = ["علاقي", "علاقي هوك"];
+                            const banana = ["بنانة", "بنانة 6سم"];
+                            const categoriesLoaded = Array.isArray(categories) && categories.length > 0;
+                            const valueNotInCategory =
+                              (halaqi.includes(currentPunching) && catName !== "أكياس علاقي") ||
+                              (banana.includes(currentPunching) && catName !== "أكياس بنانة");
+                            const showAll = editingItem && (!categoriesLoaded || valueNotInCategory);
+
+                            if (showAll || catName === "أكياس علاقي") {
+                              if (showAll && catName !== "أكياس علاقي" && catName !== "أكياس بنانة") {
+                                return (
+                                  <>
+                                    <SelectItem value="بدون">بدون</SelectItem>
+                                    <SelectItem value="علاقي">علاقي</SelectItem>
+                                    <SelectItem value="علاقي هوك">علاقي هوك</SelectItem>
+                                    <SelectItem value="بنانة">بنانة</SelectItem>
+                                    <SelectItem value="بنانة 6سم">بنانة 6سم</SelectItem>
+                                  </>
+                                );
+                              }
                               return (
                                 <>
                                   <SelectItem value="علاقي">علاقي</SelectItem>
