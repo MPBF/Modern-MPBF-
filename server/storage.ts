@@ -11895,14 +11895,21 @@ export class DatabaseStorage implements IStorage {
         }
 
         // استبعاد الأعمدة المحسوبة تلقائياً (GENERATED) — لا يمكن إدراج قيم فيها
-        const generatedColsResult = await client.query(
-          `SELECT column_name FROM information_schema.columns
-           WHERE table_schema = 'public' AND table_name = $1
-           AND is_generated = 'ALWAYS'`,
+        // ومعرفة أعمدة المصفوفات لتمريرها كمصفوفة وليس نص JSON
+        const colInfoResult = await client.query(
+          `SELECT column_name, is_generated, data_type FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = $1`,
           [tableName],
         );
         const generatedCols = new Set(
-          (generatedColsResult.rows as any[]).map((r) => r.column_name),
+          (colInfoResult.rows as any[])
+            .filter((r) => r.is_generated === "ALWAYS")
+            .map((r) => r.column_name),
+        );
+        const arrayCols = new Set(
+          (colInfoResult.rows as any[])
+            .filter((r) => r.data_type === "ARRAY")
+            .map((r) => r.column_name),
         );
 
         try {
@@ -11928,7 +11935,9 @@ export class DatabaseStorage implements IStorage {
                 return JSON.stringify(val);
               }
               if (Array.isArray(val)) {
-                return JSON.stringify(val);
+                // أعمدة المصفوفات الحقيقية: يمرر pg المصفوفة مباشرة؛
+                // أعمدة jsonb: تحتاج نص JSON
+                return arrayCols.has(c) ? val : JSON.stringify(val);
               }
               return val;
             });
@@ -11947,6 +11956,7 @@ export class DatabaseStorage implements IStorage {
               insertedCount++;
             } catch (rowErr: any) {
               await client.query("ROLLBACK TO SAVEPOINT sp_row");
+              await client.query("RELEASE SAVEPOINT sp_row");
               failedCount++;
               if (!firstError) {
                 firstError = rowErr.message;
