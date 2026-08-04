@@ -123,6 +123,63 @@ const getDeliveryDate = (createdDate: Date, days: number = 0) => {
   return result;
 };
 
+// ── Punching bag mini-SVG ──────────────────────────────────────────────────
+function PunchingIcon({ punching }: { punching?: string }) {
+  const v = (punching || "بدون").trim();
+
+  // No punching → red X
+  if (!v || v === "بدون") {
+    return (
+      <span style={{ color: "#dc2626", fontWeight: 900, fontSize: "26px", lineHeight: 1 }}>✗</span>
+    );
+  }
+
+  const isBanana = v.startsWith("بنانة");
+  const isHook   = v.startsWith("علاقي");
+
+  if (isBanana) {
+    // Banana / loop handle: bag body + loop arch on top
+    return (
+      <svg width="48" height="54" viewBox="0 0 48 54" style={{ display: "block", margin: "0 auto" }}>
+        {/* loop handle */}
+        <path d="M16 22 Q16 4 24 4 Q32 4 32 22" fill="none" stroke="#333" strokeWidth="3.5" strokeLinecap="round"/>
+        {/* bag body */}
+        <rect x="6" y="20" width="36" height="30" rx="3" ry="3" fill="#e2e8f0" stroke="#333" strokeWidth="2"/>
+        {/* label line */}
+        <line x1="6" y1="32" x2="42" y2="32" stroke="#999" strokeWidth="1" strokeDasharray="3,2"/>
+        {/* stitching bottom */}
+        <line x1="10" y1="47" x2="38" y2="47" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
+        {/* text */}
+        <text x="24" y="28" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#1a365d" fontFamily="Arial">{v}</text>
+      </svg>
+    );
+  }
+
+  if (isHook) {
+    // T-shirt / die-cut handle: bag with D-cut at top center
+    return (
+      <svg width="48" height="54" viewBox="0 0 48 54" style={{ display: "block", margin: "0 auto" }}>
+        {/* bag outline with die-cut notch */}
+        <path
+          d="M6 18 L6 50 Q6 52 8 52 L40 52 Q42 52 42 50 L42 18 Q35 18 32 14 Q30 10 24 10 Q18 10 16 14 Q13 18 6 18 Z"
+          fill="#e2e8f0" stroke="#333" strokeWidth="2"
+        />
+        {/* die-cut hole */}
+        <ellipse cx="24" cy="18" rx="6" ry="4" fill="white" stroke="#333" strokeWidth="1.5"/>
+        {/* label line */}
+        <line x1="6" y1="32" x2="42" y2="32" stroke="#999" strokeWidth="1" strokeDasharray="3,2"/>
+        {/* stitching bottom */}
+        <line x1="10" y1="47" x2="38" y2="47" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
+        {/* text */}
+        <text x="24" y="29" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#1a365d" fontFamily="Arial">{v}</text>
+      </svg>
+    );
+  }
+
+  // Fallback: plain text
+  return <span style={{ fontWeight: 900 }}>{v}</span>;
+}
+
 function Label2Lines({ ar, en }: { ar: string; en: string }) {
   return (
     <div style={{ lineHeight: 1.1 }}>
@@ -582,9 +639,9 @@ export default function OrderPrintTemplate({
                       {cp?.raw_material || t("orders.print.pure")}
                     </td>
                     <td style={styles.td}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
-                        <div style={{ width: "18px", height: "18px", borderRadius: "50%", backgroundColor: color.hex, border: "2px solid #333", flexShrink: 0 }} />
-                        <div style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                        <div style={{ width: "38px", height: "38px", borderRadius: "50%", backgroundColor: color.hex, border: "3px solid #333", flexShrink: 0, boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }} />
+                        <div style={{ textAlign: "center" }}>
                           <div style={{ fontWeight: 900, fontSize: "13px" }}>{color.name_ar}</div>
                           <div style={{ fontSize: "11px", color: "#666", direction: "ltr" }}>{color.code}</div>
                         </div>
@@ -602,12 +659,8 @@ export default function OrderPrintTemplate({
                         <span style={{ color: "#dc2626", fontWeight: 900, fontSize: "22px" }}>✗</span>
                       )}
                     </td>
-                    <td style={styles.td}>
-                      {(cp?.punching || cp?.handle_type) && cp?.punching !== "بدون" && cp?.handle_type !== "بدون" ? (
-                        <span style={{ fontWeight: 900 }}>{cp?.punching || cp?.handle_type}</span>
-                      ) : (
-                        <span style={{ color: "#dc2626", fontWeight: 900, fontSize: "22px" }}>✗</span>
-                      )}
+                    <td style={{ ...styles.td, padding: "4px" }}>
+                      <PunchingIcon punching={cp?.punching || cp?.handle_type} />
                     </td>
                     <td style={{ ...styles.td, fontWeight: 900, fontSize: "18px" }}>
                       {formatNumber(qty)}
