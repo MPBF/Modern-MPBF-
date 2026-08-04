@@ -137,41 +137,62 @@ function PunchingIcon({ punching }: { punching?: string }) {
   const isBanana = v.startsWith("بنانة");
   const isHook   = v.startsWith("علاقي");
 
-  if (isBanana) {
-    // Banana / loop handle: bag body + loop arch on top
+  if (isHook) {
+    // T-shirt / grocery bag: handles are cut FROM the bag body itself.
+    // Classic plastic grocery bag silhouette — two loop handles emerge from
+    // the top-left and top-right of the bag body, center top is open.
+    //
+    // Path traces (clockwise):
+    //   bottom-left → up left outer edge → left handle outer loop →
+    //   left handle inner edge down → bridge at bag top (y=26) →
+    //   right handle inner edge up → right handle outer loop →
+    //   down right outer edge → close bottom
     return (
-      <svg width="48" height="54" viewBox="0 0 48 54" style={{ display: "block", margin: "0 auto" }}>
-        {/* loop handle */}
-        <path d="M16 22 Q16 4 24 4 Q32 4 32 22" fill="none" stroke="#333" strokeWidth="3.5" strokeLinecap="round"/>
-        {/* bag body */}
-        <rect x="6" y="20" width="36" height="30" rx="3" ry="3" fill="#e2e8f0" stroke="#333" strokeWidth="2"/>
-        {/* label line */}
-        <line x1="6" y1="32" x2="42" y2="32" stroke="#999" strokeWidth="1" strokeDasharray="3,2"/>
-        {/* stitching bottom */}
-        <line x1="10" y1="47" x2="38" y2="47" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
-        {/* text */}
-        <text x="24" y="28" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#1a365d" fontFamily="Arial">{v}</text>
+      <svg width="52" height="60" viewBox="0 0 52 60" style={{ display: "block", margin: "0 auto" }}>
+        {/* T-shirt bag outline — handles from bag body */}
+        <path
+          d="M 4 58
+             L 4 10 Q 4 3 11 3 Q 18 3 18 10
+             L 18 26
+             L 34 26
+             L 34 10 Q 34 3 41 3 Q 48 3 48 10
+             L 48 58 Z"
+          fill="#dde3ef" stroke="#333" strokeWidth="2" strokeLinejoin="round"
+        />
+        {/* horizontal seam line where body meets handle base */}
+        <line x1="4" y1="26" x2="18" y2="26" stroke="#888" strokeWidth="1.2"/>
+        <line x1="34" y1="26" x2="48" y2="26" stroke="#888" strokeWidth="1.2"/>
+        {/* bottom stitching */}
+        <line x1="8" y1="54" x2="44" y2="54" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
+        {/* label */}
+        <text x="26" y="43" textAnchor="middle" fontSize="7.5" fontWeight="bold" fill="#1a365d" fontFamily="Arial">{v}</text>
       </svg>
     );
   }
 
-  if (isHook) {
-    // T-shirt / die-cut handle: bag with D-cut at top center
+  if (isBanana) {
+    // Banana / kidney handle: a crescent-shaped hole punched from the bag body.
+    // The hole is cut directly into the bag film near the top — like a
+    // kidney bean or banana arc. Fingers grip through the hole.
     return (
-      <svg width="48" height="54" viewBox="0 0 48 54" style={{ display: "block", margin: "0 auto" }}>
-        {/* bag outline with die-cut notch */}
+      <svg width="52" height="60" viewBox="0 0 52 60" style={{ display: "block", margin: "0 auto" }}>
+        {/* bag body */}
+        <rect x="4" y="8" width="44" height="48" rx="3" fill="#dde3ef" stroke="#333" strokeWidth="2"/>
+        {/* banana / kidney hole punched into the bag:
+            outer arc (from x=13,y=26 up through top x=26,y=10 to x=39,y=26)
+            inner arc (same endpoints but shallower, giving crescent thickness) */}
         <path
-          d="M6 18 L6 50 Q6 52 8 52 L40 52 Q42 52 42 50 L42 18 Q35 18 32 14 Q30 10 24 10 Q18 10 16 14 Q13 18 6 18 Z"
-          fill="#e2e8f0" stroke="#333" strokeWidth="2"
+          d="M 13 26
+             Q 13 11 26 11
+             Q 39 11 39 26
+             Q 32 20 26 20
+             Q 20 20 13 26 Z"
+          fill="white" stroke="#444" strokeWidth="1.5"
         />
-        {/* die-cut hole */}
-        <ellipse cx="24" cy="18" rx="6" ry="4" fill="white" stroke="#333" strokeWidth="1.5"/>
-        {/* label line */}
-        <line x1="6" y1="32" x2="42" y2="32" stroke="#999" strokeWidth="1" strokeDasharray="3,2"/>
-        {/* stitching bottom */}
-        <line x1="10" y1="47" x2="38" y2="47" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
-        {/* text */}
-        <text x="24" y="29" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#1a365d" fontFamily="Arial">{v}</text>
+        {/* bottom stitching */}
+        <line x1="8" y1="52" x2="44" y2="52" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
+        {/* label */}
+        <text x="26" y="43" textAnchor="middle" fontSize="7.5" fontWeight="bold" fill="#1a365d" fontFamily="Arial">{v}</text>
       </svg>
     );
   }
