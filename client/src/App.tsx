@@ -161,7 +161,10 @@ function AppRoutes() {
     return <Redirect to="/change-password" />;
   }
 
-  if (isLoading) {
+  // Public paths must render immediately — never block on the auth check.
+  // isLoading only gates protected pages so unauthenticated QR/public users
+  // don't hit a spinner that looks like a login wall.
+  if (isLoading && !isPublicPath) {
     return (
       <div
         style={{
