@@ -11877,6 +11877,18 @@ export class DatabaseStorage implements IStorage {
       await client.query("BEGIN");
       await client.query("SET session_replication_role = replica");
 
+      // النسخة الاحتياطية لا تتضمن كلمات مرور المستخدمين (تُحذف عند الإنشاء)،
+      // لذا نحفظها قبل الحذف ونعيدها بعد الاستعادة حتى لا تُفقد صلاحيات الدخول
+      const savedPasswords = new Map<number, string>();
+      if (tablesToRestore.includes("users")) {
+        const pwResult = await client.query(
+          `SELECT id, password FROM "users" WHERE password IS NOT NULL`,
+        );
+        for (const r of pwResult.rows as any[]) {
+          savedPasswords.set(r.id, r.password);
+        }
+      }
+
       for (const tableName of tablesToRestore) {
         try {
           await client.query(`DELETE FROM "${tableName}"`);
@@ -11991,6 +12003,27 @@ export class DatabaseStorage implements IStorage {
             status: `خطأ: ${tableErr.message}`,
           });
         }
+      }
+
+      // إعادة كلمات المرور المحفوظة للمستخدمين بعد الاستعادة
+      if (savedPasswords.size > 0) {
+        let restoredPw = 0;
+        for (const [userId, password] of Array.from(savedPasswords)) {
+          try {
+            await client.query("SAVEPOINT sp_pw");
+            const upd = await client.query(
+              `UPDATE "users" SET password = $1 WHERE id = $2 AND password IS NULL`,
+              [password, userId],
+            );
+            await client.query("RELEASE SAVEPOINT sp_pw");
+            restoredPw += upd.rowCount ?? 0;
+          } catch {
+            await client.query("ROLLBACK TO SAVEPOINT sp_pw");
+          }
+        }
+        console.log(
+          `تمت إعادة كلمات المرور لـ ${restoredPw} مستخدم بعد الاستعادة`,
+        );
       }
 
       for (const tableName of orderedTables) {
