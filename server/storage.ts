@@ -11896,6 +11896,8 @@ export class DatabaseStorage implements IStorage {
 
         try {
           let insertedCount = 0;
+          let failedCount = 0;
+          let firstError: string | null = null;
           for (const row of rows) {
             const columns = Object.keys(row);
             if (columns.length === 0) continue;
@@ -11918,25 +11920,45 @@ export class DatabaseStorage implements IStorage {
               return val;
             });
 
+            // SAVEPOINT per row: a failed INSERT inside a transaction aborts
+            // the whole transaction in PostgreSQL ("current transaction is
+            // aborted") — rolling back to the savepoint keeps the transaction
+            // usable so one bad row doesn't kill the entire restore.
             try {
+              await client.query("SAVEPOINT sp_row");
               await client.query(
                 `INSERT INTO "${tableName}" (${quotedCols}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
                 values,
               );
+              await client.query("RELEASE SAVEPOINT sp_row");
               insertedCount++;
             } catch (rowErr: any) {
-              console.warn(
-                `تحذير: تعذر إدراج سجل في ${tableName}:`,
-                rowErr.message,
-              );
+              await client.query("ROLLBACK TO SAVEPOINT sp_row");
+              failedCount++;
+              if (!firstError) {
+                firstError = rowErr.message;
+                console.warn(
+                  `تحذير: تعذر إدراج سجل في ${tableName}:`,
+                  rowErr.message,
+                );
+              }
             }
+          }
+
+          if (failedCount > 1) {
+            console.warn(
+              `تحذير: فشل إدراج ${failedCount} سجل في ${tableName} (أول خطأ: ${firstError})`,
+            );
           }
 
           totalRestored += insertedCount;
           results.push({
             table: tableName,
             records: insertedCount,
-            status: "تم",
+            status:
+              failedCount > 0
+                ? `تم (${insertedCount} نجح، ${failedCount} فشل: ${firstError})`
+                : "تم",
           });
         } catch (tableErr: any) {
           console.error(`خطأ في استعادة جدول ${tableName}:`, tableErr.message);
