@@ -41,7 +41,15 @@ export default defineConfig(async () => {
         overlay: false, // تعطيل ErrorOverlay
       },
       watch: {
-        ignored: ['**/.cache/**', '**/.local/**', '**/node_modules/**'],
+        ignored: [
+          '**/.cache/**',
+          '**/.local/**',
+          '**/node_modules/**',
+          '**/.config/**',
+          '**/.git/**',
+          '**/.upm/**',
+          '**/attached_assets/**',
+        ],
       },
     },
     optimizeDeps: {

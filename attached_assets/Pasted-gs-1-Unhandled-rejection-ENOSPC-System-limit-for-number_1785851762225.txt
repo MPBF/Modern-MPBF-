@@ -1,0 +1,105 @@
+gs.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7/package-spec.7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man5/npmrc.5'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-cache.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7/registry.7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man5/package-json.5'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-ci.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man5'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7/removal.7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man5/package-lock-json.5'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-completion.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7/scope.7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-config.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7/scripts.7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-dedupe.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man7/workspaces.7'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-deny-scripts.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-deprecate.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-diff.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-dist-tag.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-docs.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-doctor.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-edit.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-exec.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-explain.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-explore.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-find-dupes.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-fund.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-get.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-help-search.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-help.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-init.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-install-ci-test.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-install-test.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-install.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-link.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-ll.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-login.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-logout.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-ls.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-org.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-outdated.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-owner.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-pack.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-ping.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-pkg.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-prefix.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-profile.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-prune.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-publish.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-query.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-rebuild.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-repo.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-restart.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-root.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-run.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-sbom.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-search.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-set.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-shrinkwrap.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-stage.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-star.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-stars.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-start.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-stop.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-team.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-test.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-token.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-trust.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-undeprecate.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-uninstall.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-unpublish.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-unstar.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-update.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-version.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-view.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm-whoami.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npm.1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1'
+Unhandled rejection: ENOSPC: System limit for number of file watchers reached, watch '/home/runner/workspace/.config/npm/node_global/share/man/man1/npx.1'
+[2026-08-04T13:39:47.292Z] [DEBUG] User resolved from session.userId 1
+1:39:47 PM [express] GET /api/me 304 in 28ms :: {"user":"[Object]","success":true}
+1:39:47 PM [express] GET /api/notifications 304 in 10ms :: {"data":"[Array:1]"}
+1:39:49 PM [express] GET /api/dashboard/config 304 in 12ms :: {"widgets":"[Array:4]"}
+1:39:49 PM [express] GET /api/dashboard/stats 304 in 28ms :: {"totalOrders":4,"totalProductionOrders…
+1:39:49 PM [express] GET /api/users 304 in 27ms :: {"data":"[Array:73]"}
+1:39:49 PM [express] GET /api/quick-notes 304 in 26ms :: {"data":"[Array:0]"}
+1:39:50 PM [express] GET /api/customers 304 in 13ms :: {"data":"[Array:236]"}
+1:42:42 PM [express] GET /api/settings/system 304 in 13ms :: {"data":"[Array:13]"}
+1:42:42 PM [express] GET /api/settings/user/1 304 in 13ms :: {"id":13,"user_id":"[REDACTED]","settin…
+1:42:50 PM [express] GET /api/modern-agent/settings 200 in 164ms :: {"id":1,"model":"gpt-4.1","defau…
+1:43:00 PM [express] GET /api/mcp/api-keys 200 in 10ms :: {"data":"[Array:1]"}
+1:43:07 PM [express] GET /api/database/stats 200 in 31ms :: {"users":73,"orders":4,"rolls":6,"tableC…
+API Error: {
+  name: 'BadRequestError',
+  message: 'request aborted',
+  code: 'ECONNABORTED',
+  stack: 'BadRequestError: request aborted\n' +
+    '    at IncomingMessage.onAborted (/home/runner/workspace/node_modules/body-parser/node_modules/raw-body/index.js:245:10)\n' +
+    '    at IncomingMessage.emit (node:events:508:28)\n' +
+    '    at IncomingMessage._destroy (node:_http_incoming:221:10)\n' +
+    '    at _destroy (node:internal/streams/destroy:122:10)\n' +
+    '    at IncomingMessage.destroy (node:internal/streams/destroy:84:5)'
+}
