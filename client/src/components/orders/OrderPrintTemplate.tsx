@@ -171,24 +171,17 @@ function PunchingIcon({ punching }: { punching?: string }) {
   }
 
   if (isBanana) {
-    // Banana / kidney handle: a crescent-shaped hole punched from the bag body.
-    // The hole is cut directly into the bag film near the top — like a
-    // kidney bean or banana arc. Fingers grip through the hole.
+    // Banana handle: a horizontal pill-shaped hole punched from the bag body.
+    // Shape: (___)  — flat top & bottom, curved rounded ends on left and right.
+    // Fingers slip through the slot to carry the bag.
     return (
       <svg width="52" height="60" viewBox="0 0 52 60" style={{ display: "block", margin: "0 auto" }}>
         {/* bag body */}
         <rect x="4" y="8" width="44" height="48" rx="3" fill="#dde3ef" stroke="#333" strokeWidth="2"/>
-        {/* banana / kidney hole punched into the bag:
-            outer arc (from x=13,y=26 up through top x=26,y=10 to x=39,y=26)
-            inner arc (same endpoints but shallower, giving crescent thickness) */}
-        <path
-          d="M 13 26
-             Q 13 11 26 11
-             Q 39 11 39 26
-             Q 32 20 26 20
-             Q 20 20 13 26 Z"
-          fill="white" stroke="#444" strokeWidth="1.5"
-        />
+        {/* banana hole: horizontal pill/stadium shape (___)
+            rx=ry = half the height → fully rounded ends, flat top & bottom */}
+        <rect x="11" y="17" width="30" height="11" rx="5.5" ry="5.5"
+              fill="white" stroke="#444" strokeWidth="1.8"/>
         {/* bottom stitching */}
         <line x1="8" y1="52" x2="44" y2="52" stroke="#aaa" strokeWidth="1" strokeDasharray="2,2"/>
         {/* label */}
