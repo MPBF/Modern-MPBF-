@@ -11894,12 +11894,25 @@ export class DatabaseStorage implements IStorage {
           continue;
         }
 
+        // استبعاد الأعمدة المحسوبة تلقائياً (GENERATED) — لا يمكن إدراج قيم فيها
+        const generatedColsResult = await client.query(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = $1
+           AND is_generated = 'ALWAYS'`,
+          [tableName],
+        );
+        const generatedCols = new Set(
+          (generatedColsResult.rows as any[]).map((r) => r.column_name),
+        );
+
         try {
           let insertedCount = 0;
           let failedCount = 0;
           let firstError: string | null = null;
           for (const row of rows) {
-            const columns = Object.keys(row);
+            const columns = Object.keys(row).filter(
+              (c) => !generatedCols.has(c),
+            );
             if (columns.length === 0) continue;
 
             const quotedCols = columns.map((c) => `"${c}"`).join(", ");
