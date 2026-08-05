@@ -26,6 +26,19 @@ export async function setupVite(app: Express, server: Server) {
     middlewareMode: true,
     hmr: { server },
     allowedHosts: true as const,
+    watch: {
+      ignored: [
+        "**/.cache/**",
+        "**/.local/**",
+        "**/node_modules/**",
+        "**/.config/**",
+        "**/.git/**",
+        "**/.upm/**",
+        "**/attached_assets/**",
+        "**/dist/**",
+        "**/artifacts/**",
+      ],
+    },
   };
 
   const vite = await createViteServer({

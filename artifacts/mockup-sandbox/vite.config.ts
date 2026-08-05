@@ -69,6 +69,16 @@ export default defineConfig({
       // Fall back to polling so Vite starts successfully.
       usePolling: true,
       interval: 500,
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/.cache/**',
+        '**/.local/**',
+        '**/.config/**',
+        '**/.upm/**',
+        '**/dist/**',
+        '**/attached_assets/**',
+      ],
     },
   },
   preview: {

@@ -49,6 +49,8 @@ export default defineConfig(async () => {
           '**/.git/**',
           '**/.upm/**',
           '**/attached_assets/**',
+          '**/dist/**',
+          '**/artifacts/**',
         ],
       },
     },
