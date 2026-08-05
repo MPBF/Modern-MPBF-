@@ -14,11 +14,15 @@ import {
   TableCell,
   WidthType,
   convertMillimetersToTwip,
+  Header,
+  Footer,
+  ImageRun,
 } from "docx";
 import {
   isArabicText,
   processArabicText,
 } from "../services/arabic-text-service";
+import type { LetterheadData, LetterheadImage } from "./letterhead";
 
 export const MODERN_DOCS_DIR = path.join(os.tmpdir(), "modern-agent-docs");
 
@@ -48,6 +52,21 @@ export interface AgentDocSpec {
   table?: { headers: string[]; rows: string[][] };
   footer?: string;
   ownerId?: number;
+  /** Company letterhead (header/footer images, footer text, signatures). */
+  letterhead?: LetterheadData;
+}
+
+// Scale an image to fit a max width/height box, preserving aspect ratio.
+function fitImage(
+  img: LetterheadImage,
+  maxW: number,
+  maxH: number,
+): { width: number; height: number } {
+  const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+  return {
+    width: Math.round(img.width * scale),
+    height: Math.round(img.height * scale),
+  };
 }
 
 function sanitizeFileName(name: string): string {
@@ -95,11 +114,33 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
     return processArabicText(text);
   };
 
+  // A4 = 595 x 842 pt. Reserve space for the company letterhead.
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
+  const SIDE = 50;
+  const CONTENT_W = PAGE_W - SIDE * 2;
+  const lh = spec.letterhead;
+  const headerFit = lh?.headerImage
+    ? fitImage(lh.headerImage, CONTENT_W, 120)
+    : null;
+  const footerImgFit = lh?.footerImage
+    ? fitImage(lh.footerImage, CONTENT_W, 70)
+    : null;
+  const footerTextH = lh?.footerText ? 26 : 0;
+  const footerBlockH = (footerImgFit?.height || 0) + footerTextH;
+  const topMargin = headerFit ? headerFit.height + 65 : 50;
+  const bottomMargin = footerBlockH > 0 ? footerBlockH + 60 : 50;
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: "A4",
-        margins: { top: 50, bottom: 50, left: 50, right: 50 },
+        margins: {
+          top: topMargin,
+          bottom: bottomMargin,
+          left: SIDE,
+          right: SIDE,
+        },
         bufferPages: true,
       });
       const stream = fs.createWriteStream(filePath);
@@ -161,6 +202,62 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
           .fontSize(10)
           .fillColor("#718096")
           .text(safe(spec.footer), { align });
+      }
+
+      // Default company signatures (from letterhead settings)
+      if (lh?.signatures?.length) {
+        doc.moveDown(2);
+        doc
+          .fontSize(12)
+          .fillColor("#2b6cb0")
+          .text(safe(isAr ? "التواقيع" : "Signatures"), { align });
+        doc.moveDown(0.5);
+        for (const sig of lh.signatures) {
+          doc
+            .fontSize(11)
+            .fillColor("#1a202c")
+            .text(safe(sig), { align });
+          doc.moveDown(1.2);
+        }
+      }
+
+      // Stamp the company letterhead (header/footer) on every page.
+      if (headerFit || footerBlockH > 0) {
+        const range = doc.bufferedPageRange();
+        for (let i = range.start; i < range.start + range.count; i++) {
+          doc.switchToPage(i);
+          // prevent stamping from triggering a new page
+          const prevBottom = doc.page.margins.bottom;
+          doc.page.margins.bottom = 0;
+          if (headerFit && lh?.headerImage) {
+            doc.image(lh.headerImage.buffer, (PAGE_W - headerFit.width) / 2, 25, {
+              width: headerFit.width,
+              height: headerFit.height,
+            });
+          }
+          let fy = PAGE_H - 30 - footerBlockH;
+          if (lh?.footerText) {
+            doc
+              .fontSize(9)
+              .fillColor("#718096")
+              .text(safe(lh.footerText), SIDE, fy, {
+                width: CONTENT_W,
+                align: "center",
+                height: footerTextH,
+                ellipsis: true,
+              });
+            fy += footerTextH;
+          }
+          if (footerImgFit && lh?.footerImage) {
+            doc.image(
+              lh.footerImage.buffer,
+              (PAGE_W - footerImgFit.width) / 2,
+              fy,
+              { width: footerImgFit.width, height: footerImgFit.height },
+            );
+          }
+          doc.page.margins.bottom = prevBottom;
+        }
       }
 
       doc.end();
@@ -279,9 +376,97 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
     );
   }
 
+  const lh = spec.letterhead;
+
+  // Default company signatures (from letterhead settings)
+  if (lh?.signatures?.length) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        alignment,
+        bidirectional: bidi,
+        spacing: { before: 400 },
+        children: [
+          new TextRun({
+            text: isAr ? "التواقيع" : "Signatures",
+            bold: true,
+            rightToLeft: bidi,
+          }),
+        ],
+      }),
+    );
+    for (const sig of lh.signatures) {
+      children.push(
+        new Paragraph({
+          alignment,
+          bidirectional: bidi,
+          spacing: { after: 300 },
+          children: [new TextRun({ text: sig, rightToLeft: bidi })],
+        }),
+      );
+    }
+  }
+
+  // Company letterhead header/footer (images sized in px, ~96dpi; usable width ≈ 640px)
+  const headerFit = lh?.headerImage ? fitImage(lh.headerImage, 640, 160) : null;
+  const footerImgFit = lh?.footerImage ? fitImage(lh.footerImage, 640, 90) : null;
+  const docImage = (
+    img: LetterheadImage,
+    size: { width: number; height: number },
+  ) =>
+    new ImageRun({
+      type: img.type === "png" ? "png" : "jpg",
+      data: img.buffer,
+      transformation: size,
+    });
+
+  const headers = lh?.headerImage && headerFit
+    ? {
+        default: new Header({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [docImage(lh.headerImage, headerFit)],
+            }),
+          ],
+        }),
+      }
+    : undefined;
+
+  const footerChildren: Paragraph[] = [];
+  if (lh?.footerText) {
+    footerChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        bidirectional: bidi,
+        children: [
+          new TextRun({
+            text: lh.footerText,
+            size: 18,
+            color: "718096",
+            rightToLeft: bidi,
+          }),
+        ],
+      }),
+    );
+  }
+  if (lh?.footerImage && footerImgFit) {
+    footerChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [docImage(lh.footerImage, footerImgFit)],
+      }),
+    );
+  }
+  const footers = footerChildren.length
+    ? { default: new Footer({ children: footerChildren }) }
+    : undefined;
+
   const docx = new Document({
     sections: [
       {
+        headers,
+        footers,
         properties: {
           page: {
             size: {
@@ -289,8 +474,23 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
               height: convertMillimetersToTwip(297), // A4 height
             },
             margin: {
-              top: convertMillimetersToTwip(20),
-              bottom: convertMillimetersToTwip(20),
+              // Reserve room for the letterhead so header/footer content
+              // never overlaps the body (px at ~96dpi → mm: px / 96 * 25.4).
+              top: convertMillimetersToTwip(
+                headerFit
+                  ? Math.ceil(13 + (headerFit.height / 96) * 25.4 + 4)
+                  : 20,
+              ),
+              bottom: convertMillimetersToTwip(
+                footerChildren.length
+                  ? Math.ceil(
+                      13 +
+                        ((footerImgFit?.height || 0) / 96) * 25.4 +
+                        (lh?.footerText ? 6 : 0) +
+                        4,
+                    )
+                  : 20,
+              ),
               left: convertMillimetersToTwip(20),
               right: convertMillimetersToTwip(20),
             },

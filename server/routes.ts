@@ -201,6 +201,7 @@ import {
   updateIndustrialWasteVoucherOutSchema,
 } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
+import { invalidateLetterheadCache } from "./modern-agent/letterhead";
 import { hasPermission } from "@shared/permissions";
 import { eq, sql, and, gte, lte, gt, desc, inArray } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -11438,6 +11439,7 @@ Input: ${text}`;
             .insert(company_profile)
             .values({ name: "Company", ...updates });
         }
+        invalidateLetterheadCache();
         res.json({ message: "تم حفظ قالب الخطابات بنجاح" });
       } catch (error: any) {
         if (error?.message === "INVALID_OBJECT_PATH") {

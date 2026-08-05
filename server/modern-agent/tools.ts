@@ -9,6 +9,7 @@ import {
   generateAgentWord,
   type AgentDocSpec,
 } from "./documents";
+import { loadLetterhead } from "./letterhead";
 
 export interface ToolContext {
   userId: number;
@@ -634,6 +635,16 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
         }
       }
       const format = args.format || "pdf";
+      // Attach the company letterhead (header/footer/logo/signatures)
+      // configured in Settings → ترويسة الخطابات والمستندات.
+      try {
+        spec.letterhead = await loadLetterhead();
+      } catch (err) {
+        console.warn(
+          "[ModernAgent] letterhead unavailable, generating plain document:",
+          (err as Error)?.message,
+        );
+      }
       const out: GeneratedDocument[] = [];
       if (format === "pdf" || format === "both") {
         const { fileName } = await generateAgentPdf(spec);

@@ -32,6 +32,7 @@ import {
   type GeneratedDocument,
 } from "./tools";
 import { getDocPath, getDocOwnerId } from "./documents";
+import { APP_OVERVIEW } from "./app-knowledge";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -327,6 +328,9 @@ async function buildSystemPrompt(
 
   // ── Persona / identity ──
   parts.push("\n# Identity & Persona\n" + (settings.base_persona || DEFAULT_PERSONA));
+
+  // ── Built-in application overview (always current with the codebase) ──
+  parts.push("\n# Application Overview (نظرة عامة على النظام)\n" + APP_OVERVIEW);
 
   // ── User context ──
   if (userName) {
