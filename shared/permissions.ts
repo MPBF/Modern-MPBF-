@@ -1212,6 +1212,21 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/display-screen": ["view_display_screen", "admin"],
   "/display-control": ["manage_display_screen", "admin"],
 
+  // Display Tools hub (groups bag configurator, factory simulation, virtual warehouse, display screen)
+  "/display-tools": [
+    "view_bag_configurator",
+    "manage_orders",
+    "view_factory_simulation",
+    "manage_factory_simulation",
+    "view_production",
+    "manage_production",
+    "view_warehouse",
+    "manage_warehouse",
+    "view_display_screen",
+    "manage_display_screen",
+    "admin",
+  ],
+
   // Factory Floor
   "/factory-floor": ["view_production", "manage_production", "admin"],
 

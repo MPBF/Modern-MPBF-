@@ -33,6 +33,7 @@ function PersistentChrome() {
 }
 
 const BagConfigurator = lazyWithRetry(() => import("./pages/bag-configurator"));
+const DisplayTools = lazyWithRetry(() => import("./pages/display-tools"));
 const Dashboard = lazyWithRetry(() => import("./pages/dashboard"));
 const Orders = lazyWithRetry(() => import("./pages/orders"));
 const Production = lazyWithRetry(() => import("./pages/production"));
@@ -421,6 +422,12 @@ function AppRoutes() {
 
         <Route path="/system-monitoring">
           <Redirect to="/settings?section=system-monitoring" />
+        </Route>
+
+        <Route path="/display-tools">
+          <ProtectedRoute path="/display-tools">
+            <DisplayTools />
+          </ProtectedRoute>
         </Route>
 
         <Route path="/factory-simulation">
