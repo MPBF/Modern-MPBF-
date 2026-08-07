@@ -1,9 +1,9 @@
 import { Link } from "wouter";
 import { Wand2, Box, Warehouse, Tv, MonitorCog, ChevronLeft, ChevronRight } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { useAuth } from "@/hooks/use-auth";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { canAccessRoute } from "@/utils/roleUtils";
+import { Card, CardContent } from "../components/ui/card";
+import { useAuth } from "../hooks/use-auth";
+import { useLanguage } from "../contexts/LanguageContext";
+import { canAccessRoute } from "../utils/roleUtils";
 
 const tools = [
   {
