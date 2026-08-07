@@ -41,4 +41,5 @@
 - [Punching hook/banana detection](punching-hook-detection.md) — overrun % from substring match on punching (hook/علاقي/t-shirt=20%, banana/بنانة=10%, else 5%); new علاقي* variants auto-inherit, no enum.
 - [Dominant color extraction](color-extraction-clustering.md) — extractColors uses LAB weighted k-means + shade-merge → area-share %; ignoreWhite default true (bag substrate), % intentionally may not sum to 100.
 - [Backup restore generated columns](backup-restore-generated-columns.md) — restore needs per-row SAVEPOINTs and must strip GENERATED ALWAYS columns or one bad row aborts the whole transaction.
+- [pdfkit Arabic rendering](pdfkit-arabic-rendering.md) — pass raw Unicode + features:["rtla"]; never reshape+bidi first (garbles text); pre-reverse digit runs & mirror brackets.
 - [Bag-weight calculator types](bag-weight-calculator-types.md) — 6-type exclusion/layer physics; rolls store g/m as gramsPerBag with lengthCm=100; shared weight 0 for rolls means "enter manually".

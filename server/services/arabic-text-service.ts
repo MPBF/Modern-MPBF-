@@ -25,6 +25,30 @@ export function processArabicText(text: string): string {
   }
 }
 
+// لاستخدامها مع pdfkit عند تمرير features: ["rtla"]: يترك النص العربي كما هو
+// (fontkit يتولى التشكيل و rtla يتولى الاتجاه) لكن يعكس مقاطع الأرقام/اللاتينية
+// مسبقاً حتى يعيدها rtla إلى اتجاهها الصحيح (وإلا تظهر 120 كـ 021).
+export function prepareArabicForPdf(text: string): string {
+  if (!text) return "";
+  if (!ARABIC_REGEX.test(text)) return text;
+  const MIRROR: Record<string, string> = {
+    "(": ")",
+    ")": "(",
+    "[": "]",
+    "]": "[",
+    "{": "}",
+    "}": "{",
+    "<": ">",
+    ">": "<",
+  };
+  return text
+    .replace(
+      /[0-9A-Za-z][0-9A-Za-z.,:%\/\-]*|[%][0-9][0-9.,]*/g,
+      (run) => run.split("").reverse().join(""),
+    )
+    .replace(/[()\[\]{}<>]/g, (ch) => MIRROR[ch]);
+}
+
 // لاستخدامها مع pdfkit + fontkit: يعيد ترتيب الكلمات (Bidi) فقط دون إعادة تشكيل،
 // لأن fontkit يتولى تشكيل الحروف تلقائياً من حروف Unicode الأصلية.
 export function bidiReorderArabic(text: string): string {

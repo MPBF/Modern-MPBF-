@@ -20,7 +20,7 @@ import {
 } from "docx";
 import {
   isArabicText,
-  processArabicText,
+  prepareArabicForPdf,
 } from "../services/arabic-text-service";
 import type { LetterheadData, LetterheadImage } from "./letterhead";
 
@@ -106,13 +106,18 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
   const hasArabicFont = !!ARABIC_FONT_PATH;
   const align: "right" | "left" = isAr ? "right" : "left";
 
-  // Always apply full Arabic processing (reshape contextual forms + bidi reorder)
-  // regardless of font availability — pdfkit does not do Arabic shaping natively.
+  // Arabic rendering: pass the ORIGINAL text to pdfkit and let fontkit do the
+  // contextual shaping, with the "rtla" feature handling right-to-left run
+  // direction. Pre-reshaping/bidi-reordering here breaks the shaping (letters
+  // come out disconnected and reversed). Number/Latin runs are pre-reversed so
+  // the rtla pass restores their correct direction.
   const safe = (text: string): string => {
     if (!text) return "";
     if (!isArabicText(text)) return text;
-    return processArabicText(text);
+    return prepareArabicForPdf(text);
   };
+  const feat = (extra: Record<string, unknown> = {}) =>
+    isAr ? { features: ["rtla" as any], ...extra } : extra;
 
   // A4 = 595 x 842 pt. Reserve space for the company letterhead.
   const PAGE_W = 595.28;
@@ -151,14 +156,14 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
       doc
         .fontSize(20)
         .fillColor("#1a365d")
-        .text(safe(spec.title), { align: "center" });
+        .text(safe(spec.title), feat({ align: "center" }));
       doc.moveDown(1);
 
       if (spec.intro) {
         doc
           .fontSize(12)
           .fillColor("#2d3748")
-          .text(safe(spec.intro), { align });
+          .text(safe(spec.intro), feat({ align }));
         doc.moveDown(0.8);
       }
 
@@ -167,14 +172,14 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
           doc
             .fontSize(14)
             .fillColor("#2b6cb0")
-            .text(safe(section.heading), { align });
+            .text(safe(section.heading), feat({ align }));
           doc.moveDown(0.3);
         }
         if (section.body) {
           doc
             .fontSize(12)
             .fillColor("#1a202c")
-            .text(safe(section.body), { align });
+            .text(safe(section.body), feat({ align }));
           doc.moveDown(0.6);
         }
       }
@@ -185,13 +190,13 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
         doc
           .fontSize(12)
           .fillColor("#2b6cb0")
-          .text(safe(headerLine), { align });
+          .text(safe(headerLine), feat({ align }));
         doc.moveDown(0.2);
         for (const row of spec.table.rows || []) {
           doc
             .fontSize(11)
             .fillColor("#1a202c")
-            .text(safe(row.join("   |   ")), { align });
+            .text(safe(row.join("   |   ")), feat({ align }));
         }
         doc.moveDown(0.6);
       }
@@ -201,7 +206,7 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
         doc
           .fontSize(10)
           .fillColor("#718096")
-          .text(safe(spec.footer), { align });
+          .text(safe(spec.footer), feat({ align }));
       }
 
       // Default company signatures (from letterhead settings)
@@ -210,13 +215,13 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
         doc
           .fontSize(12)
           .fillColor("#2b6cb0")
-          .text(safe(isAr ? "التواقيع" : "Signatures"), { align });
+          .text(safe(isAr ? "التواقيع" : "Signatures"), feat({ align }));
         doc.moveDown(0.5);
         for (const sig of lh.signatures) {
           doc
             .fontSize(11)
             .fillColor("#1a202c")
-            .text(safe(sig), { align });
+            .text(safe(sig), feat({ align }));
           doc.moveDown(1.2);
         }
       }
@@ -240,12 +245,17 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
             doc
               .fontSize(9)
               .fillColor("#718096")
-              .text(safe(lh.footerText), SIDE, fy, {
-                width: CONTENT_W,
-                align: "center",
-                height: footerTextH,
-                ellipsis: true,
-              });
+              .text(
+                safe(lh.footerText),
+                SIDE,
+                fy,
+                feat({
+                  width: CONTENT_W,
+                  align: "center",
+                  height: footerTextH,
+                  ellipsis: true,
+                }),
+              );
             fy += footerTextH;
           }
           if (footerImgFit && lh?.footerImage) {
