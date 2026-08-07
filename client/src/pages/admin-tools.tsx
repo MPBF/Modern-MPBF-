@@ -4814,7 +4814,7 @@ export default function AdminToolsPage() {
         >
           <TabsTrigger value="delivery" className="flex items-center gap-2">
             <FileSignature className="h-4 w-4" />
-            <span className="hidden sm:inline">تسليم وإخلاء مسؤولية</span>
+            <span className="hidden sm:inline">إخلاء مسؤولية</span>
             <span className="sm:hidden">تسليم</span>
           </TabsTrigger>
           <TabsTrigger value="order" className="flex items-center gap-2">
