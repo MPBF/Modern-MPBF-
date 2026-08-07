@@ -4,6 +4,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../hooks/use-auth";
 import { useLanguage } from "../contexts/LanguageContext";
 import { canAccessRoute } from "../utils/roleUtils";
+import PageLayout from "../components/layout/PageLayout";
 
 const tools = [
   {
@@ -57,18 +58,14 @@ export default function DisplayTools() {
   const visibleTools = tools.filter((tool) => canAccessRoute(user, tool.path));
 
   return (
-    <div className="p-4 md:p-6 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-      <div>
-        <h1 className="text-2xl font-bold" data-testid="text-page-title">
-          {isAr ? "أدوات العرض" : "Display Tools"}
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          {isAr
-            ? "مجموعة الأدوات المرئية والتفاعلية في مكان واحد"
-            : "Visual and interactive tools in one place"}
-        </p>
-      </div>
-
+    <PageLayout
+      title={isAr ? "أدوات العرض" : "Display Tools"}
+      description={
+        isAr
+          ? "مجموعة الأدوات المرئية والتفاعلية في مكان واحد"
+          : "Visual and interactive tools in one place"
+      }
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
         {visibleTools.map((tool) => {
           const Icon = tool.icon;
@@ -108,6 +105,6 @@ export default function DisplayTools() {
             : "You don't have access to any display tools"}
         </p>
       )}
-    </div>
+    </PageLayout>
   );
 }
