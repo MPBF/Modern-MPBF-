@@ -4854,7 +4854,7 @@ export default function AdminToolsPage() {
           </TabsTrigger>
           <TabsTrigger value="voucher" className="flex items-center gap-2">
             <Banknote className="h-4 w-4" />
-            <span className="hidden sm:inline">سند صرف نقدي</span>
+            <span className="hidden sm:inline">سند صرف</span>
             <span className="sm:hidden">سند صرف</span>
           </TabsTrigger>
           {canUseModernAgent && (
