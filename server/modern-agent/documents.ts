@@ -1,6 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import crypto from "crypto";
 import PDFDocument from "pdfkit";
 import {
   Document,
@@ -13,6 +14,7 @@ import {
   TableRow,
   TableCell,
   WidthType,
+  BorderStyle,
   convertMillimetersToTwip,
   Header,
   Footer,
@@ -20,7 +22,7 @@ import {
 } from "docx";
 import {
   isArabicText,
-  prepareArabicForPdf,
+  processArabicText,
 } from "../services/arabic-text-service";
 import type { LetterheadData, LetterheadImage } from "./letterhead";
 
@@ -81,9 +83,8 @@ function sanitizeFileName(name: string): string {
 
 function uniqueBase(title: string, ownerId?: number): string {
   const prefix = ownerId != null ? `u${ownerId}-` : "";
-  return `${prefix}${sanitizeFileName(title)}-${Date.now()}-${Math.floor(
-    Math.random() * 1e6,
-  )}`;
+  const uuid = crypto.randomUUID();
+  return `${prefix}${sanitizeFileName(title)}-${uuid}`;
 }
 
 // Parse the owner user id encoded into a generated document file name.
@@ -104,22 +105,23 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
   const filePath = path.join(MODERN_DOCS_DIR, fileName);
   const isAr = spec.language === "ar";
   const hasArabicFont = !!ARABIC_FONT_PATH;
+
+  // الحماية: إذا المستند عربي والخط العربي غير متوفر نرفع استثناء بدلاً من إخراج رموز غريبة
+  if (isAr && !hasArabicFont) {
+    throw new Error(
+      "Arabic font path not found. Please place an Arabic TTF font in server/fonts or public/fonts.",
+    );
+  }
+
   const align: "right" | "left" = isAr ? "right" : "left";
 
-  // Arabic rendering: pass the ORIGINAL text to pdfkit and let fontkit do the
-  // contextual shaping, with the "rtla" feature handling right-to-left run
-  // direction. Pre-reshaping/bidi-reordering here breaks the shaping (letters
-  // come out disconnected and reversed). Number/Latin runs are pre-reversed so
-  // the rtla pass restores their correct direction.
   const safe = (text: string): string => {
     if (!text) return "";
     if (!isArabicText(text)) return text;
-    return prepareArabicForPdf(text);
+    return processArabicText(text);
   };
-  const feat = (extra: Record<string, unknown> = {}) =>
-    isAr ? { features: ["rtla" as any], ...extra } : extra;
 
-  // A4 = 595 x 842 pt. Reserve space for the company letterhead.
+  // A4 = 595.28 x 841.89 pt
   const PAGE_W = 595.28;
   const PAGE_H = 841.89;
   const SIDE = 50;
@@ -137,6 +139,8 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
   const bottomMargin = footerBlockH > 0 ? footerBlockH + 60 : 50;
 
   return new Promise((resolve, reject) => {
+    let stream: fs.WriteStream | null = null;
+
     try {
       const doc = new PDFDocument({
         size: "A4",
@@ -148,22 +152,32 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
         },
         bufferPages: true,
       });
-      const stream = fs.createWriteStream(filePath);
+
+      stream = fs.createWriteStream(filePath);
       doc.pipe(stream);
+
+      // التعامل الآمن مع أخطاء الـ Stream لتجنب التسريب
+      stream.on("error", (err) => {
+        doc.end();
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        reject(err);
+      });
 
       if (hasArabicFont) doc.font(ARABIC_FONT_PATH);
 
       doc
         .fontSize(20)
         .fillColor("#1a365d")
-        .text(safe(spec.title), feat({ align: "center" }));
+        .text(safe(spec.title), { align: "center" });
       doc.moveDown(1);
 
       if (spec.intro) {
         doc
           .fontSize(12)
           .fillColor("#2d3748")
-          .text(safe(spec.intro), feat({ align }));
+          .text(safe(spec.intro), { align });
         doc.moveDown(0.8);
       }
 
@@ -172,14 +186,14 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
           doc
             .fontSize(14)
             .fillColor("#2b6cb0")
-            .text(safe(section.heading), feat({ align }));
+            .text(safe(section.heading), { align });
           doc.moveDown(0.3);
         }
         if (section.body) {
           doc
             .fontSize(12)
             .fillColor("#1a202c")
-            .text(safe(section.body), feat({ align }));
+            .text(safe(section.body), { align });
           doc.moveDown(0.6);
         }
       }
@@ -190,13 +204,13 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
         doc
           .fontSize(12)
           .fillColor("#2b6cb0")
-          .text(safe(headerLine), feat({ align }));
+          .text(safe(headerLine), { align });
         doc.moveDown(0.2);
         for (const row of spec.table.rows || []) {
           doc
             .fontSize(11)
             .fillColor("#1a202c")
-            .text(safe(row.join("   |   ")), feat({ align }));
+            .text(safe(row.join("   |   ")), { align });
         }
         doc.moveDown(0.6);
       }
@@ -206,58 +220,55 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
         doc
           .fontSize(10)
           .fillColor("#718096")
-          .text(safe(spec.footer), feat({ align }));
+          .text(safe(spec.footer), { align });
       }
 
-      // Default company signatures (from letterhead settings)
+      // Default company signatures
       if (lh?.signatures?.length) {
         doc.moveDown(2);
         doc
           .fontSize(12)
           .fillColor("#2b6cb0")
-          .text(safe(isAr ? "التواقيع" : "Signatures"), feat({ align }));
+          .text(safe(isAr ? "التواقيع" : "Signatures"), { align });
         doc.moveDown(0.5);
         for (const sig of lh.signatures) {
           doc
             .fontSize(11)
             .fillColor("#1a202c")
-            .text(safe(sig), feat({ align }));
+            .text(safe(sig), { align });
           doc.moveDown(1.2);
         }
       }
 
-      // Stamp the company letterhead (header/footer) on every page.
+      // تطبيق الترويسة (Header / Footer) على كافة الصفحات بعد اكتمال المحتوى
       if (headerFit || footerBlockH > 0) {
         const range = doc.bufferedPageRange();
         for (let i = range.start; i < range.start + range.count; i++) {
           doc.switchToPage(i);
-          // prevent stamping from triggering a new page
           const prevBottom = doc.page.margins.bottom;
           doc.page.margins.bottom = 0;
+
           if (headerFit && lh?.headerImage) {
             doc.image(lh.headerImage.buffer, (PAGE_W - headerFit.width) / 2, 25, {
               width: headerFit.width,
               height: headerFit.height,
             });
           }
+
           let fy = PAGE_H - 30 - footerBlockH;
           if (lh?.footerText) {
             doc
               .fontSize(9)
               .fillColor("#718096")
-              .text(
-                safe(lh.footerText),
-                SIDE,
-                fy,
-                feat({
-                  width: CONTENT_W,
-                  align: "center",
-                  height: footerTextH,
-                  ellipsis: true,
-                }),
-              );
+              .text(safe(lh.footerText), SIDE, fy, {
+                width: CONTENT_W,
+                align: "center",
+                height: footerTextH,
+                ellipsis: true,
+              });
             fy += footerTextH;
           }
+
           if (footerImgFit && lh?.footerImage) {
             doc.image(
               lh.footerImage.buffer,
@@ -266,14 +277,21 @@ export async function generateAgentPdf(spec: AgentDocSpec): Promise<{
               { width: footerImgFit.width, height: footerImgFit.height },
             );
           }
+
           doc.page.margins.bottom = prevBottom;
         }
       }
 
       doc.end();
+
       stream.on("finish", () => resolve({ fileName, filePath }));
-      stream.on("error", reject);
     } catch (err) {
+      if (stream) {
+        stream.destroy();
+      }
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
       reject(err);
     }
   });
@@ -307,6 +325,7 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
       new Paragraph({
         alignment,
         bidirectional: bidi,
+        spacing: { after: 200 },
         children: [new TextRun({ text: spec.intro, rightToLeft: bidi })],
       }),
     );
@@ -319,6 +338,7 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
           heading: HeadingLevel.HEADING_2,
           alignment,
           bidirectional: bidi,
+          spacing: { before: 240, after: 120 },
           children: [
             new TextRun({ text: section.heading, bold: true, rightToLeft: bidi }),
           ],
@@ -330,33 +350,49 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
         new Paragraph({
           alignment,
           bidirectional: bidi,
+          spacing: { after: 180 },
           children: [new TextRun({ text: section.body, rightToLeft: bidi })],
         }),
       );
     }
   }
 
+  // تنسيق الجدول بإضافة حواف مسافات داخلية متناسقة
   if (spec.table && spec.table.headers?.length) {
+    const tableBorders = {
+      top: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E0" },
+      bottom: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E0" },
+      left: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E0" },
+      right: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E0" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "E2E8F0" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "E2E8F0" },
+    };
+
     const headerRow = new TableRow({
+      tableHeader: true,
       children: spec.table.headers.map(
         (h) =>
           new TableCell({
+            margins: { top: 120, bottom: 120, left: 150, right: 150 },
+            shading: { fill: "F7FAFC" },
             children: [
               new Paragraph({
                 alignment,
                 bidirectional: bidi,
-                children: [new TextRun({ text: h, bold: true, rightToLeft: bidi })],
+                children: [new TextRun({ text: h, bold: true, color: "2B6CB0", rightToLeft: bidi })],
               }),
             ],
           }),
       ),
     });
+
     const bodyRows = (spec.table.rows || []).map(
       (row) =>
         new TableRow({
           children: row.map(
             (cell) =>
               new TableCell({
+                margins: { top: 100, bottom: 100, left: 150, right: 150 },
                 children: [
                   new Paragraph({
                     alignment,
@@ -368,9 +404,11 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
           ),
         }),
     );
+
     children.push(
       new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: tableBorders,
         rows: [headerRow, ...bodyRows],
       }),
     );
@@ -381,6 +419,7 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
       new Paragraph({
         alignment,
         bidirectional: bidi,
+        spacing: { before: 240 },
         children: [new TextRun({ text: spec.footer, italics: true, rightToLeft: bidi })],
       }),
     );
@@ -388,14 +427,14 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
 
   const lh = spec.letterhead;
 
-  // Default company signatures (from letterhead settings)
+  // Default company signatures
   if (lh?.signatures?.length) {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
         alignment,
         bidirectional: bidi,
-        spacing: { before: 400 },
+        spacing: { before: 400, after: 120 },
         children: [
           new TextRun({
             text: isAr ? "التواقيع" : "Signatures",
@@ -417,9 +456,9 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
     }
   }
 
-  // Company letterhead header/footer (images sized in px, ~96dpi; usable width ≈ 640px)
   const headerFit = lh?.headerImage ? fitImage(lh.headerImage, 640, 160) : null;
   const footerImgFit = lh?.footerImage ? fitImage(lh.footerImage, 640, 90) : null;
+
   const docImage = (
     img: LetterheadImage,
     size: { width: number; height: number },
@@ -480,12 +519,10 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
         properties: {
           page: {
             size: {
-              width: convertMillimetersToTwip(210),  // A4 width
-              height: convertMillimetersToTwip(297), // A4 height
+              width: convertMillimetersToTwip(210),
+              height: convertMillimetersToTwip(297),
             },
             margin: {
-              // Reserve room for the letterhead so header/footer content
-              // never overlaps the body (px at ~96dpi → mm: px / 96 * 25.4).
               top: convertMillimetersToTwip(
                 headerFit
                   ? Math.ceil(13 + (headerFit.height / 96) * 25.4 + 4)
@@ -510,6 +547,7 @@ export async function generateAgentWord(spec: AgentDocSpec): Promise<{
       },
     ],
   });
+
   const buffer = await Packer.toBuffer(docx);
   fs.writeFileSync(filePath, buffer);
   return { fileName, filePath };

@@ -17,12 +17,18 @@ export interface ToolContext {
   privateKnowledge?: string[];
 }
 
+// توحيد النصوص العربية والإنجليزي لضمان دقة البحث وكشف التسريب
 export function normalizeForMatch(s: string): string {
-  return (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return (s || "")
+    .replace(/[\u064B-\u0652]/g, "") // إزالة التشكيل
+    .replace(/[أإآ]/g, "ا")         // توحيد الهمزات
+    .replace(/ة/g, "ه")             // توحيد التاء المربوطة
+    .replace(/ى/g, "ي")             // توحيد الألف المقصورة
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
-// Deterministic guardrail: detect verbatim/near-verbatim disclosure of private
-// knowledge in any user-visible text (assistant replies or generated documents).
 export function detectPrivateLeak(
   text: string,
   privateContents: string[],
@@ -37,7 +43,6 @@ export function detectPrivateLeak(
     for (let i = 0; i + win <= content.length; i += step) {
       if (norm.includes(content.slice(i, i + win))) return true;
     }
-    // Always check the trailing window so the tail is never skipped by the step.
     if (norm.includes(content.slice(-win))) return true;
   }
   return false;
@@ -88,14 +93,16 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     },
     handler: async (args) => {
       const list = await storage.getCustomers();
-      const search = (args?.search || "").toString().toLowerCase();
+      const rawSearch = (args?.search || "").toString();
+      const search = normalizeForMatch(rawSearch);
+
       const filtered = search
-        ? list.filter((c: any) =>
-            `${c.name || ""} ${c.name_ar || ""}`
-              .toLowerCase()
-              .includes(search),
-          )
+        ? list.filter((c: any) => {
+            const fullName = normalizeForMatch(`${c.name || ""} ${c.name_ar || ""}`);
+            return fullName.includes(search);
+          })
         : list;
+
       return filtered.slice(0, clampLimit(args?.limit)).map((c: any) => ({
         id: c.id,
         name: c.name,
@@ -418,8 +425,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     },
     handler: async (args, ctx) => {
       if (!args?.customer_id) return { error: "customer_id_required" };
-      // Generate a unique order_number with retry-on-collision, mirroring the
-      // /api/orders route so concurrent calls never produce duplicate numbers.
+
       let lastErr: any = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         const result = await db.execute(
@@ -441,7 +447,6 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
           } as any);
           return { ok: true, order: created };
         } catch (e: any) {
-          // 23505 = unique_violation (order_number collision); retry with next.
           const code = e?.code || e?.cause?.code;
           const dup =
             code === "23505" ||
@@ -505,9 +510,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       if (!Number.isFinite(baseQuantityKg) || baseQuantityKg <= 0) {
         return { error: "quantity_kg_must_be_positive" };
       }
-      // Mirror the standard /api/production-orders route: derive final quantity
-      // and overrun from the product's punching type using factory standards.
-      // Never trust an AI-provided final quantity or overrun.
+
       const customerProduct = await storage.getCustomerProductById(
         Number(args.customer_product_id),
       );
@@ -618,7 +621,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
         footer: args.footer,
         ownerId: ctx.userId,
       };
-      // Guardrail: never let private knowledge be exfiltrated via a document.
+
       if (ctx.privateKnowledge?.length) {
         const combined = [
           spec.title,
@@ -635,8 +638,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
         }
       }
       const format = args.format || "pdf";
-      // Attach the company letterhead (header/footer/logo/signatures)
-      // configured in Settings → ترويسة الخطابات والمستندات.
+
       try {
         spec.letterhead = await loadLetterhead();
       } catch (err) {
@@ -687,4 +689,26 @@ export function userCanUseTool(
 ): boolean {
   if (!tool.permission) return true;
   return hasPermission(userPermissions, tool.permission);
+}
+
+/**
+ * Helper لضمان تنفيذ الأدوات بأمان حسب صلاحيات المستخدم
+ */
+export async function executeTool(
+  toolName: string,
+  args: any,
+  ctx: ToolContext,
+  sink: { documents: GeneratedDocument[] },
+): Promise<any> {
+  const tool = TOOL_MAP[toolName];
+  if (!tool) {
+    return { error: "tool_not_found" };
+  }
+
+  // الحماية والأمان: التحقق الصارم من الصلاحية قبل التمرير للـ handler
+  if (!userCanUseTool(tool, ctx.userPermissions)) {
+    return { error: "permission_denied", requiredPermission: tool.permission };
+  }
+
+  return await tool.handler(args, ctx, sink);
 }
