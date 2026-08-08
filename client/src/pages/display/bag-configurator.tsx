@@ -566,7 +566,8 @@ export default function BagConfigurator() {
     }
   }
 
-  // Auto-set dimensions & gusset when switching to dastarkhan
+  // Auto-reset dimensions & gusset to type defaults on EVERY type switch
+  // (switching away from dastarkhan must not keep its 100×110 size).
   useEffect(() => {
     if (type === "dastarkhan") {
       setWidth(100);
@@ -575,6 +576,13 @@ export default function BagConfigurator() {
       setPrintImgSize(60);   // حجم أصغر افتراضياً للسفرة
       setPrintSize(35);
       setRepeatCount(2);
+    } else {
+      setWidth(30);
+      setHeight(40);
+      setGusset(10);
+      setPrintImgSize(80);
+      setPrintSize(30);
+      setRepeatCount(3);
     }
   }, [type]);
 
@@ -749,8 +757,9 @@ export default function BagConfigurator() {
 
       if (gusset > 0) {
         // Gusset fold: replace flat side walls with V-shaped accordion panels.
-        // Each side = two PlaneGeometry panels meeting at a crease that points
-        // outward from the bag's side edge, giving a realistic fold appearance.
+        // Each side = two PlaneGeometry panels meeting at a crease that tucks
+        // INWARD into the bag (crease at x=±(hw−hd), z=0), so the side looks
+        // like "<" / ">" folded into the body — not bulging outward.
         const panelW = hd * Math.SQRT2; // diagonal panel width = gusset/2 × √2
         const addGussetPanel = (cx: number, cz: number, ry: number) => {
           const geo = new THREE.PlaneGeometry(panelW, height);
@@ -761,12 +770,12 @@ export default function BagConfigurator() {
           mesh.receiveShadow = true;
           bagGroup.add(mesh);
         };
-        //  Left side:  crease at x=-(hw+hd), z=0
-        addGussetPanel(-(hw + hd / 2),  hd / 2, -Math.PI / 4);       // left-front panel
-        addGussetPanel(-(hw + hd / 2), -hd / 2, -3 * Math.PI / 4);   // left-back panel
-        //  Right side: crease at x=+(hw+hd), z=0
-        addGussetPanel( (hw + hd / 2),  hd / 2,  Math.PI / 4);       // right-front panel
-        addGussetPanel( (hw + hd / 2), -hd / 2,  3 * Math.PI / 4);   // right-back panel
+        //  Left side:  crease tucked in at x=-(hw-hd), z=0
+        addGussetPanel(-(hw - hd / 2),  hd / 2,  Math.PI / 4);       // left-front panel
+        addGussetPanel(-(hw - hd / 2), -hd / 2, -Math.PI / 4);       // left-back panel
+        //  Right side: crease tucked in at x=+(hw-hd), z=0
+        addGussetPanel( (hw - hd / 2),  hd / 2, -Math.PI / 4);       // right-front panel
+        addGussetPanel( (hw - hd / 2), -hd / 2,  Math.PI / 4);       // right-back panel
       } else {
         addWall(d, height, -hw, 0, 0, 0, Math.PI / 2); // left side (no gusset)
         addWall(d, height,  hw, 0, 0, 0, Math.PI / 2); // right side (no gusset)
