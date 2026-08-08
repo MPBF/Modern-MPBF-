@@ -2,16 +2,16 @@ import { Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Route, Switch, Redirect, useLocation } from "wouter";
 
-import ErrorBoundary from "./components/ErrorBoundary";
-import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
+import ProtectedRoute from "./components/shared/ProtectedRoute";
 import Header from "./components/layout/Header";
 import MobileShell from "./components/layout/MobileShell";
 import Sidebar from "./components/layout/Sidebar";
 import InstallPrompt from "./components/pwa/InstallPrompt";
 import { AuthProvider, useAuth } from "./hooks/use-auth";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
-import Login from "./pages/login";
-import ForceChangePassword from "./pages/force-change-password";
+import Login from "./pages/misc/login";
+import ForceChangePassword from "./pages/misc/force-change-password";
 
 import { shouldShowChrome } from "./config/chromeRoutes";
 
@@ -32,94 +32,94 @@ function PersistentChrome() {
   );
 }
 
-const BagConfigurator = lazyWithRetry(() => import("./pages/bag-configurator"));
-const DisplayTools = lazyWithRetry(() => import("./pages/display-tools"));
-const Dashboard = lazyWithRetry(() => import("./pages/dashboard"));
-const Orders = lazyWithRetry(() => import("./pages/orders"));
-const Production = lazyWithRetry(() => import("./pages/production"));
+const BagConfigurator = lazyWithRetry(() => import("./pages/display/bag-configurator"));
+const DisplayTools = lazyWithRetry(() => import("./pages/display/display-tools"));
+const Dashboard = lazyWithRetry(() => import("./pages/dashboard/dashboard"));
+const Orders = lazyWithRetry(() => import("./pages/orders/orders"));
+const Production = lazyWithRetry(() => import("./pages/production/production"));
 const ProductionOrdersManagement = lazyWithRetry(
-  () => import("./pages/ProductionOrdersManagement"),
+  () => import("./pages/production/ProductionOrdersManagement"),
 );
 const ProductionQueues = lazyWithRetry(
-  () => import("./pages/ProductionQueues"),
+  () => import("./pages/production/ProductionQueues"),
 );
-const Quality = lazyWithRetry(() => import("./pages/quality"));
-const Warehouse = lazyWithRetry(() => import("./pages/warehouse"));
-const Maintenance = lazyWithRetry(() => import("./pages/maintenance"));
-const HR = lazyWithRetry(() => import("./pages/hr"));
-const Reports = lazyWithRetry(() => import("./pages/reports"));
-const Settings = lazyWithRetry(() => import("./pages/settings"));
-const Definitions = lazyWithRetry(() => import("./pages/definitions"));
-const UserDashboard = lazyWithRetry(() => import("./pages/user-dashboard"));
-const NotFound = lazyWithRetry(() => import("./pages/not-found"));
-const Notifications = lazyWithRetry(() => import("./pages/notifications"));
-const AlertsCenter = lazyWithRetry(() => import("./pages/AlertsCenter"));
-const SystemHealth = lazyWithRetry(() => import("./pages/SystemHealth"));
+const Quality = lazyWithRetry(() => import("./pages/misc/quality"));
+const Warehouse = lazyWithRetry(() => import("./pages/warehouse/warehouse"));
+const Maintenance = lazyWithRetry(() => import("./pages/misc/maintenance"));
+const HR = lazyWithRetry(() => import("./pages/hr/hr"));
+const Reports = lazyWithRetry(() => import("./pages/reports/reports"));
+const Settings = lazyWithRetry(() => import("./pages/settings/settings"));
+const Definitions = lazyWithRetry(() => import("./pages/settings/definitions"));
+const UserDashboard = lazyWithRetry(() => import("./pages/dashboard/user-dashboard"));
+const NotFound = lazyWithRetry(() => import("./pages/misc/not-found"));
+const Notifications = lazyWithRetry(() => import("./pages/misc/notifications"));
+const AlertsCenter = lazyWithRetry(() => import("./pages/misc/AlertsCenter"));
+const SystemHealth = lazyWithRetry(() => import("./pages/misc/SystemHealth"));
 const ProductionMonitoring = lazyWithRetry(
-  () => import("./pages/production-monitoring"),
+  () => import("./pages/production/production-monitoring"),
 );
 const MetaWhatsAppSetup = lazyWithRetry(
-  () => import("./pages/meta-whatsapp-setup"),
+  () => import("./pages/whatsapp/meta-whatsapp-setup"),
 );
-const WhatsAppSetup = lazyWithRetry(() => import("./pages/whatsapp-setup"));
-const WhatsAppTest = lazyWithRetry(() => import("./pages/whatsapp-test"));
+const WhatsAppSetup = lazyWithRetry(() => import("./pages/whatsapp/whatsapp-setup"));
+const WhatsAppTest = lazyWithRetry(() => import("./pages/whatsapp/whatsapp-test"));
 const WhatsAppTroubleshoot = lazyWithRetry(
-  () => import("./pages/whatsapp-troubleshoot"),
+  () => import("./pages/whatsapp/whatsapp-troubleshoot"),
 );
 const WhatsAppProductionSetup = lazyWithRetry(
-  () => import("./pages/whatsapp-production-setup"),
+  () => import("./pages/whatsapp/whatsapp-production-setup"),
 );
 const WhatsAppFinalSetup = lazyWithRetry(
-  () => import("./pages/whatsapp-final-setup"),
+  () => import("./pages/whatsapp/whatsapp-final-setup"),
 );
 const TwilioContentTemplate = lazyWithRetry(
-  () => import("./pages/twilio-content-template"),
+  () => import("./pages/whatsapp/twilio-content-template"),
 );
 const WhatsAppTemplateTest = lazyWithRetry(
-  () => import("./pages/whatsapp-template-test"),
+  () => import("./pages/whatsapp/whatsapp-template-test"),
 );
 const WhatsAppWebhooks = lazyWithRetry(
-  () => import("./pages/whatsapp-webhooks"),
+  () => import("./pages/whatsapp/whatsapp-webhooks"),
 );
-const ToolsPage = lazyWithRetry(() => import("./pages/tools_page"));
-const AdminTools = lazyWithRetry(() => import("./pages/admin-tools"));
+const ToolsPage = lazyWithRetry(() => import("./pages/misc/tools_page"));
+const AdminTools = lazyWithRetry(() => import("./pages/misc/admin-tools"));
 const FilmOperatorDashboard = lazyWithRetry(
-  () => import("./pages/FilmOperatorDashboard"),
+  () => import("./pages/production/FilmOperatorDashboard"),
 );
 const PrintingOperatorDashboard = lazyWithRetry(
-  () => import("./pages/PrintingOperatorDashboard"),
+  () => import("./pages/production/PrintingOperatorDashboard"),
 );
 const CuttingOperatorDashboard = lazyWithRetry(
-  () => import("./pages/CuttingOperatorDashboard"),
+  () => import("./pages/production/CuttingOperatorDashboard"),
 );
 const ProductionDashboard = lazyWithRetry(
-  () => import("./pages/ProductionDashboard"),
+  () => import("./pages/production/ProductionDashboard"),
 );
-const RollSearch = lazyWithRetry(() => import("./pages/RollSearch"));
+const RollSearch = lazyWithRetry(() => import("./pages/production/RollSearch"));
 const ProductionReports = lazyWithRetry(
-  () => import("./pages/ProductionReports"),
+  () => import("./pages/production/ProductionReports"),
 );
 const SystemMonitoring = lazyWithRetry(
-  () => import("./pages/system-monitoring"),
+  () => import("./pages/settings/system-monitoring"),
 );
 const FactorySimulation3D = lazyWithRetry(
-  () => import("./pages/FactorySimulation3D"),
+  () => import("./pages/display/FactorySimulation3D"),
 );
 const VirtualWarehouse3D = lazyWithRetry(
-  () => import("./pages/VirtualWarehouse3D"),
+  () => import("./pages/display/VirtualWarehouse3D"),
 );
-const CompanySetup = lazyWithRetry(() => import("./pages/company-setup"));
-const DisplayScreen = lazyWithRetry(() => import("./pages/DisplayScreen"));
+const CompanySetup = lazyWithRetry(() => import("./pages/settings/company-setup"));
+const DisplayScreen = lazyWithRetry(() => import("./pages/display/DisplayScreen"));
 const DisplayControlPanel = lazyWithRetry(
-  () => import("./pages/DisplayControlPanel"),
+  () => import("./pages/display/DisplayControlPanel"),
 );
-const FactoryFloor = lazyWithRetry(() => import("./pages/FactoryFloor"));
-const MaterialMixing = lazyWithRetry(() => import("./pages/material-mixing"));
-const MyOrders = lazyWithRetry(() => import("./pages/my-orders"));
-const McpSettings = lazyWithRetry(() => import("./pages/mcp-settings"));
-const MpbfBagQuote = lazyWithRetry(() => import("./pages/mpbf-bag-quote"));
-const ViewOrder = lazyWithRetry(() => import("./pages/view-order"));
-const BatchLookup = lazyWithRetry(() => import("./pages/BatchLookup"));
+const FactoryFloor = lazyWithRetry(() => import("./pages/production/FactoryFloor"));
+const MaterialMixing = lazyWithRetry(() => import("./pages/production/material-mixing"));
+const MyOrders = lazyWithRetry(() => import("./pages/orders/my-orders"));
+const McpSettings = lazyWithRetry(() => import("./pages/settings/mcp-settings"));
+const MpbfBagQuote = lazyWithRetry(() => import("./pages/orders/mpbf-bag-quote"));
+const ViewOrder = lazyWithRetry(() => import("./pages/orders/view-order"));
+const BatchLookup = lazyWithRetry(() => import("./pages/production/BatchLookup"));
 
 function PageLoadingFallback() {
   return (

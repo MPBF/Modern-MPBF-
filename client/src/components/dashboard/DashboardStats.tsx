@@ -12,7 +12,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { formatNumber } from "../../lib/formatNumber";
-import ErrorBoundary from "../ErrorBoundary";
+import ErrorBoundary from "../shared/ErrorBoundary";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 

@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../../hooks/use-auth";
 import { useProductionSSE } from "../../hooks/use-production-sse";
-import CuttingOperatorDashboard from "../../pages/CuttingOperatorDashboard";
-import PrintingOperatorDashboard from "../../pages/PrintingOperatorDashboard";
+import CuttingOperatorDashboard from "../../pages/production/CuttingOperatorDashboard";
+import PrintingOperatorDashboard from "../../pages/production/PrintingOperatorDashboard";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";

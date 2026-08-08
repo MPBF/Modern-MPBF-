@@ -40,15 +40,16 @@ If a credential still can't be decrypted (e.g. the previous secret was lost), co
 ## Where things live
 
 - **Frontend**: `client/`
-    - Pages: `client/src/pages/`
+    - Pages: `client/src/pages/<feature>/` (feature folders — see `client/src/pages/README.md`)
+    - Shared root components: `client/src/components/shared/`
     - UI Components: `client/src/components/ui/`
     - API Request/Query Client: `client/src/lib/queryClient.ts`
     - Internationalization: `client/src/i18n/locales/`
     - Navigation Configuration: `client/src/config/navigationConfig.ts`
 - **Backend**: `server/`
     - Entry Point: `server/index.ts`
-    - Main API Routes: `server/routes.ts`
-    - Database Access Layer: `server/storage.ts`
+    - API Routes: `server/routes/<domain>.ts` (orchestrated by `server/routes.ts`; shared helpers in `server/routes/shared.ts` — see `server/routes/README.md`)
+    - Database Access Layer: `server/storage/<domain>.ts` (inheritance chain; `server/storage.ts` is a re-export shim — see `server/storage/README.md`)
     - Middleware: `server/middleware/`
     - Shared Services: `server/services/`
 - **Shared Code (Frontend/Backend)**: `shared/`

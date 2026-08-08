@@ -19,7 +19,7 @@ import PDFDocument from "pdfkit";
 import {
   generateQuotePdfWithAdobe,
   isAdobePdfAvailable,
-} from "./adobe-pdf-service";
+} from "./services/adobe-pdf/quote-pdf";
 import { db } from "./db";
 import { objectStorageClient } from "./replit_integrations/object_storage";
 import { processArabicText } from "./services/arabic-text-service";

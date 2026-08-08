@@ -1,3 +1,4 @@
+- [Mechanical file split](mechanical-file-split.md) — storage/routes/pages split conventions: IStorage sigs must match textually, routes ctx mutable-state rules, page move import fixes.
 - [Security & authz patterns](security-fixes.md) — durable route/webhook/AI-tool authz patterns, private-knowledge leak control, doc owner-binding, order-number concurrency, type-safety gotchas.
 - [Permission tree guarded keys](permission-tree-guarded-keys.md) — roles-tree parent cascades & "select all" must exclude superuser keys (`admin`); grant only via explicit confirmed toggle.
 - [Admin = "admin" permission not role_id](admin-identity-permission-not-roleid.md) — backend admin authz must check permissions.includes("admin"); role_id 1=Management(not admin), 10=Administrator; keep FE/BE rule identical + onError on 403-able mutations.
