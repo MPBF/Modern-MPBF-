@@ -1,194 +1,21 @@
-import type { Express, Request } from "express";
+import type { Express } from "express";
 
-import crypto from "crypto";
-import { createServer, type Server } from "http";
 
-import bcrypt from "bcrypt";
 import { storage } from "../storage";
 import { db } from "../db";
 
-import {
-  insertUserSchema,
-  insertNewOrderSchema,
-  insertProductionOrderSchema,
-  insertRollSchema,
-  insertMaintenanceRequestSchema,
-  insertMaintenanceActionSchema,
-  insertMaintenanceReportSchema,
-  insertMaintenanceComponentSchema,
-  updateMaintenanceComponentSchema,
-  createPreventiveMaintenanceSchema,
-  updatePreventiveMaintenanceSchema,
-  insertOperatorNegligenceReportSchema,
-  insertConsumablePartSchema,
-  insertConsumablePartTransactionSchema,
-  insertInventoryMovementSchema,
-  insertInventorySchema,
-  insertCutSchema,
-  insertWarehouseReceiptSchema,
-  insertProductionSettingsSchema,
-  insertCustomerProductSchema,
-  insertMasterBatchColorSchema,
-  insertQualityIssueSchema,
-  insertQualityInspectionFormSchema,
-  insertQualityIssueResponsibleSchema,
-  insertQualityIssueActionSchema,
-  insertQuickNoteSchema,
-  insertNotificationTemplateSchema,
-  insertTrainingRecordSchema,
-  insertAdminDecisionSchema,
-  insertTrainingProgramSchema,
-  insertTrainingMaterialSchema,
-  insertTrainingEnrollmentSchema,
-  insertTrainingEvaluationSchema,
-  insertTrainingCertificateSchema,
-  insertPerformanceReviewSchema,
-  insertPerformanceCriteriaSchema,
-  insertLeaveTypeSchema,
-  insertLeaveRequestSchema,
-  insertLeaveBalanceSchema,
-  insertSystemSettingSchema,
-  orders,
-  production_orders,
-  rolls,
-  customers,
-  customer_products,
-  locations,
-  users,
-  attendance,
-  violations,
-  factory_layouts,
-  factory_snapshots,
-  insertFactorySnapshotSchema,
-  notifications as notificationsTable,
-  insertDisplaySlideSchema,
-  user_settings,
-  roles,
-  inventory,
-  items,
-  face_registrations,
-  mobile_device_tokens,
-  mobile_sessions,
-  mobile_sync_queue,
-  company_profile,
-  insertSparePartSchema,
-  updateSparePartSchema,
-  insertViolationSchema,
-  updateViolationSchema,
-  insertWorkViolationSchema,
-  updateWorkViolationSchema,
-  updateWorkViolationTypeSchema,
-  updateWorkViolationSettingsSchema,
-  waiveWorkViolationSchema,
-  insertAttendanceWithdrawalSchema,
-  createUserApiSchema,
-  updateUserSchema,
-  insertMixingRecipeSchema,
-  insertBagWeightRecordSchema,
-  insertDeliveryManifestSchema,
-  insertAdminToolDocumentSchema,
-  insertPackagingUnitSchema,
-  insertShiftAssignmentSchema,
-  insertRewardSchema,
-  updateRewardSchema,
-  insertEmployeeCustodySchema,
-  updateEmployeeCustodySchema,
-  insertEmployeeTraitSchema,
-  updateEmployeeTraitSchema,
-  insertIndustrialWasteVoucherInSchema,
-  insertIndustrialWasteVoucherOutSchema,
-  updateIndustrialWasteVoucherInSchema,
-  updateIndustrialWasteVoucherOutSchema,
-} from "@shared/schema";
-import { isShiftType, factoryNowParts } from "@shared/shifts";
-import { invalidateLetterheadCache } from "../modern-agent/letterhead";
+import { violations, roles } from "@shared/schema";
 import { hasPermission } from "@shared/permissions";
-import { eq, sql, and, gte, lte, gt, desc, inArray } from "drizzle-orm";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import {
-  parseIntSafe,
-  parseFloatSafe,
-  coercePositiveInt,
-  coerceNonNegativeInt,
-  extractNumericId,
-  generateNextId,
-} from "@shared/validation-utils";
-import {
-  createAlertsRouter,
-  createSystemHealthRouter,
-  createPerformanceRouter,
-  createCorrectiveActionsRouter,
-  createDataValidationRouter,
-} from "./alerts";
-import { getSystemHealthMonitor } from "../services/system-health-monitor";
-import { getAlertManager } from "../services/alert-manager";
-import { getDataValidator } from "../services/data-validator";
-import QRCode from "qrcode";
-import { validateRequest, commonSchemas } from "../middleware/validation";
-import { calculateProductionQuantities } from "@shared/quantity-utils";
-import ExcelJS from "exceljs";
-import multer from "multer";
+import { parseIntSafe } from "@shared/validation-utils";
 
-import { resolveSessionUser } from "../auth/sessionUser";
-import {
-  createPerformanceIndexes,
-  createTextSearchIndexes,
-} from "../database-optimizations";
-import { logger } from "../lib/logger";
-import {
-  requireAuth,
-  requirePermission,
-  requireAdmin,
-  type AuthRequest,
-} from "../middleware/auth";
-import {
-  generateMobileToken,
-  revokeMobileToken,
-  invalidateRolesCache,
-  invalidateUserCache,
-  getCachedRoles,
-  createMobileSession,
-  refreshMobileSession,
-  revokeMobileSession,
-} from "../middleware/session-auth";
-import {
-  setupAuth,
-  isAuthenticated as isAuthenticatedReplit,
-} from "../replitAuth";
-import {
-  getNotificationManager,
-  type SystemNotificationData,
-} from "../services/notification-manager";
-import { NotificationService } from "../services/notification-service";
-import { TaqnyatSMSService } from "../services/taqnyat-sms";
-import {
-  translateAnnouncement,
-  ensureAnnouncementTranslations,
-} from "../services/announcement-translation";
-import { setNotificationManager } from "../storage";
-import {
-  notificationService,
-  taqnyatSMS,
-  notificationManagerHolder,
-  addJsonSheet,
-  getAuthUserId,
-  parseRouteParam,
-} from "./shared";
+import { requireAuth, requirePermission } from "../middleware/auth";
+import { getNotificationManager } from "../services/notification-manager";
+import { notificationService, notificationManagerHolder, getAuthUserId, parseRouteParam } from "./shared";
 
 // Extracted from server/routes/hr.ts (registration order preserved; called
 // from registerHrRoutes). See server/routes/README.md.
 export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
-  const {
-    WV_READ,
-    WV_RECORD,
-    WV_MANAGE,
-    HR_VIEW,
-    HR_CREATE,
-    HR_EDIT,
-    HR_DELETE,
-    parseEmployeeId,
-  } = ctx;
 
   // ============ HR Attendance Management API ============
 
@@ -289,8 +116,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           });
         }
 
-        const { lat, lng, accuracy, isMocked, altitudeAccuracy } =
-          req.body.location;
+        const { lat, lng, accuracy, isMocked } = req.body.location;
 
         // =============== التحقق من دقة الموقع ===============
         // نتعامل مع accuracy كرقم صالح أو نتجاهل التحقق إذا لم تتوفر
@@ -407,13 +233,6 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             parseFloat(factoryLocation.latitude),
             parseFloat(factoryLocation.longitude),
           );
-
-          // نأخذ دقة GPS بعين الاعتبار عند حساب المسافة الفعلية
-          const effectiveDistance = accuracy
-            ? Math.max(0, distance - accuracy)
-            : distance;
-          const effectiveRadius =
-            factoryLocation.allowed_radius + (accuracy || 0);
 
           if (isDevMode) {
           }
@@ -965,7 +784,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             alreadyClosed: true,
           });
         }
-        const restoredStatus = await restoreStatus();
+        await restoreStatus();
 
         const { totalMinutes } = await storage.getAttendanceWithdrawalsForDay(
           att.user_id,
