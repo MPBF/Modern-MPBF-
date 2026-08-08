@@ -38,6 +38,21 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "filesize"
+
+[[workflows.workflow]]
+name = "filesize"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run check:filesize"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [agent]
 integrations = [
 	"javascript_log_in_with_replit:1.0.0",
