@@ -249,26 +249,51 @@ export function BagPreview({
           config.handle !== "hanger_hook" &&
           config.handle !== "external_strap" && (
           <>
-            {/* Side face — right side trapezoid */}
-            <polygon
-              points={`
-                ${bagX + bagW},${bagY}
-                ${bagX + bagW + sideWidth},${bagY + perspectiveOffset}
-                ${bagX + bagW + sideWidth},${bagY + bagH + perspectiveOffset}
-                ${bagX + bagW},${bagY + bagH}
-              `}
-              fill={`url(#${sideGradId})`}
-              stroke={darkenColor(fillColor, 55)}
-              strokeWidth="0.8"
-            />
-            {/* Inner crease line on side face */}
-            <line
-              x1={bagX + bagW + sideWidth * 0.5}
-              y1={bagY + perspectiveOffset * 0.5}
-              x2={bagX + bagW + sideWidth * 0.5}
-              y2={bagY + bagH + perspectiveOffset * 0.5}
-              stroke="white" strokeOpacity="0.12" strokeWidth="1"
-            />
+            {/* Side gusset folded INWARD: two panels meeting at a recessed
+                V-crease. The crease sits deeper than the outer edge
+                (larger perspective offset), so the fold tucks into the bag
+                instead of bulging outward. */}
+            {(() => {
+              const creaseX = bagX + bagW + sideWidth * 0.5;
+              const creaseDepth = perspectiveOffset * 1.35;
+              return (
+                <>
+                  {/* Front half-panel (lit) — bag edge → inner crease */}
+                  <polygon
+                    points={`
+                      ${bagX + bagW},${bagY}
+                      ${creaseX},${bagY + creaseDepth}
+                      ${creaseX},${bagY + bagH + creaseDepth}
+                      ${bagX + bagW},${bagY + bagH}
+                    `}
+                    fill={`url(#${sideGradId})`}
+                    stroke={darkenColor(fillColor, 55)}
+                    strokeWidth="0.8"
+                  />
+                  {/* Back half-panel (shadowed) — inner crease → outer edge */}
+                  <polygon
+                    points={`
+                      ${creaseX},${bagY + creaseDepth}
+                      ${bagX + bagW + sideWidth},${bagY + perspectiveOffset}
+                      ${bagX + bagW + sideWidth},${bagY + bagH + perspectiveOffset}
+                      ${creaseX},${bagY + bagH + creaseDepth}
+                    `}
+                    fill={darkenColor(fillColor, 60)}
+                    fillOpacity={fillOpacity * 0.85}
+                    stroke={darkenColor(fillColor, 55)}
+                    strokeWidth="0.8"
+                  />
+                  {/* Recessed crease shadow line */}
+                  <line
+                    x1={creaseX}
+                    y1={bagY + creaseDepth}
+                    x2={creaseX}
+                    y2={bagY + bagH + creaseDepth}
+                    stroke="#000" strokeOpacity="0.28" strokeWidth="1.2"
+                  />
+                </>
+              );
+            })()}
           </>
         )}
 
