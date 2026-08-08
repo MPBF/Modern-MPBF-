@@ -9,10 +9,7 @@ const DEFAULT_LIMIT = 3000;
 
 // Grandfathered files: already above the default limit when this check was added.
 // Frozen at their size then — any growth fails. Shrink them over time, then remove entries.
-const OVERRIDES = {
-  "server/routes/hr.ts": 3401,
-  "server/routes/production.ts": 3075,
-};
+const OVERRIDES = {};
 
 const offenders = [];
 for (const dir of DIRS) {
