@@ -468,6 +468,11 @@ export default function Definitions() {
     role_id: "none",
     section_id: "none",
     status: "active",
+    national_id: "",
+    nationality: "none",
+    birth_date: "",
+    service_start_date: "",
+    profession: "",
   });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -2429,6 +2434,11 @@ export default function Definitions() {
       role_id: "none",
       section_id: "none",
       status: "active",
+      national_id: "",
+      nationality: "none",
+      birth_date: "",
+      service_start_date: "",
+      profession: "",
     });
     setMasterBatchColorForm({
       id: "",
@@ -4159,7 +4169,12 @@ export default function Definitions() {
                                         {u.username || "-"}
                                       </td>
                                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
-                                        {u.display_name || u.name || "-"}
+                                        <div className="font-medium">
+                                          {u.display_name_ar || "-"}
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400" dir="ltr">
+                                          {u.display_name || u.name || "-"}
+                                        </div>
                                       </td>
                                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
                                         {(() => {
@@ -4209,6 +4224,11 @@ export default function Definitions() {
                                                     return m[u.section_id] || "none";
                                                   })(),
                                                   status: u.status || "active",
+                                                  national_id: u.national_id || "",
+                                                  nationality: u.nationality || "none",
+                                                  birth_date: u.birth_date ? String(u.birth_date).slice(0, 10) : "",
+                                                  service_start_date: u.service_start_date ? String(u.service_start_date).slice(0, 10) : "",
+                                                  profession: u.profession || "",
                                                 });
                                                 setSelectedTab("users");
                                                 setShowPassword(false);
@@ -7224,6 +7244,101 @@ export default function Definitions() {
                             ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="national_id">رقم الهوية</Label>
+                    <Input
+                      id="national_id"
+                      value={userForm.national_id}
+                      onChange={(e) =>
+                        setUserForm({
+                          ...userForm,
+                          national_id: e.target.value,
+                        })
+                      }
+                      placeholder="رقم الهوية / الإقامة"
+                      className="mt-1"
+                      dir="ltr"
+                      data-testid="input-national-id"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="nationality">الجنسية</Label>
+                    <Select
+                      value={userForm.nationality}
+                      onValueChange={(value) =>
+                        setUserForm({ ...userForm, nationality: value })
+                      }
+                    >
+                      <SelectTrigger className="mt-1" data-testid="select-nationality">
+                        <SelectValue placeholder="اختر الجنسية" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">غير محدد</SelectItem>
+                        {[
+                          "سعودي",
+                          "يمني",
+                          "هندي",
+                          "باكستاني",
+                          "نيبالي",
+                          "مصري",
+                          "فلبيني",
+                          "سوداني",
+                        ].map((n) => (
+                          <SelectItem key={n} value={n}>
+                            {n}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="birth_date">تاريخ الميلاد</Label>
+                    <Input
+                      id="birth_date"
+                      type="date"
+                      value={userForm.birth_date}
+                      onChange={(e) =>
+                        setUserForm({
+                          ...userForm,
+                          birth_date: e.target.value,
+                        })
+                      }
+                      className="mt-1"
+                      data-testid="input-birth-date"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="service_start_date">تاريخ بداية الخدمة</Label>
+                    <Input
+                      id="service_start_date"
+                      type="date"
+                      value={userForm.service_start_date}
+                      onChange={(e) =>
+                        setUserForm({
+                          ...userForm,
+                          service_start_date: e.target.value,
+                        })
+                      }
+                      className="mt-1"
+                      data-testid="input-service-start-date"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="profession">المهنة</Label>
+                    <Input
+                      id="profession"
+                      value={userForm.profession}
+                      onChange={(e) =>
+                        setUserForm({
+                          ...userForm,
+                          profession: e.target.value,
+                        })
+                      }
+                      placeholder="المهنة"
+                      className="mt-1"
+                      data-testid="input-profession"
+                    />
                   </div>
                   <div>
                     <Label htmlFor="status">

@@ -608,11 +608,34 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     }
   });
 
+  // Sensitive employee-info fields: only visible to users who can manage users
+  const SENSITIVE_USER_FIELDS = [
+    "national_id",
+    "nationality",
+    "birth_date",
+    "service_start_date",
+    "profession",
+  ] as const;
+  const canViewEmployeeInfo = (req: Request): boolean => {
+    const perms = (req as AuthRequest).user?.permissions || [];
+    if (perms.includes("admin")) return true;
+    return (
+      ["view_users", "add_users", "edit_users", "manage_users", "manage_definitions"] as const
+    ).some((p) => hasPermission(perms, p as any));
+  };
+  const stripEmployeeInfo = <T extends Record<string, any>>(u: T): T => {
+    const copy: Record<string, any> = { ...u };
+    for (const f of SENSITIVE_USER_FIELDS) delete copy[f];
+    return copy as T;
+  };
+
   // Users routes
   app.get("/api/users", requireAuth, async (req, res) => {
     try {
       const users = await storage.getSafeUsers();
-      res.json(users);
+      res.json(
+        canViewEmployeeInfo(req) ? users : users.map(stripEmployeeInfo),
+      );
     } catch (error) {
       console.error("Error fetching safe users:", error);
       res.status(500).json({ message: "خطأ في جلب المستخدمين" });
@@ -646,7 +669,10 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
       if (!user) {
         return res.status(404).json({ message: "المستخدم غير موجود" });
       }
-      res.json(user);
+      const isSelf = (req as AuthRequest).user?.id === id;
+      res.json(
+        canViewEmployeeInfo(req) || isSelf ? user : stripEmployeeInfo(user),
+      );
     } catch (error) {
       console.error("Error fetching safe user by ID:", error);
       res.status(500).json({ message: "خطأ في جلب بيانات المستخدم" });
@@ -715,6 +741,11 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           "phone",
           "email",
           "status",
+          "national_id",
+          "nationality",
+          "birth_date",
+          "service_start_date",
+          "profession",
         ];
         const candidate: Record<string, any> = {
           role_id: roleId,
@@ -812,6 +843,11 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           "email",
           "status",
           "password",
+          "national_id",
+          "nationality",
+          "birth_date",
+          "service_start_date",
+          "profession",
         ];
         const candidate: Record<string, any> = {
           role_id: roleId,

@@ -786,6 +786,15 @@ function sanitizeResponseForLogging(response: any): any {
         ON production_orders (batch_number)
         WHERE batch_number IS NOT NULL
       `);
+      // Ensure optional employee-info columns on users (existing DBs). Idempotent.
+      await db.execute(sql`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS national_id varchar(20),
+        ADD COLUMN IF NOT EXISTS nationality varchar(30),
+        ADD COLUMN IF NOT EXISTS birth_date date,
+        ADD COLUMN IF NOT EXISTS service_start_date date,
+        ADD COLUMN IF NOT EXISTS profession varchar(100)
+      `);
       // One-time migration: fix invalid roll stage 'printed' -> 'printing'
       try {
         const fixed = await db.execute(sql`

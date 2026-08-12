@@ -483,6 +483,11 @@ export class UsersStorage extends StorageBase {
             profile_image_url: users.profile_image_url,
             created_at: users.created_at,
             updated_at: users.updated_at,
+            national_id: users.national_id,
+            nationality: users.nationality,
+            birth_date: users.birth_date,
+            service_start_date: users.service_start_date,
+            profession: users.profession,
           })
           .from(users)
           .where(eq(users.id, id));
@@ -516,6 +521,11 @@ export class UsersStorage extends StorageBase {
             profile_image_url: users.profile_image_url,
             created_at: users.created_at,
             updated_at: users.updated_at,
+            national_id: users.national_id,
+            nationality: users.nationality,
+            birth_date: users.birth_date,
+            service_start_date: users.service_start_date,
+            profession: users.profession,
           })
           .from(users)
           .orderBy(users.username);
@@ -548,6 +558,11 @@ export class UsersStorage extends StorageBase {
             profile_image_url: users.profile_image_url,
             created_at: users.created_at,
             updated_at: users.updated_at,
+            national_id: users.national_id,
+            nationality: users.nationality,
+            birth_date: users.birth_date,
+            service_start_date: users.service_start_date,
+            profession: users.profession,
           })
           .from(users)
           .where(eq(users.role_id, roleId));
@@ -822,8 +837,24 @@ export class UsersStorage extends StorageBase {
   }
 
 
-  async getSafeUsersBySection(sectionId: number): Promise<SafeUser[]> {
-    const result = await db
+  // Deliberately minimal projection (no employee PII) — used for public-ish
+  // lists like sales reps; do not widen to full SafeUser.
+  async getSafeUsersBySection(
+    sectionId: number,
+  ): Promise<
+    Pick<
+      SafeUser,
+      | "id"
+      | "username"
+      | "display_name"
+      | "display_name_ar"
+      | "role_id"
+      | "status"
+      | "replit_user_id"
+      | "created_at"
+    >[]
+  > {
+    return await db
       .select({
         id: users.id,
         username: users.username,
@@ -836,7 +867,6 @@ export class UsersStorage extends StorageBase {
       })
       .from(users)
       .where(and(eq(users.section_id, sectionId), eq(users.status, "active")));
-    return result as unknown as SafeUser[];
   }
 
 

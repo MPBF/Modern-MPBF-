@@ -138,6 +138,13 @@ export const users = pgTable(
     must_change_password: boolean("must_change_password").default(false),
     created_at: timestamp("created_at").defaultNow(),
 
+    // بيانات الموظف الإضافية (غير إلزامية)
+    national_id: varchar("national_id", { length: 20 }), // رقم الهوية
+    nationality: varchar("nationality", { length: 30 }), // الجنسية
+    birth_date: date("birth_date"), // تاريخ الميلاد
+    service_start_date: date("service_start_date"), // تاريخ بداية الخدمة
+    profession: varchar("profession", { length: 100 }), // المهنة
+
     // Replit Auth fields (from integration blueprint)
     replit_user_id: varchar("replit_user_id", { length: 255 }).unique(), // Replit user ID from OpenID Connect
     first_name: varchar("first_name", { length: 100 }),
@@ -2821,6 +2828,23 @@ export const insertWageRecordSchema = createInsertSchema(wage_records).omit({
 export type InsertWageRecord = z.infer<typeof insertWageRecordSchema>;
 export type WageRecord = typeof wage_records.$inferSelect;
 
+// يحول القيم الفارغة أو "none" إلى null (لحقول اختيارية قادمة من نماذج)
+const emptyToNull = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (v) => (v === "" || v === "none" ? null : v),
+    schema,
+  );
+
+// تاريخ بصيغة YYYY-MM-DD مع التحقق من صحته فعلياً (يرفض مثل 2025-02-30)
+const isoDateString = () =>
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((s) => {
+      const d = new Date(`${s}T00:00:00Z`);
+      return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+    }, "تاريخ غير صالح");
+
 export const createUserApiSchema = z
   .object({
     username: z.string().min(1).max(50),
@@ -2833,6 +2857,11 @@ export const createUserApiSchema = z
     status: z.enum(["active", "inactive", "suspended"]).optional(),
     role_id: z.union([z.number().int().positive(), z.null()]).optional(),
     section_id: z.union([z.number().int().positive(), z.null()]).optional(),
+    national_id: emptyToNull(z.string().max(20).nullable()).optional(),
+    nationality: emptyToNull(z.string().max(30).nullable()).optional(),
+    birth_date: emptyToNull(isoDateString().nullable()).optional(),
+    service_start_date: emptyToNull(isoDateString().nullable()).optional(),
+    profession: emptyToNull(z.string().max(100).nullable()).optional(),
   })
   .strict();
 
@@ -2848,6 +2877,11 @@ export const updateUserSchema = z
     password: z.string().min(6).max(200).optional(),
     role_id: z.union([z.number().int().positive(), z.null()]).optional(),
     section_id: z.union([z.number().int().positive(), z.null()]).optional(),
+    national_id: emptyToNull(z.string().max(20).nullable()).optional(),
+    nationality: emptyToNull(z.string().max(30).nullable()).optional(),
+    birth_date: emptyToNull(isoDateString().nullable()).optional(),
+    service_start_date: emptyToNull(isoDateString().nullable()).optional(),
+    profession: emptyToNull(z.string().max(100).nullable()).optional(),
   })
   .strict();
 
