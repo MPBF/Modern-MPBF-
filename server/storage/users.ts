@@ -919,6 +919,66 @@ export class UsersStorage extends StorageBase {
   }
 
 
+  async getUserRequestById(id: number): Promise<any | undefined> {
+    const [r] = await db
+      .select()
+      .from(user_requests)
+      .where(eq(user_requests.id, id));
+    return r;
+  }
+
+
+  /**
+   * Find leave/permission requests for the same user whose period overlaps
+   * the given one. Leaves overlap on date ranges; permissions overlap when
+   * on the same calendar day with intersecting time ranges.
+   */
+  async getOverlappingUserRequests(opts: {
+    userId: number;
+    type: string;
+    statuses: string[];
+    excludeId?: number;
+    leaveStart?: Date | null;
+    leaveEnd?: Date | null;
+    permissionDate?: Date | null;
+    permissionStart?: string | null;
+    permissionEnd?: string | null;
+  }): Promise<any[]> {
+    const base = [
+      eq(user_requests.user_id, opts.userId),
+      eq(user_requests.type, opts.type),
+      inArray(user_requests.status, opts.statuses),
+    ];
+    if (opts.excludeId) base.push(ne(user_requests.id, opts.excludeId));
+
+    if (opts.type === "إجازة") {
+      if (!opts.leaveStart || !opts.leaveEnd) return [];
+      base.push(
+        isNotNull(user_requests.leave_start_date),
+        isNotNull(user_requests.leave_end_date),
+        lte(user_requests.leave_start_date, opts.leaveEnd),
+        gte(user_requests.leave_end_date, opts.leaveStart),
+      );
+    } else if (opts.type === "استئذان") {
+      if (!opts.permissionStart || !opts.permissionEnd) return [];
+      const day = opts.permissionDate ?? new Date();
+      base.push(
+        isNotNull(user_requests.permission_start_time),
+        isNotNull(user_requests.permission_end_time),
+        sql`DATE(${user_requests.date}) = DATE(${day})`,
+        sql`${user_requests.permission_start_time} < ${opts.permissionEnd}`,
+        sql`${user_requests.permission_end_time} > ${opts.permissionStart}`,
+      );
+    } else {
+      return [];
+    }
+    return await db
+      .select()
+      .from(user_requests)
+      .where(and(...base));
+  }
+
+
   async updateUserRequest(id: number, data: any): Promise<any> {
     const [u] = await db
       .update(user_requests)

@@ -1,4 +1,4 @@
-import type { Express, Request } from "express";
+import type { Express, Request, Response } from "express";
 
 import crypto from "crypto";
 import { createServer, type Server } from "http";
@@ -1113,6 +1113,28 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           });
         }
       }
+      // Prevent overlapping pending/approved requests for the same period
+      if (isLeave || isPermission) {
+        const overlapping = await storage.getOverlappingUserRequests({
+          userId,
+          type,
+          statuses: ["معلق", "موافق"],
+          leaveStart,
+          leaveEnd,
+          permissionDate: new Date(),
+          permissionStart: permStart,
+          permissionEnd: permEnd,
+        });
+        if (overlapping.length > 0) {
+          const existing = overlapping[0];
+          const existingStatus = existing?.status === "موافق" ? "معتمد" : "معلق";
+          return res.status(409).json({
+            message: isLeave
+              ? `لا يمكن إرسال الطلب: لديك طلب إجازة ${existingStatus} يتداخل مع نفس الفترة`
+              : `لا يمكن إرسال الطلب: لديك طلب استئذان ${existingStatus} يتداخل مع نفس الوقت في هذا اليوم`,
+          });
+        }
+      }
       const request = await storage.createUserRequest({
         type,
         title: String(req.body.title || "").slice(0, 200) || "بدون عنوان",
@@ -1164,40 +1186,63 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     }
   };
 
+  // On approval, block if another APPROVED request overlaps the same period
+  const checkApprovalOverlap = async (
+    id: number,
+    update: Record<string, any>,
+  ): Promise<string | null> => {
+    if (update.status !== "موافق") return null;
+    const existing = await storage.getUserRequestById(id);
+    if (!existing) return "الطلب غير موجود";
+    if (existing.type !== "إجازة" && existing.type !== "استئذان") return null;
+    const overlapping = await storage.getOverlappingUserRequests({
+      userId: existing.user_id,
+      type: existing.type,
+      statuses: ["موافق"],
+      excludeId: id,
+      leaveStart: existing.leave_start_date,
+      leaveEnd: existing.leave_end_date,
+      permissionDate: existing.date,
+      permissionStart: existing.permission_start_time,
+      permissionEnd: existing.permission_end_time,
+    });
+    if (overlapping.length > 0) {
+      return existing.type === "إجازة"
+        ? "لا يمكن الموافقة: يوجد طلب إجازة معتمد سابقاً لنفس الموظف يتداخل مع نفس الفترة"
+        : "لا يمكن الموافقة: يوجد طلب استئذان معتمد سابقاً لنفس الموظف يتداخل مع نفس الوقت في هذا اليوم";
+    }
+    return null;
+  };
+
+  const handleRequestReviewUpdate = async (req: Request, res: Response) => {
+    try {
+      const id = parseRouteParam(req.params.id, "id");
+      const update = buildRequestReviewUpdate(req);
+      const conflict = await checkApprovalOverlap(id, update);
+      if (conflict) {
+        return res.status(409).json({ message: conflict });
+      }
+      const request = await storage.updateUserRequest(id, update);
+      await notifyRequestOwner(request, update);
+      res.json(request);
+    } catch (error) {
+      console.error("Error updating user request:", error);
+      res.status(500).json({ message: "خطأ في تحديث الطلب" });
+    }
+  };
+
   app.put(
     "/api/user-requests/:id",
     requireAuth,
     requirePermission("edit_hr", "manage_hr"),
-    async (req, res) => {
-      try {
-        const id = parseRouteParam(req.params.id, "id");
-        const update = buildRequestReviewUpdate(req);
-        const request = await storage.updateUserRequest(id, update);
-        await notifyRequestOwner(request, update);
-        res.json(request);
-      } catch (error) {
-        console.error("Error updating user request:", error);
-        res.status(500).json({ message: "خطأ في تحديث الطلب" });
-      }
-    },
+    handleRequestReviewUpdate,
   );
 
   app.patch(
     "/api/user-requests/:id",
     requireAuth,
     requirePermission("edit_hr", "manage_hr"),
-    async (req, res) => {
-      try {
-        const id = parseRouteParam(req.params.id, "id");
-        const update = buildRequestReviewUpdate(req);
-        const request = await storage.updateUserRequest(id, update);
-        await notifyRequestOwner(request, update);
-        res.json(request);
-      } catch (error) {
-        console.error("Error updating user request:", error);
-        res.status(500).json({ message: "خطأ في تحديث الطلب" });
-      }
-    },
+    handleRequestReviewUpdate,
   );
 
   app.delete(

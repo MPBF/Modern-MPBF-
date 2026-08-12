@@ -119,7 +119,10 @@ export default function RequestsManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, response }),
       });
-      if (!res.ok) throw new Error("فشل تحديث الطلب");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || "فشل تحديث الطلب");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -128,8 +131,12 @@ export default function RequestsManagement() {
       setResponseText("");
       toast({ title: "تم تحديث الطلب بنجاح" });
     },
-    onError: () =>
-      toast({ title: "خطأ في تحديث الطلب", variant: "destructive" }),
+    onError: (err: Error) =>
+      toast({
+        title: "خطأ في تحديث الطلب",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const deleteMutation = useMutation({
