@@ -8,6 +8,7 @@ import Header from "./components/layout/Header";
 import MobileShell from "./components/layout/MobileShell";
 import Sidebar from "./components/layout/Sidebar";
 import InstallPrompt from "./components/pwa/InstallPrompt";
+import GlobalNotificationListener from "./components/notifications/GlobalNotificationListener";
 import { AuthProvider, useAuth } from "./hooks/use-auth";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import Login from "./pages/misc/login";
@@ -490,6 +491,7 @@ function App() {
     <ErrorBoundary fallback="page" showReload>
       <AuthProvider>
         <PersistentChrome />
+        <GlobalNotificationListener />
         <AppRoutes />
         <InstallPrompt />
       </AuthProvider>

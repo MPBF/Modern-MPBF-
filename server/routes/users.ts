@@ -167,9 +167,11 @@ import {
   ensureAnnouncementTranslations,
 } from "../services/announcement-translation";
 import { setNotificationManager } from "../storage";
+import { buildUserRequestDecisionNotification } from "../services/user-request-notifications";
 import {
   notificationService,
   taqnyatSMS,
+  notificationManagerHolder,
   getAuthUserId,
   parseRouteParam,
 } from "./shared";
@@ -1146,6 +1148,22 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     return data;
   };
 
+  // Notify the request owner in-app when their request is approved/rejected
+  const notifyRequestOwner = async (
+    request: any,
+    update: Record<string, any>,
+  ) => {
+    try {
+      const decision = buildUserRequestDecisionNotification(request, update);
+      if (!decision) return;
+      const nm =
+        notificationManagerHolder.value || getNotificationManager(storage);
+      await nm.sendToUser(decision.userId, decision.payload);
+    } catch (e) {
+      console.error("Failed to notify request owner of review decision:", e);
+    }
+  };
+
   app.put(
     "/api/user-requests/:id",
     requireAuth,
@@ -1153,10 +1171,9 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "id");
-        const request = await storage.updateUserRequest(
-          id,
-          buildRequestReviewUpdate(req),
-        );
+        const update = buildRequestReviewUpdate(req);
+        const request = await storage.updateUserRequest(id, update);
+        await notifyRequestOwner(request, update);
         res.json(request);
       } catch (error) {
         console.error("Error updating user request:", error);
@@ -1172,10 +1189,9 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "id");
-        const request = await storage.updateUserRequest(
-          id,
-          buildRequestReviewUpdate(req),
-        );
+        const update = buildRequestReviewUpdate(req);
+        const request = await storage.updateUserRequest(id, update);
+        await notifyRequestOwner(request, update);
         res.json(request);
       } catch (error) {
         console.error("Error updating user request:", error);
