@@ -21,6 +21,7 @@
 - [Bag weight formula](bag-weight-formula.md) — customer_products weight = flatWidth × length × 2 layers × universal_thickness(µm→cm) × density; use universal (computed/hidden) thickness, never raw thickness.
 - [HR/schema tables need ensure-block](hr-ensure-block-tables.md) — drizzle-kit push doesn't run on existing DBs; tables only in schema.ts (not in server/index.ts ensure-block) are absent and 500 every query touching them.
 - [Vite @/ alias fragility](vite-at-alias-resolution.md) — `@/` imports can break dev server during Vite dep re-optimization after lockfile churn; use relative imports in client code.
+- [Approved leave/permission → attendance](approved-requests-attendance.md) — leave = attendance rows status "إجازة" (engine-derived, not absent); approved استئذان minutes credit late→early→withdrawn in engine; status is "موافق".
 - [Wage computation](wage-computation.md) — monthly net = basic+OT-deductions-penalties+rewards; no-checkout (incomplete) days must be deducted as non-payable or they get full pay (overpayment).
 - [Number display formatting](number-formatting.md) — displayed numbers group thousands via central helpers (formatNumber / formatNumberAr); never group GPS coords/CSS/payloads/percentages, and never re-parse grouped output.
 - [Attendance engine aggregation](attendance-engine-aggregation.md) — self check-in writes many rows per shift-day; coalesce stamps to one record, MAX cumulative withdrawn, compute break once (never per-row sum).

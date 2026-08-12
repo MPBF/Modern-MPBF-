@@ -1214,6 +1214,27 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     return null;
   };
 
+  // عند اعتماد طلب إجازة: انعكاس تلقائي على سجل الحضور (أيام "إجازة").
+  // دقائق الاستئذان المعتمدة تُستثنى تلقائياً في محرك الحضور/الأجور.
+  const applyApprovalSideEffects = async (request: any): Promise<void> => {
+    try {
+      if (
+        request?.status === "موافق" &&
+        request?.type === "إجازة" &&
+        request?.leave_start_date &&
+        request?.leave_end_date
+      ) {
+        await storage.applyApprovedLeaveToAttendance(request);
+      }
+    } catch (err) {
+      console.error(
+        "Error applying approved leave to attendance for request",
+        request?.id,
+        err,
+      );
+    }
+  };
+
   const handleRequestReviewUpdate = async (req: Request, res: Response) => {
     try {
       const id = parseRouteParam(req.params.id, "id");
@@ -1223,6 +1244,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
         return res.status(409).json({ message: conflict });
       }
       const request = await storage.updateUserRequest(id, update);
+      await applyApprovalSideEffects(request);
       await notifyRequestOwner(request, update);
       res.json(request);
     } catch (error) {

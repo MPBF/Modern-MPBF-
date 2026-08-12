@@ -43,6 +43,8 @@ export interface DailyAttendanceResult {
   withdrawnMinutes: number;
   workedHours: number;
   overtimeHours: number;
+  /** يوم إجازة معتمدة (سجل حضور بحالة "إجازة") — لا يُحتسب غياباً. */
+  onLeave: boolean;
 }
 
 export interface AttendanceTotals {
@@ -51,6 +53,8 @@ export interface AttendanceTotals {
   presentDays: number;
   absentDays: number;
   incompleteDays: number;
+  /** أيام الإجازة المعتمدة (لا تُخصم كغياب). */
+  leaveDays: number;
   totalLateMinutes: number;
   totalEarlyLeaveMinutes: number;
   totalWithdrawnMinutes: number;
@@ -102,14 +106,32 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * @param from تاريخ البداية "YYYY-MM-DD".
  * @param to تاريخ النهاية "YYYY-MM-DD" (شامل).
  */
+export interface AttendanceComputeOptions {
+  /**
+   * دقائق الاستئذان المعتمدة لكل يوم "YYYY-MM-DD" → دقائق. تُخصم من
+   * التأخير ثم المغادرة المبكرة ثم الانسحاب لذلك اليوم (لا تُحتسب خصماً).
+   */
+  permissionMinutesByDate?: Map<string, number>;
+}
+
 export function computeEmployeeAttendance(
   rows: RawAttendanceRow[],
   shiftByMonth: MonthlyShiftMap,
   from: string,
   to: string,
   graceMinutes = 0,
+  options: AttendanceComputeOptions = {},
 ): EmployeeAttendanceResult {
   const days: DailyAttendanceResult[] = [];
+
+  // أيام الإجازة المعتمدة: أي صف حضور بحالة "إجازة" يعلّم يومه كإجازة.
+  const leaveDates = new Set<string>();
+  for (const r of rows) {
+    if (r.status === "إجازة" && r.date) {
+      leaveDates.add(String(r.date).slice(0, 10));
+    }
+  }
+  const permissionByDate = options.permissionMinutesByDate;
 
   // طبّع صفوف الحضور إلى لحظاتها الخام مرة واحدة. ملاحظة مهمة: لوحة الموظف
   // تُنشئ صفاً منفصلاً لكل إجراء (حضور/استراحة/عودة/انصراف)، لذا قد توجد عدة
@@ -153,6 +175,7 @@ export function computeEmployeeAttendance(
         withdrawnMinutes: 0,
         workedHours: 0,
         overtimeHours: 0,
+        onLeave: false,
       });
       cursor = addDays(cursor, 1);
       continue;
@@ -209,8 +232,29 @@ export function computeEmployeeAttendance(
       graceMinutes,
     });
 
+    // خصم دقائق الاستئذان المعتمدة لهذا اليوم من التأخير ثم المغادرة
+    // المبكرة ثم الانسحاب (الدقائق المعتمدة لا تُحتسب خصماً).
+    let lateMinutes = metrics.lateMinutes;
+    let earlyLeaveMinutes = metrics.earlyLeaveMinutes;
+    let dayWithdrawn = withdrawnMinutes;
+    let credit = permissionByDate?.get(cursor) ?? 0;
+    if (credit > 0) {
+      const useLate = Math.min(lateMinutes, credit);
+      lateMinutes -= useLate;
+      credit -= useLate;
+      const useEarly = Math.min(earlyLeaveMinutes, credit);
+      earlyLeaveMinutes -= useEarly;
+      credit -= useEarly;
+      const useWithdrawn = Math.min(dayWithdrawn, credit);
+      dayWithdrawn -= useWithdrawn;
+    }
+
+    // يوم إجازة معتمدة بدون حضور فعلي: يُعلَّم "إجازة" ولا يُحتسب غياباً.
+    const onLeave = !metrics.present && leaveDates.has(cursor);
+
     let status: string;
-    if (!metrics.present) status = "غائب";
+    if (onLeave) status = "إجازة";
+    else if (!metrics.present) status = "غائب";
     else if (!metrics.complete) status = "غير مكتمل";
     else status = "حاضر";
 
@@ -224,11 +268,12 @@ export function computeEmployeeAttendance(
       complete: metrics.complete,
       checkIn: earliestIn ? earliestIn.toISOString() : null,
       checkOut: latestOut ? latestOut.toISOString() : null,
-      lateMinutes: metrics.lateMinutes,
-      earlyLeaveMinutes: metrics.earlyLeaveMinutes,
-      withdrawnMinutes,
+      lateMinutes,
+      earlyLeaveMinutes,
+      withdrawnMinutes: dayWithdrawn,
       workedHours: metrics.workedHours,
       overtimeHours: metrics.overtimeHours,
+      onLeave,
     });
 
     cursor = addDays(cursor, 1);
@@ -240,6 +285,7 @@ export function computeEmployeeAttendance(
     presentDays: 0,
     absentDays: 0,
     incompleteDays: 0,
+    leaveDays: 0,
     totalLateMinutes: 0,
     totalEarlyLeaveMinutes: 0,
     totalWithdrawnMinutes: 0,
@@ -252,6 +298,7 @@ export function computeEmployeeAttendance(
     totals.scheduledDays++;
     if (d.present && d.complete) totals.presentDays++;
     else if (d.present && !d.complete) totals.incompleteDays++;
+    else if (d.onLeave) totals.leaveDays++;
     else totals.absentDays++;
     totals.totalLateMinutes += d.lateMinutes;
     totals.totalEarlyLeaveMinutes += d.earlyLeaveMinutes;

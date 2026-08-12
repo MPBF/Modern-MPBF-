@@ -303,6 +303,10 @@ import {
   lte,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import {
+  applyApprovedLeaveToAttendance as applyApprovedLeaveToAttendanceImpl,
+  getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
+} from "../services/leave-attendance";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
 
@@ -1510,6 +1514,32 @@ export class HrStorage extends MachinesStorage {
   }
 
 
+  // عند اعتماد طلب إجازة: انعكاس تلقائي على سجل الحضور (أيام "إجازة").
+  // التنفيذ في server/services/leave-attendance.ts.
+  async applyApprovedLeaveToAttendance(request: {
+    id: number;
+    user_id: number | null;
+    leave_start_date: Date | string | null;
+    leave_end_date: Date | string | null;
+    reviewed_by?: number | null;
+  }): Promise<void> {
+    return withDatabaseErrorHandling(
+      async () => applyApprovedLeaveToAttendanceImpl(request),
+      "applyApprovedLeaveToAttendance",
+      "تسجيل أيام الإجازة المعتمدة في الحضور",
+    );
+  }
+
+  // دقائق الاستئذان المعتمدة لكل مستخدم/يوم ضمن المدى: تُخصم من
+  // التأخير/المغادرة المبكرة/الانسحاب في محرك الحضور (وبالتالي من الأجور).
+  private async getApprovedPermissionMinutes(
+    userIds: number[],
+    from: string,
+    to: string,
+  ): Promise<Map<number, Map<string, number>>> {
+    return getApprovedPermissionMinutesImpl(userIds, from, to);
+  }
+
   async getComputedAttendance(
     userId: number,
     from: string,
@@ -1530,7 +1560,14 @@ export class HrStorage extends MachinesStorage {
           );
         const assignments = await this.getShiftAssignmentsForUser(userId);
         const shiftMap = this.buildShiftMap(assignments);
-        return computeEmployeeAttendance(rows as any, shiftMap, from, to);
+        const permByUser = await this.getApprovedPermissionMinutes(
+          [userId],
+          from,
+          to,
+        );
+        return computeEmployeeAttendance(rows as any, shiftMap, from, to, 0, {
+          permissionMinutesByDate: permByUser.get(userId),
+        });
       },
       "getComputedAttendance",
       "حساب حضور الموظف",
@@ -1593,6 +1630,12 @@ export class HrStorage extends MachinesStorage {
           assignByUser.set(a.user_id, list);
         }
 
+        const permByUser = await this.getApprovedPermissionMinutes(
+          userIds,
+          from,
+          to,
+        );
+
         return empRows.map((emp) => {
           const shiftMap = this.buildShiftMap(assignByUser.get(emp.id) ?? []);
           const result = computeEmployeeAttendance(
@@ -1600,6 +1643,8 @@ export class HrStorage extends MachinesStorage {
             shiftMap,
             from,
             to,
+            0,
+            { permissionMinutesByDate: permByUser.get(emp.id) },
           );
           const sec =
             emp.section_id != null

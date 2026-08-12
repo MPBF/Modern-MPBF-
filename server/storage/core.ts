@@ -835,6 +835,7 @@ export interface IStorage {
   getEmployeeFile(userId: number): Promise<any | null>;
   getComputedAttendance(userId: number, from: string, to: string): Promise<EmployeeAttendanceResult>;
   getAttendanceReportByRange(from: string, to: string, sectionId?: number): Promise<any[]>;
+  applyApprovedLeaveToAttendance(request: { id: number; user_id: number | null; leave_start_date: Date | string | null; leave_end_date: Date | string | null; reviewed_by?: number | null }): Promise<void>;
 
   // Waste
   getAllWaste(): Promise<any[]>;
