@@ -219,7 +219,9 @@ export async function registerMobileRoutes(app: Express, ctx: any) {
         }
       }
 
-      const user = await storage.getUserByUsername(username.trim());
+      const user = await storage.getUserByUsernameOrNationalId(
+        username.trim(),
+      );
       if (!user || !user.password) {
         const current = mobileLoginAttempts.get(rateLimitKey) || {
           count: 0,

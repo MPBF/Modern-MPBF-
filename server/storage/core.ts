@@ -641,6 +641,9 @@ export interface IStorage {
   // Users (with sensitive data)
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByUsernameOrNationalId(
+    identifier: string,
+  ): Promise<User | undefined>;
   createUser(insertUser: InsertUser): Promise<User>;
 
   // Replit Auth user operations

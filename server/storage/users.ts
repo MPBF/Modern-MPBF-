@@ -366,6 +366,29 @@ export class UsersStorage extends StorageBase {
   }
 
 
+  async getUserByUsernameOrNationalId(
+    identifier: string,
+  ): Promise<User | undefined> {
+    return withDatabaseErrorHandling(
+      async () => {
+        // Prefer exact username match, then fall back to national_id
+        const [byUsername] = await db
+          .select()
+          .from(users)
+          .where(eq(users.username, identifier));
+        if (byUsername) return byUsername;
+        const [byNationalId] = await db
+          .select()
+          .from(users)
+          .where(eq(users.national_id, identifier));
+        return byNationalId;
+      },
+      "getUserByUsernameOrNationalId",
+      `جلب المستخدم ${identifier}`,
+    );
+  }
+
+
   async createUser(insertUser: InsertUser): Promise<User> {
     return withDatabaseErrorHandling(
       async () => {

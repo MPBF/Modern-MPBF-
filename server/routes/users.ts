@@ -236,7 +236,9 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           }
         }
 
-        const user = await storage.getUserByUsername(username.trim());
+        const user = await storage.getUserByUsernameOrNationalId(
+          username.trim(),
+        );
         if (!user) {
           const current = webLoginAttempts.get(rateLimitKey) || {
             count: 0,
