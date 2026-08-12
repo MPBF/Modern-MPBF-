@@ -786,6 +786,35 @@ function sanitizeResponseForLogging(response: any): any {
         ON production_orders (batch_number)
         WHERE batch_number IS NOT NULL
       `);
+      // Ensure internal messages table exists (existing DBs). Idempotent.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS internal_messages (
+          id serial PRIMARY KEY,
+          sender_id integer NOT NULL REFERENCES users(id),
+          recipient_id integer NOT NULL REFERENCES users(id),
+          subject varchar(200) NOT NULL,
+          body text,
+          category varchar(30) NOT NULL DEFAULT 'عامة',
+          parent_id integer,
+          root_id integer,
+          read_at timestamp,
+          sender_deleted boolean NOT NULL DEFAULT false,
+          recipient_deleted boolean NOT NULL DEFAULT false,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_internal_messages_recipient
+        ON internal_messages (recipient_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_internal_messages_sender
+        ON internal_messages (sender_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_internal_messages_root
+        ON internal_messages (root_id)
+      `);
       // Ensure optional employee-info columns on users (existing DBs). Idempotent.
       await db.execute(sql`
         ALTER TABLE users

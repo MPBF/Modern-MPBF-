@@ -1117,6 +1117,20 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/virtual-warehouse": ["view_warehouse", "manage_warehouse"],
   "/inventory": ["view_inventory", "manage_inventory"],
   "/hr": ["view_hr", "manage_hr", "edit_hr", "delete_hr"],
+  // المراسلات الداخلية متاحة لعموم المستخدمين النشطين (أي صلاحية أساسية)
+  "/messages": [
+    "view_dashboard",
+    "view_user_dashboard",
+    "view_orders",
+    "view_production",
+    "view_hr",
+    "manage_hr",
+    "view_notifications",
+    "view_reports",
+    "view_maintenance",
+    "view_quality",
+    "view_warehouse",
+  ],
   "/work-violations": [
     "record_work_violations",
     "view_work_violations",

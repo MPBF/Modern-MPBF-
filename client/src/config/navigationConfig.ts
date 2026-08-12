@@ -18,6 +18,7 @@ import {
   ClipboardList,
   ListOrdered,
   ShieldAlert,
+  Mail,
 } from "lucide-react";
 
 export interface NavigationItem {
@@ -102,6 +103,15 @@ export const navigationItems: NavigationItem[] = [
     path: "/maintenance",
     priority: 8,
     group: "support",
+  },
+  {
+    name: "المراسلات",
+    name_ar: "المراسلات",
+    name_en: "Messages",
+    icon: Mail,
+    path: "/messages",
+    priority: 5.5,
+    group: "primary",
   },
   {
     name: "الموارد البشرية",

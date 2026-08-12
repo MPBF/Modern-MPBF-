@@ -176,6 +176,7 @@ import { registerSystemRoutes } from "./routes/system";
 import { registerUsersRoutes } from "./routes/users";
 import { registerReportsRoutes } from "./routes/reports";
 import { registerNotificationsRoutes } from "./routes/notifications";
+import { registerMessagesRoutes } from "./routes/messages";
 import { registerOrdersRoutes } from "./routes/orders";
 import { registerProductionRoutes } from "./routes/production";
 import { registerMachinesRoutes } from "./routes/machines";
@@ -633,6 +634,7 @@ export async function registerRoutes(
   await registerUsersRoutes(app, ctx);
   await registerReportsRoutes(app, ctx);
   await registerNotificationsRoutes(app, ctx);
+  await registerMessagesRoutes(app, ctx);
   await registerOrdersRoutes(app, ctx);
   await registerProductionRoutes(app, ctx);
   await registerMachinesRoutes(app, ctx);

@@ -158,6 +158,38 @@ export const users = pgTable(
   ],
 );
 
+// ✉️ المراسلات الداخلية بين المستخدمين (بريد داخلي)
+export const internal_messages = pgTable(
+  "internal_messages",
+  {
+    id: serial("id").primaryKey(),
+    sender_id: integer("sender_id")
+      .notNull()
+      .references(() => users.id),
+    recipient_id: integer("recipient_id")
+      .notNull()
+      .references(() => users.id),
+    subject: varchar("subject", { length: 200 }).notNull(),
+    body: text("body"),
+    // عامة / تكليف عمل / إشعار خصم / إنذار / توكيل مهام
+    category: varchar("category", { length: 30 }).notNull().default("عامة"),
+    parent_id: integer("parent_id"), // الرسالة التي تم الرد عليها
+    root_id: integer("root_id"), // جذر المحادثة (null = الرسالة نفسها جذر)
+    read_at: timestamp("read_at"),
+    sender_deleted: boolean("sender_deleted").notNull().default(false),
+    recipient_deleted: boolean("recipient_deleted").notNull().default(false),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_internal_messages_recipient").on(table.recipient_id),
+    index("idx_internal_messages_sender").on(table.sender_id),
+    index("idx_internal_messages_root").on(table.root_id),
+  ],
+);
+
+export type InternalMessage = typeof internal_messages.$inferSelect;
+export type InsertInternalMessage = typeof internal_messages.$inferInsert;
+
 // 📋 جدول طلبات المستخدمين
 export const user_requests = pgTable("user_requests", {
   id: serial("id").primaryKey(),
