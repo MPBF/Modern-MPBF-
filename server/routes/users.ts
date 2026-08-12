@@ -1069,6 +1069,22 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
       }
       // Whitelist employee-editable fields; review fields are server-controlled
       const type = String(req.body.type).slice(0, 50);
+      const ALLOWED_TYPES = ["إجازة", "استئذان", "عامة"];
+      if (!ALLOWED_TYPES.includes(type)) {
+        return res.status(400).json({ message: "نوع الطلب غير صحيح" });
+      }
+      const titleInput =
+        typeof req.body.title === "string" ? req.body.title.trim() : "";
+      const descriptionInput =
+        typeof req.body.description === "string"
+          ? req.body.description.trim()
+          : "";
+      if (!titleInput) {
+        return res.status(400).json({ message: "عنوان الطلب مطلوب" });
+      }
+      if (!descriptionInput) {
+        return res.status(400).json({ message: "تفاصيل الطلب مطلوبة" });
+      }
       // Type-specific fields: leave dates for إجازة, time range for استئذان
       const parseDate = (v: any): Date | null => {
         if (!v) return null;
@@ -1137,8 +1153,8 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
       }
       const request = await storage.createUserRequest({
         type,
-        title: String(req.body.title || "").slice(0, 200) || "بدون عنوان",
-        description: req.body.description ?? null,
+        title: titleInput.slice(0, 200),
+        description: descriptionInput,
         priority: req.body.priority ?? "عادي",
         leave_start_date: leaveStart,
         leave_end_date: leaveEnd,

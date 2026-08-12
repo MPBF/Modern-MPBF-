@@ -461,7 +461,14 @@ export default function UserDashboard() {
   // Fetch user requests
   const { data: userRequests } = useQuery<UserRequest[]>({
     queryKey: ["/api/user-requests"],
-    select: (data) => data.filter((request) => request.user_id === user?.id),
+    enabled: !!user?.id,
+    select: (data) =>
+      data
+        .filter((request) => request.user_id === user?.id)
+        .sort(
+          (a, b) =>
+            new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+        ),
   });
 
   // Fetch daily attendance status - Optimized polling
@@ -722,11 +729,8 @@ export default function UserDashboard() {
     mutationFn: async (data: any) => {
       const payload: any = {
         type: data.type,
-        title: data.title,
-        description: data.description,
-        user_id: user?.id,
-        date: new Date().toISOString(),
-        status: "معلق",
+        title: data.title?.trim(),
+        description: data.description?.trim(),
       };
       if (data.type === "إجازة") {
         payload.leave_start_date = data.leave_start_date || null;
@@ -1503,6 +1507,7 @@ export default function UserDashboard() {
                       <FormField
                         control={requestForm.control}
                         name="type"
+                        rules={{ required: "نوع الطلب مطلوب" }}
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>
@@ -1527,8 +1532,6 @@ export default function UserDashboard() {
                                 </SelectItem>
                                 <SelectItem value="استئذان">استئذان</SelectItem>
                                 <SelectItem value="عامة">عامة</SelectItem>
-                                <SelectItem value="شكوى">شكوى</SelectItem>
-                                <SelectItem value="طلب خاص">طلب خاص</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1540,6 +1543,12 @@ export default function UserDashboard() {
                           <FormField
                             control={requestForm.control}
                             name="leave_start_date"
+                            rules={{
+                              validate: (v) =>
+                                selectedRequestType !== "إجازة" ||
+                                !!v ||
+                                "تاريخ بداية الإجازة مطلوب",
+                            }}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>من تاريخ</FormLabel>
@@ -1557,6 +1566,17 @@ export default function UserDashboard() {
                           <FormField
                             control={requestForm.control}
                             name="leave_end_date"
+                            rules={{
+                              validate: (v) => {
+                                if (selectedRequestType !== "إجازة") return true;
+                                if (!v) return "تاريخ نهاية الإجازة مطلوب";
+                                const start =
+                                  requestForm.getValues("leave_start_date");
+                                if (start && v < start)
+                                  return "تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له";
+                                return true;
+                              },
+                            }}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>إلى تاريخ</FormLabel>
@@ -1578,6 +1598,12 @@ export default function UserDashboard() {
                           <FormField
                             control={requestForm.control}
                             name="permission_start_time"
+                            rules={{
+                              validate: (v) =>
+                                selectedRequestType !== "استئذان" ||
+                                !!v ||
+                                "وقت بداية الاستئذان مطلوب",
+                            }}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>من الساعة</FormLabel>
@@ -1595,6 +1621,19 @@ export default function UserDashboard() {
                           <FormField
                             control={requestForm.control}
                             name="permission_end_time"
+                            rules={{
+                              validate: (v) => {
+                                if (selectedRequestType !== "استئذان")
+                                  return true;
+                                if (!v) return "وقت نهاية الاستئذان مطلوب";
+                                const start = requestForm.getValues(
+                                  "permission_start_time",
+                                );
+                                if (start && v <= start)
+                                  return "وقت النهاية يجب أن يكون بعد وقت البداية";
+                                return true;
+                              },
+                            }}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>إلى الساعة</FormLabel>
@@ -1614,6 +1653,10 @@ export default function UserDashboard() {
                       <FormField
                         control={requestForm.control}
                         name="title"
+                        rules={{
+                          validate: (v) =>
+                            !!v?.trim() || "عنوان الطلب مطلوب",
+                        }}
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>
@@ -1634,6 +1677,10 @@ export default function UserDashboard() {
                       <FormField
                         control={requestForm.control}
                         name="description"
+                        rules={{
+                          validate: (v) =>
+                            !!v?.trim() || "تفاصيل الطلب مطلوبة",
+                        }}
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>
@@ -1691,11 +1738,11 @@ export default function UserDashboard() {
                             <strong>من تاريخ:</strong>{" "}
                             {new Date(
                               request.leave_start_date,
-                            ).toLocaleDateString("en-US")}{" "}
+                            ).toLocaleDateString("ar-EG")}{" "}
                             <strong>إلى تاريخ:</strong>{" "}
                             {new Date(
                               request.leave_end_date,
-                            ).toLocaleDateString("en-US")}
+                            ).toLocaleDateString("ar-EG")}
                           </p>
                         )}
                         {request.permission_start_time &&
@@ -1720,7 +1767,11 @@ export default function UserDashboard() {
                         )}
                         <p className="text-xs text-gray-500">
                           {t("userDashboard.requests.date")}:{" "}
-                          {new Date(request.date).toLocaleDateString("en-US")}
+                          {request.date
+                            ? new Date(request.date).toLocaleDateString(
+                                "ar-EG",
+                              )
+                            : "-"}
                         </p>
                       </div>
                     ))}
