@@ -202,6 +202,12 @@ export const user_requests = pgTable("user_requests", {
   status: varchar("status", { length: 20 }).notNull().default("معلق"),
   priority: varchar("priority", { length: 20 }).default("عادي"),
   response: text("response"),
+  // حقول طلب الإجازة: من تاريخ / إلى تاريخ
+  leave_start_date: timestamp("leave_start_date"),
+  leave_end_date: timestamp("leave_end_date"),
+  // حقول طلب الاستئذان: من ساعة / إلى ساعة (HH:MM)
+  permission_start_time: varchar("permission_start_time", { length: 5 }),
+  permission_end_time: varchar("permission_end_time", { length: 5 }),
   reviewed_by: integer("reviewed_by").references(() => users.id),
   date: timestamp("date").defaultNow(),
   reviewed_date: timestamp("reviewed_date"),

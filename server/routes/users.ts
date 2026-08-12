@@ -1027,7 +1027,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     },
   );
 
-  // ============ User Requests Management API ============
+  // ------------ User Requests Management API ------------
 
   app.get("/api/user-requests", requireAuth, async (req, res) => {
     try {
@@ -1066,11 +1066,60 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
         return res.status(400).json({ message: "نوع الطلب مطلوب" });
       }
       // Whitelist employee-editable fields; review fields are server-controlled
+      const type = String(req.body.type).slice(0, 50);
+      // Type-specific fields: leave dates for إجازة, time range for استئذان
+      const parseDate = (v: any): Date | null => {
+        if (!v) return null;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? null : d;
+      };
+      const parseTime = (v: any): string | null => {
+        if (typeof v !== "string") return null;
+        return /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null;
+      };
+      const isLeave = type === "إجازة";
+      const isPermission = type === "استئذان";
+      const leaveStart = isLeave ? parseDate(req.body.leave_start_date) : null;
+      const leaveEnd = isLeave ? parseDate(req.body.leave_end_date) : null;
+      const permStart = isPermission
+        ? parseTime(req.body.permission_start_time)
+        : null;
+      const permEnd = isPermission
+        ? parseTime(req.body.permission_end_time)
+        : null;
+      if (isLeave) {
+        if (!leaveStart || !leaveEnd) {
+          return res
+            .status(400)
+            .json({ message: "تاريخ بداية ونهاية الإجازة مطلوبان" });
+        }
+        if (leaveEnd.getTime() < leaveStart.getTime()) {
+          return res.status(400).json({
+            message: "تاريخ نهاية الإجازة يجب أن يكون بعد تاريخ البداية",
+          });
+        }
+      }
+      if (isPermission) {
+        if (!permStart || !permEnd) {
+          return res
+            .status(400)
+            .json({ message: "وقت بداية ونهاية الاستئذان مطلوبان (HH:MM)" });
+        }
+        if (permEnd <= permStart) {
+          return res.status(400).json({
+            message: "وقت نهاية الاستئذان يجب أن يكون بعد وقت البداية",
+          });
+        }
+      }
       const request = await storage.createUserRequest({
-        type: String(req.body.type).slice(0, 50),
+        type,
         title: String(req.body.title || "").slice(0, 200) || "بدون عنوان",
         description: req.body.description ?? null,
         priority: req.body.priority ?? "عادي",
+        leave_start_date: leaveStart,
+        leave_end_date: leaveEnd,
+        permission_start_time: permStart,
+        permission_end_time: permEnd,
         user_id: userId,
         status: "معلق",
         date: new Date(),

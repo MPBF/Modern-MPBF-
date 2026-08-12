@@ -39,9 +39,24 @@ interface UserRequest {
   priority?: string | null;
   response?: string | null;
   reviewed_by?: number | null;
+  leave_start_date?: string | null;
+  leave_end_date?: string | null;
+  permission_start_time?: string | null;
+  permission_end_time?: string | null;
   date?: string | null;
   reviewed_date?: string | null;
   created_at?: string | null;
+}
+
+function requestPeriod(r: UserRequest): string {
+  if (r.leave_start_date && r.leave_end_date) {
+    const fmt = (v: string) => new Date(v).toLocaleDateString("en-GB");
+    return `${fmt(r.leave_start_date)} ← ${fmt(r.leave_end_date)}`;
+  }
+  if (r.permission_start_time && r.permission_end_time) {
+    return `${r.permission_start_time} ← ${r.permission_end_time}`;
+  }
+  return "-";
 }
 
 const TYPE_FILTERS = ["الكل", "إجازة", "استئذان", "عامة"] as const;
@@ -200,6 +215,7 @@ export default function RequestsManagement() {
                   <th className="px-3 py-2 text-center">النوع</th>
                   <th className="px-3 py-2 text-center">العنوان</th>
                   <th className="px-3 py-2 text-center">التفاصيل</th>
+                  <th className="px-3 py-2 text-center">الفترة</th>
                   <th className="px-3 py-2 text-center">التاريخ</th>
                   <th className="px-3 py-2 text-center">الحالة</th>
                   <th className="px-3 py-2 text-center">الرد</th>
@@ -222,6 +238,12 @@ export default function RequestsManagement() {
                     <td className="px-3 py-2 text-center">{r.title}</td>
                     <td className="px-3 py-2 text-center max-w-56 truncate">
                       {r.description || "-"}
+                    </td>
+                    <td
+                      className="px-3 py-2 text-center whitespace-nowrap"
+                      data-testid={`text-request-period-${r.id}`}
+                    >
+                      {requestPeriod(r)}
                     </td>
                     <td className="px-3 py-2 text-center whitespace-nowrap">
                       {fmtDate(r.date || r.created_at)}

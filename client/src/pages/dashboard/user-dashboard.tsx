@@ -133,6 +133,10 @@ interface UserRequest {
   title: string;
   description: string;
   status: "معلق" | "موافق" | "مرفوض";
+  leave_start_date?: string | null;
+  leave_end_date?: string | null;
+  permission_start_time?: string | null;
+  permission_end_time?: string | null;
   date: string;
   response?: string;
 }
@@ -705,28 +709,54 @@ export default function UserDashboard() {
       type: "",
       title: "",
       description: "",
+      leave_start_date: "",
+      leave_end_date: "",
+      permission_start_time: "",
+      permission_end_time: "",
     },
   });
+  const selectedRequestType = requestForm.watch("type");
 
   // Submit request mutation
   const submitRequestMutation = useMutation({
     mutationFn: async (data: any) => {
+      const payload: any = {
+        type: data.type,
+        title: data.title,
+        description: data.description,
+        user_id: user?.id,
+        date: new Date().toISOString(),
+        status: "معلق",
+      };
+      if (data.type === "إجازة") {
+        payload.leave_start_date = data.leave_start_date || null;
+        payload.leave_end_date = data.leave_end_date || null;
+      }
+      if (data.type === "استئذان") {
+        payload.permission_start_time = data.permission_start_time || null;
+        payload.permission_end_time = data.permission_end_time || null;
+      }
       const response = await fetch("/api/user-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...data,
-          user_id: user?.id,
-          date: new Date().toISOString(),
-          status: "معلق",
-        }),
+        body: JSON.stringify(payload),
       });
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.message || "خطأ في إرسال الطلب");
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user-requests"] });
       toast({ title: t("userDashboard.requests.submitSuccess") });
       requestForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: error.message || "خطأ في إرسال الطلب",
+        variant: "destructive",
+      });
     },
   });
 
@@ -1497,12 +1527,90 @@ export default function UserDashboard() {
                                 </SelectItem>
                                 <SelectItem value="استئذان">استئذان</SelectItem>
                                 <SelectItem value="عامة">عامة</SelectItem>
+                                <SelectItem value="شكوى">شكوى</SelectItem>
+                                <SelectItem value="طلب خاص">طلب خاص</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+                      {selectedRequestType === "إجازة" && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField
+                            control={requestForm.control}
+                            name="leave_start_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>من تاريخ</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="date"
+                                    data-testid="input-leave-start-date"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={requestForm.control}
+                            name="leave_end_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>إلى تاريخ</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="date"
+                                    data-testid="input-leave-end-date"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
+                      {selectedRequestType === "استئذان" && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField
+                            control={requestForm.control}
+                            name="permission_start_time"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>من الساعة</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="time"
+                                    data-testid="input-permission-start-time"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={requestForm.control}
+                            name="permission_end_time"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>إلى الساعة</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="time"
+                                    data-testid="input-permission-end-time"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
                       <FormField
                         control={requestForm.control}
                         name="title"
@@ -1578,6 +1686,27 @@ export default function UserDashboard() {
                           <strong>{t("userDashboard.requests.type")}:</strong>{" "}
                           {request.type}
                         </p>
+                        {request.leave_start_date && request.leave_end_date && (
+                          <p className="text-sm text-gray-600 mb-2">
+                            <strong>من تاريخ:</strong>{" "}
+                            {new Date(
+                              request.leave_start_date,
+                            ).toLocaleDateString("en-US")}{" "}
+                            <strong>إلى تاريخ:</strong>{" "}
+                            {new Date(
+                              request.leave_end_date,
+                            ).toLocaleDateString("en-US")}
+                          </p>
+                        )}
+                        {request.permission_start_time &&
+                          request.permission_end_time && (
+                            <p className="text-sm text-gray-600 mb-2">
+                              <strong>من الساعة:</strong>{" "}
+                              {request.permission_start_time}{" "}
+                              <strong>إلى الساعة:</strong>{" "}
+                              {request.permission_end_time}
+                            </p>
+                          )}
                         <p className="text-gray-600 mb-2">
                           {request.description}
                         </p>

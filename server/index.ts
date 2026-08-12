@@ -824,6 +824,14 @@ function sanitizeResponseForLogging(response: any): any {
         ADD COLUMN IF NOT EXISTS service_start_date date,
         ADD COLUMN IF NOT EXISTS profession varchar(100)
       `);
+      // Ensure leave/permission fields on user_requests (existing DBs). Idempotent.
+      await db.execute(sql`
+        ALTER TABLE user_requests
+        ADD COLUMN IF NOT EXISTS leave_start_date timestamp,
+        ADD COLUMN IF NOT EXISTS leave_end_date timestamp,
+        ADD COLUMN IF NOT EXISTS permission_start_time varchar(5),
+        ADD COLUMN IF NOT EXISTS permission_end_time varchar(5)
+      `);
       // One-time migration: fix invalid roll stage 'printed' -> 'printing'
       try {
         const fixed = await db.execute(sql`
