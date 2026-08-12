@@ -294,7 +294,7 @@ export default function MessagesPage() {
   return (
     <PageLayout
       title="المراسلات"
-      description="بريد داخلي بين مستخدمي النظام — تكليفات، إشعارات، إنذارات ورسائل عامة"
+      description="بريد داخلي بين مستخدمي نظام مودرن "
     >
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
