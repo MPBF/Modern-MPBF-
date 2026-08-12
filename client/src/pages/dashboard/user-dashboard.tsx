@@ -129,7 +129,7 @@ interface Violation {
 interface UserRequest {
   id: number;
   user_id: number;
-  type: "إجازة" | "شكوى" | "طلب خاص";
+  type: "إجازة" | "استئذان" | "عامة" | "شكوى" | "طلب خاص";
   title: string;
   description: string;
   status: "معلق" | "موافق" | "مرفوض";
@@ -1495,12 +1495,8 @@ export default function UserDashboard() {
                                 <SelectItem value="إجازة">
                                   {t("userDashboard.requests.leaveRequest")}
                                 </SelectItem>
-                                <SelectItem value="شكوى">
-                                  {t("userDashboard.requests.complaint")}
-                                </SelectItem>
-                                <SelectItem value="طلب خاص">
-                                  {t("userDashboard.requests.specialRequest")}
-                                </SelectItem>
+                                <SelectItem value="استئذان">استئذان</SelectItem>
+                                <SelectItem value="عامة">عامة</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />

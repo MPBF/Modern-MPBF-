@@ -1033,7 +1033,20 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     try {
       const requests = await storage.getUserRequests();
 
-      res.json(requests);
+      // HR reviewers see all requests; everyone else sees only their own
+      const perms = (req as AuthRequest).user?.permissions || [];
+      const canViewAll =
+        perms.includes("admin") ||
+        (["view_hr", "edit_hr", "manage_hr"] as const).some((p) =>
+          hasPermission(perms, p as any),
+        );
+      if (canViewAll) {
+        return res.json(requests);
+      }
+      const selfId = getAuthUserId(req);
+      res.json(
+        (requests || []).filter((r: any) => r.user_id === selfId),
+      );
     } catch (error) {
       console.error("Error fetching user requests:", error);
       res.status(500).json({ message: "خطأ في جلب طلبات المستخدمين" });
@@ -1052,9 +1065,15 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
       if (!req.body.type) {
         return res.status(400).json({ message: "نوع الطلب مطلوب" });
       }
+      // Whitelist employee-editable fields; review fields are server-controlled
       const request = await storage.createUserRequest({
-        ...req.body,
+        type: String(req.body.type).slice(0, 50),
+        title: String(req.body.title || "").slice(0, 200) || "بدون عنوان",
+        description: req.body.description ?? null,
+        priority: req.body.priority ?? "عادي",
         user_id: userId,
+        status: "معلق",
+        date: new Date(),
       });
       res.status(201).json(request);
     } catch (error) {
@@ -1063,6 +1082,21 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     }
   });
 
+  // Whitelist review fields and stamp reviewer info when status changes
+  const buildRequestReviewUpdate = (req: Request): Record<string, any> => {
+    const allowed = ["status", "response", "priority", "title", "description", "type"];
+    const data: Record<string, any> = {};
+    for (const f of allowed) {
+      if (req.body?.[f] !== undefined) data[f] = req.body[f];
+    }
+    if (data.status && data.status !== "معلق") {
+      data.reviewed_by = (req as AuthRequest).user?.id ?? null;
+      data.reviewed_date = new Date();
+    }
+    data.updated_at = new Date();
+    return data;
+  };
+
   app.put(
     "/api/user-requests/:id",
     requireAuth,
@@ -1070,7 +1104,10 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "id");
-        const request = await storage.updateUserRequest(id, req.body);
+        const request = await storage.updateUserRequest(
+          id,
+          buildRequestReviewUpdate(req),
+        );
         res.json(request);
       } catch (error) {
         console.error("Error updating user request:", error);
@@ -1086,7 +1123,10 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "id");
-        const request = await storage.updateUserRequest(id, req.body);
+        const request = await storage.updateUserRequest(
+          id,
+          buildRequestReviewUpdate(req),
+        );
         res.json(request);
       } catch (error) {
         console.error("Error updating user request:", error);
