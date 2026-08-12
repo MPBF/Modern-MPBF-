@@ -291,6 +291,7 @@ import {
 import bcrypt from "bcrypt";
 import {
   eq,
+  ne,
   desc,
   and,
   sql,
@@ -528,6 +529,7 @@ export class UsersStorage extends StorageBase {
             profession: users.profession,
           })
           .from(users)
+          .where(or(isNull(users.status), ne(users.status, "deleted")))
           .orderBy(users.username);
       },
       "getSafeUsers",
@@ -833,7 +835,9 @@ export class UsersStorage extends StorageBase {
 
 
   async deleteUser(id: number): Promise<void> {
-    await db.update(users).set({ status: "inactive" }).where(eq(users.id, id));
+    // Soft delete: mark as 'deleted' so historical references (orders,
+    // attendance, ...) stay intact; deleted users are hidden from lists.
+    await db.update(users).set({ status: "deleted" }).where(eq(users.id, id));
   }
 
 
