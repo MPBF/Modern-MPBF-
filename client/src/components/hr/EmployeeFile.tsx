@@ -10,6 +10,8 @@ import {
   CalendarClock,
   CalendarDays,
   Clock,
+  Printer,
+  BarChart3,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -27,6 +29,15 @@ import {
   TableRow,
 } from "../ui/table";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { Checkbox } from "../ui/checkbox";
+import { Label } from "../ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   ViolationsTab,
   RewardsTab,
@@ -67,9 +78,25 @@ export default function EmployeeFile({ userId, onBack }: Props) {
     queryKey: ["/api/hr/attendance/summary", userId, { from, to }],
     enabled: !!from && !!to,
   });
+  const { data: ovRes, isLoading: ovLoading } = useQuery<{ data: any }>({
+    queryKey: [`/api/hr/employees/${userId}/overview?from=${from}&to=${to}`],
+    enabled: !!from && !!to,
+  });
 
   const file = fileRes?.data;
   const att = attRes?.data;
+  const ov = ovRes?.data;
+
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printSections, setPrintSections] = useState<Record<string, boolean>>({
+    stats: true,
+    attendance: true,
+    violations: false,
+    rewards: false,
+    requests: false,
+    production: false,
+  });
+  const [printing, setPrinting] = useState(false);
 
   const shiftName = (s: string | null) =>
     s === "day" ? L("نهارية", "Day") : s === "night" ? L("ليلية", "Night") : L("غير مجدول", "Unscheduled");
@@ -94,6 +121,179 @@ export default function EmployeeFile({ userId, onBack }: Props) {
       file.username
     : "";
 
+  const nf = (v: any) => Number(v ?? 0).toLocaleString("en-US");
+
+  const buildPrintHtml = async () => {
+    const esc = (s: any) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    const sec = printSections;
+    const parts: string[] = [];
+
+    parts.push(`
+      <div class="header">
+        <h1>تقرير الموظف</h1>
+        <div class="meta">
+          <div><b>الموظف:</b> ${esc(file?.display_name_ar || file?.display_name || file?.username)}</div>
+          <div><b>القسم:</b> ${esc(file?.section_name_ar || file?.section_name || "—")} &nbsp; <b>الدور:</b> ${esc(file?.role_name_ar || file?.role_name || "—")}</div>
+          <div><b>الفترة:</b> من ${esc(from)} إلى ${esc(to)}</div>
+          <div><b>تاريخ الطباعة:</b> ${new Date().toLocaleString("ar-SA")}</div>
+        </div>
+      </div>`);
+
+    if (sec.stats && ov) {
+      parts.push(`
+        <h2>الإحصائيات الشاملة</h2>
+        <table><tbody>
+          <tr><th>حضور</th><td>${nf(att?.totals?.presentDays)}</td><th>غياب</th><td>${nf(att?.totals?.absentDays)}</td><th>ساعات العمل</th><td>${nf(att?.totals?.totalWorkedHours)}</td><th>ساعات إضافية</th><td>${nf(att?.totals?.totalOvertimeHours)}</td></tr>
+          <tr><th>المخالفات</th><td>${nf(ov.violations?.count)}</td><th>خصومات المخالفات</th><td>${nf(ov.violations?.deductions)} ر.س</td><th>المكافآت</th><td>${nf(ov.rewards?.count)}</td><th>مبلغ المكافآت</th><td>${nf(ov.rewards?.amount)} ر.س</td></tr>
+          <tr><th>إجازات معتمدة</th><td>${nf(ov.requests?.leaves_approved)} (${nf(ov.requests?.leave_days_approved)} يوم)</td><th>استئذانات معتمدة</th><td>${nf(ov.requests?.permissions_approved)}</td><th>دورات تدريبية</th><td>${nf(ov.training?.count)}</td><th>عهد بحوزته</th><td>${nf(ov.custody?.handed)}</td></tr>
+          <tr><th>رولات فيلم</th><td>${nf(ov.production?.film_rolls)} (${nf(ov.production?.film_weight_kg)} كجم)</td><th>رولات طباعة</th><td>${nf(ov.production?.printed_rolls)}</td><th>رولات تقطيع</th><td>${nf(ov.production?.cut_rolls)} (${nf(ov.production?.cut_weight_kg)} كجم)</td><th>هدر</th><td>${nf(ov.production?.waste_kg)} كجم</td></tr>
+        </tbody></table>`);
+    }
+
+    if (sec.attendance && att?.days?.length) {
+      parts.push(`
+        <h2>سجل الحضور اليومي</h2>
+        <table>
+          <thead><tr><th>التاريخ</th><th>الوردية</th><th>الحالة</th><th>دخول</th><th>خروج</th><th>تأخير(د)</th><th>مبكر(د)</th><th>عمل(س)</th><th>إضافي(س)</th></tr></thead>
+          <tbody>${att.days
+            .map(
+              (d: any) =>
+                `<tr><td>${esc(d.date)}</td><td>${esc(shiftName(d.shift))}</td><td>${esc(d.status)}</td><td>${esc(fmtTime(d.checkIn))}</td><td>${esc(fmtTime(d.checkOut))}</td><td>${nf(d.lateMinutes)}</td><td>${nf(d.earlyLeaveMinutes)}</td><td>${nf(d.workedHours)}</td><td>${nf(d.overtimeHours)}</td></tr>`,
+            )
+            .join("")}</tbody>
+        </table>`);
+    }
+
+    const fetchJson = async (url: string) => {
+      try {
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch {
+        return null;
+      }
+    };
+    const inRange = (d: any) => {
+      if (!d) return false;
+      const t = String(d).slice(0, 10);
+      return t >= from && t <= to;
+    };
+
+    if (sec.violations) {
+      const v = await fetchJson(`/api/work-violations?employee_id=${userId}&from=${from}&to=${to}`);
+      const rows = (Array.isArray(v) ? v : v?.data || []).filter(Boolean);
+      parts.push(`
+        <h2>المخالفات</h2>
+        ${
+          rows.length
+            ? `<table><thead><tr><th>التاريخ</th><th>النوع</th><th>النقاط</th><th>الخصم</th><th>الحالة</th><th>ملاحظة</th></tr></thead><tbody>${rows
+                .map(
+                  (r: any) =>
+                    `<tr><td>${esc(String(r.occurred_at || r.date || "").slice(0, 10))}</td><td>${esc(r.type_name_ar || r.type_name || r.type || "—")}</td><td>${nf(r.points)}</td><td>${nf(r.deduction_amount)} ر.س</td><td>${r.waived ? "معفى" : "سارية"}</td><td>${esc(r.note || r.description || "")}</td></tr>`,
+                )
+                .join("")}</tbody></table>`
+            : `<div class="empty">لا توجد مخالفات في الفترة</div>`
+        }`);
+    }
+
+    if (sec.rewards) {
+      const rw = await fetchJson(`/api/hr/employees/${userId}/rewards`);
+      const rows = (rw?.data || []).filter((r: any) => inRange(r.date));
+      parts.push(`
+        <h2>المكافآت</h2>
+        ${
+          rows.length
+            ? `<table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الحالة</th><th>السبب</th></tr></thead><tbody>${rows
+                .map(
+                  (r: any) =>
+                    `<tr><td>${esc(String(r.date).slice(0, 10))}</td><td>${esc(r.reward_type)}</td><td>${nf(r.amount)} ر.س</td><td>${esc(r.status)}</td><td>${esc(r.reason || "")}</td></tr>`,
+                )
+                .join("")}</tbody></table>`
+            : `<div class="empty">لا توجد مكافآت في الفترة</div>`
+        }`);
+    }
+
+    if (sec.requests) {
+      const rq = await fetchJson(`/api/user-requests`);
+      const rows = (Array.isArray(rq) ? rq : rq?.data || []).filter(
+        (r: any) => r.user_id === userId && inRange(r.date || r.created_at),
+      );
+      parts.push(`
+        <h2>الطلبات والإجازات</h2>
+        ${
+          rows.length
+            ? `<table><thead><tr><th>التاريخ</th><th>النوع</th><th>العنوان</th><th>الحالة</th><th>الفترة/الوقت</th><th>الرد</th></tr></thead><tbody>${rows
+                .map((r: any) => {
+                  const period = r.leave_start_date
+                    ? `${String(r.leave_start_date).slice(0, 10)} ← ${String(r.leave_end_date || "").slice(0, 10)}`
+                    : r.permission_start_time
+                      ? `${r.permission_start_time} - ${r.permission_end_time || ""}`
+                      : "—";
+                  return `<tr><td>${esc(String(r.date || r.created_at || "").slice(0, 10))}</td><td>${esc(r.type)}</td><td>${esc(r.title)}</td><td>${esc(r.status)}</td><td>${esc(period)}</td><td>${esc(r.response || "")}</td></tr>`;
+                })
+                .join("")}</tbody></table>`
+            : `<div class="empty">لا توجد طلبات في الفترة</div>`
+        }`);
+    }
+
+    if (sec.production && ov) {
+      parts.push(`
+        <h2>الإنتاج</h2>
+        <table><thead><tr><th>المرحلة</th><th>عدد الرولات</th><th>الوزن (كجم)</th></tr></thead>
+        <tbody>
+          <tr><td>فيلم (إنشاء رولات)</td><td>${nf(ov.production?.film_rolls)}</td><td>${nf(ov.production?.film_weight_kg)}</td></tr>
+          <tr><td>طباعة</td><td>${nf(ov.production?.printed_rolls)}</td><td>—</td></tr>
+          <tr><td>تقطيع</td><td>${nf(ov.production?.cut_rolls)}</td><td>${nf(ov.production?.cut_weight_kg)}</td></tr>
+          <tr><td>الهدر (على رولاته)</td><td>—</td><td>${nf(ov.production?.waste_kg)}</td></tr>
+        </tbody></table>`);
+    }
+
+    return `<!DOCTYPE html>
+      <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير الموظف</title>
+      <style>
+        @page { size: A4; margin: 12mm; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; color: #111; font-size: 12px; }
+        .header { border-bottom: 2px solid #333; margin-bottom: 12px; padding-bottom: 8px; }
+        .header h1 { margin: 0 0 6px; font-size: 20px; }
+        .meta div { margin: 2px 0; }
+        h2 { font-size: 15px; margin: 16px 0 6px; border-right: 4px solid #2563eb; padding-right: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: right; }
+        th { background: #f3f4f6; }
+        .empty { color: #777; padding: 6px; }
+      </style></head><body>${parts.join("")}
+      <script>window.onload = function(){ window.print(); };</script>
+      </body></html>`;
+  };
+
+  const handlePrint = async () => {
+    // فتح النافذة فوراً ضمن نقرة المستخدم لتفادي مانع النوافذ المنبثقة
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert(L("يرجى السماح بالنوافذ المنبثقة للطباعة", "Please allow popups to print"));
+      return;
+    }
+    w.document.write(
+      `<html dir="rtl"><body style="font-family:sans-serif;padding:20px">${L("جارٍ تجهيز التقرير...", "Preparing report...")}</body></html>`,
+    );
+    setPrinting(true);
+    try {
+      const html = await buildPrintHtml();
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      setPrintOpen(false);
+    } catch {
+      w.close();
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const phase2Tabs: Array<{ key: string; ar: string; en: string }> = [
     { key: "violations", ar: "المخالفات", en: "Violations" },
     { key: "rewards", ar: "المكافآت", en: "Rewards" },
@@ -105,15 +305,26 @@ export default function EmployeeFile({ userId, onBack }: Props) {
 
   return (
     <div className="space-y-4">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onBack}
-        data-testid="button-back-to-directory"
-      >
-        <Back className="h-4 w-4 ml-1" />
-        {L("رجوع للدليل", "Back to directory")}
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          data-testid="button-back-to-directory"
+        >
+          <Back className="h-4 w-4 ml-1" />
+          {L("رجوع للدليل", "Back to directory")}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setPrintOpen(true)}
+          data-testid="button-print-report"
+        >
+          <Printer className="h-4 w-4 ml-1" />
+          {L("معاينة وطباعة تقرير", "Preview & print report")}
+        </Button>
+      </div>
 
       {fileLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -148,6 +359,39 @@ export default function EmployeeFile({ userId, onBack }: Props) {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BarChart3 className="h-4 w-4" />
+            {L("الإحصائيات الشاملة", "Overall Statistics")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ovLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : !ov ? (
+            <div className="py-4 text-center text-gray-500">
+              {L("لا توجد بيانات", "No data")}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+              <Stat label={L("المخالفات", "Violations")} value={ov.violations?.count} tone="red" />
+              <Stat label={L("خصومات (ر.س)", "Deductions (SAR)")} value={Number(ov.violations?.deductions || 0).toLocaleString()} tone="red" />
+              <Stat label={L("المكافآت", "Rewards")} value={ov.rewards?.count} tone="green" />
+              <Stat label={L("مبلغ المكافآت (ر.س)", "Rewards (SAR)")} value={Number(ov.rewards?.amount || 0).toLocaleString()} tone="green" />
+              <Stat label={L("إجازات معتمدة", "Approved leaves")} value={`${ov.requests?.leaves_approved ?? 0} (${ov.requests?.leave_days_approved ?? 0} ${L("يوم", "d")})`} tone="indigo" />
+              <Stat label={L("استئذانات معتمدة", "Approved permissions")} value={ov.requests?.permissions_approved} tone="indigo" />
+              <Stat label={L("طلبات معلقة", "Pending requests")} value={ov.requests?.pending} tone="amber" />
+              <Stat label={L("دورات تدريبية", "Trainings")} value={ov.training?.count} />
+              <Stat label={L("عهد بحوزته", "Custody items")} value={ov.custody?.handed} />
+              <Stat label={L("رولات فيلم", "Film rolls")} value={`${ov.production?.film_rolls ?? 0} (${Number(ov.production?.film_weight_kg || 0).toLocaleString()} ${L("كجم", "kg")})`} />
+              <Stat label={L("رولات طباعة", "Printed rolls")} value={ov.production?.printed_rolls} />
+              <Stat label={L("رولات تقطيع", "Cut rolls")} value={`${ov.production?.cut_rolls ?? 0} (${Number(ov.production?.cut_weight_kg || 0).toLocaleString()} ${L("كجم", "kg")})`} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -255,6 +499,58 @@ export default function EmployeeFile({ userId, onBack }: Props) {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog open={printOpen} onOpenChange={setPrintOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{L("طباعة تقرير الموظف", "Print employee report")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Label className="text-sm">{L("الفترة:", "Period:")}</Label>
+              <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
+              <span className="text-gray-400">—</span>
+              <Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className="w-auto" />
+            </div>
+            <div className="space-y-2">
+              {[
+                { key: "stats", ar: "الإحصائيات الشاملة", en: "Overall statistics" },
+                { key: "attendance", ar: "سجل الحضور اليومي", en: "Daily attendance" },
+                { key: "violations", ar: "المخالفات", en: "Violations" },
+                { key: "rewards", ar: "المكافآت", en: "Rewards" },
+                { key: "requests", ar: "الطلبات والإجازات", en: "Requests & leaves" },
+                { key: "production", ar: "الإنتاج", en: "Production" },
+              ].map((s) => (
+                <div key={s.key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`print-${s.key}`}
+                    checked={!!printSections[s.key]}
+                    onCheckedChange={(c) =>
+                      setPrintSections((prev) => ({ ...prev, [s.key]: c === true }))
+                    }
+                  />
+                  <Label htmlFor={`print-${s.key}`} className="text-sm font-normal">
+                    {L(s.ar, s.en)}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintOpen(false)}>
+              {L("إلغاء", "Cancel")}
+            </Button>
+            <Button
+              onClick={handlePrint}
+              disabled={printing || !Object.values(printSections).some(Boolean)}
+              data-testid="button-print-confirm"
+            >
+              <Printer className="h-4 w-4 ml-1" />
+              {printing ? L("جارٍ التجهيز...", "Preparing...") : L("معاينة وطباعة", "Preview & print")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

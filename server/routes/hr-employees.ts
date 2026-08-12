@@ -10,6 +10,8 @@ import ExcelJS from "exceljs";
 
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { notificationService, addJsonSheet, getAuthUserId } from "./shared";
+import { db } from "../db";
+import { sql } from "drizzle-orm";
 
 // Extracted from server/routes/hr.ts (registration order preserved; called
 // from registerHrRoutes). See server/routes/README.md.
@@ -52,6 +54,133 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
       } catch (error) {
         console.error("Error fetching employee file:", error);
         res.status(500).json({ message: "خطأ في جلب ملف الموظف" });
+      }
+    },
+  );
+
+  // نظرة شاملة على إحصائيات الموظف من جميع أجزاء النظام (لفترة محددة)
+  app.get(
+    "/api/hr/employees/:userId/overview",
+    requireAuth,
+    requirePermission("view_hr", "manage_hr"),
+    async (req, res) => {
+      try {
+        const userId = parseInt(req.params.userId, 10);
+        if (isNaN(userId) || userId <= 0) {
+          return res.status(400).json({ message: "معرف الموظف غير صحيح" });
+        }
+        const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+        const parseDay = (v: unknown): string | null => {
+          const s = String(v || "");
+          if (!dateRe.test(s)) return null;
+          const d = new Date(`${s}T00:00:00Z`);
+          if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s)
+            return null;
+          return s;
+        };
+        const from = parseDay(req.query.from);
+        const to = parseDay(req.query.to);
+        if (!from || !to || from > to) {
+          return res
+            .status(400)
+            .json({ message: "الفترة مطلوبة بصيغة YYYY-MM-DD وبترتيب صحيح" });
+        }
+        // نطاق نصف مفتوح [from, to + 1 يوم)
+        const toNextDate = new Date(`${to}T00:00:00Z`);
+        toNextDate.setUTCDate(toNextDate.getUTCDate() + 1);
+        const toNext = toNextDate.toISOString().slice(0, 10);
+        const fromTs = `${from} 00:00:00`;
+
+        const [violations, rewardsAgg, requestsAgg, training, custody, production] =
+          await Promise.all([
+            db.execute(sql`
+              SELECT count(*)::int AS count,
+                     COALESCE(SUM(points),0)::int AS points,
+                     COALESCE(SUM(CASE WHEN waived THEN 0 ELSE deduction_amount END),0)::numeric AS deductions,
+                     count(*) FILTER (WHERE waived)::int AS waived_count
+              FROM work_violations
+              WHERE employee_id = ${userId}
+                AND occurred_at >= ${fromTs}::timestamp
+                AND occurred_at < ${toNext}::timestamp
+            `),
+            db.execute(sql`
+              SELECT count(*)::int AS count,
+                     COALESCE(SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END),0)::numeric AS amount
+              FROM rewards
+              WHERE employee_id = ${userId}
+                AND date BETWEEN ${from}::date AND ${to}::date
+            `),
+            db.execute(sql`
+              SELECT
+                count(*)::int AS total,
+                count(*) FILTER (WHERE type = 'إجازة')::int AS leaves,
+                count(*) FILTER (WHERE type = 'إجازة' AND status = 'موافق')::int AS leaves_approved,
+                COALESCE(SUM(CASE WHEN type = 'إجازة' AND status = 'موافق'
+                  AND leave_start_date IS NOT NULL AND leave_end_date IS NOT NULL
+                  THEN (leave_end_date::date - leave_start_date::date) + 1 ELSE 0 END),0)::int AS leave_days_approved,
+                count(*) FILTER (WHERE type = 'استئذان')::int AS permissions,
+                count(*) FILTER (WHERE type = 'استئذان' AND status = 'موافق')::int AS permissions_approved,
+                count(*) FILTER (WHERE status = 'معلق')::int AS pending
+              FROM user_requests
+              WHERE user_id = ${userId}
+                AND COALESCE(date, created_at) >= ${fromTs}::timestamp
+                AND COALESCE(date, created_at) < ${toNext}::timestamp
+            `),
+            db.execute(sql`
+              SELECT count(*)::int AS count,
+                     count(*) FILTER (WHERE status = 'completed')::int AS completed
+              FROM training_records
+              WHERE employee_id = ${userId}
+                AND date BETWEEN ${from}::date AND ${to}::date
+            `),
+            db.execute(sql`
+              SELECT count(*)::int AS total,
+                     count(*) FILTER (WHERE status = 'handed')::int AS handed
+              FROM employee_custody
+              WHERE employee_id = ${userId}
+            `),
+            db.execute(sql`
+              SELECT
+                count(*) FILTER (WHERE created_by = ${userId}
+                  AND created_at >= ${fromTs}::timestamp AND created_at < ${toNext}::timestamp)::int AS film_rolls,
+                COALESCE(SUM(CASE WHEN created_by = ${userId}
+                  AND created_at >= ${fromTs}::timestamp AND created_at < ${toNext}::timestamp
+                  THEN weight_kg ELSE 0 END),0)::numeric AS film_weight_kg,
+                count(*) FILTER (WHERE printed_by = ${userId} AND printed_at IS NOT NULL
+                  AND printed_at >= ${fromTs}::timestamp AND printed_at < ${toNext}::timestamp)::int AS printed_rolls,
+                count(*) FILTER (WHERE cut_by = ${userId} AND cut_completed_at IS NOT NULL
+                  AND cut_completed_at >= ${fromTs}::timestamp AND cut_completed_at < ${toNext}::timestamp)::int AS cut_rolls,
+                COALESCE(SUM(CASE WHEN cut_by = ${userId} AND cut_completed_at IS NOT NULL
+                  AND cut_completed_at >= ${fromTs}::timestamp AND cut_completed_at < ${toNext}::timestamp
+                  THEN cut_weight_total_kg ELSE 0 END),0)::numeric AS cut_weight_kg,
+                COALESCE(SUM(CASE WHEN created_by = ${userId}
+                  AND created_at >= ${fromTs}::timestamp AND created_at < ${toNext}::timestamp
+                  THEN waste_kg ELSE 0 END),0)::numeric AS waste_kg
+              FROM rolls
+              WHERE (created_by = ${userId} OR printed_by = ${userId} OR cut_by = ${userId})
+                AND (
+                  created_at >= ${fromTs}::timestamp AND created_at < ${toNext}::timestamp
+                  OR (printed_at IS NOT NULL AND printed_at >= ${fromTs}::timestamp AND printed_at < ${toNext}::timestamp)
+                  OR (cut_completed_at IS NOT NULL AND cut_completed_at >= ${fromTs}::timestamp AND cut_completed_at < ${toNext}::timestamp)
+                )
+            `),
+          ]);
+
+        res.json({
+          data: {
+            from,
+            to,
+            violations: violations.rows?.[0] || {},
+            rewards: rewardsAgg.rows?.[0] || {},
+            requests: requestsAgg.rows?.[0] || {},
+            training: training.rows?.[0] || {},
+            custody: custody.rows?.[0] || {},
+            production: production.rows?.[0] || {},
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching employee overview:", error);
+        res.status(500).json({ message: "خطأ في جلب إحصائيات الموظف" });
       }
     },
   );
