@@ -365,12 +365,32 @@ function botSystemPrompt(bot: BotUser): string {
 //
 // يُجلب كعينة صغيرة بعبارات SELECT فقط ويُمرَّر في البرومبت كمرجع واقعي.
 // لا يجري هذا المسار أي كتابة على جداول customers أو customer_products أو orders.
+//
+// ⚠️ سياسة الخصوصية للحقول المسموح تمريرها إلى البرومبت (قائمة بيضاء):
+//   - customers:          name / name_ar (اسم العرض)، city (المدينة) فقط.
+//   - customer_products:  size_caption، raw_material فقط.
+//   - orders:             order_number، status + اسم العميل المرتبط فقط.
+// يُمنع منعاً باتاً تمرير أي حقل آخر — خصوصاً: phone، tax_number، address،
+// unified_number، unique_customer_number، commercial_name، code، user_id،
+// plate_drawer_code، sales_rep_id — لأن رسائل البوتات تظهر لكل موظف داخل النظام.
+// عند إضافة حقول جديدة للسياق حدِّث هذه القائمة وحدِّث اختبار
+// tests/system-user-context-privacy.test.ts الذي يتحقق آلياً من عدم التسريب.
+export const BUSINESS_CONTEXT_ALLOWED_FIELDS = {
+  customers: ["name", "name_ar", "city"],
+  customer_products: ["size_caption", "raw_material"],
+  orders: ["order_number", "status", "customer_name"],
+} as const;
 
 type BusinessContext = { text: string; orderNumbers: Set<string> };
 let businessContextCache: { ctx: BusinessContext; fetchedAt: number } | null = null;
 const BUSINESS_CONTEXT_TTL_MS = 10 * 60 * 1000;
 
-async function getBusinessContext(): Promise<BusinessContext> {
+/** لأغراض الاختبار فقط: تفريغ ذاكرة التخزين المؤقت للسياق المرجعي. */
+export function resetBusinessContextCacheForTests(): void {
+  businessContextCache = null;
+}
+
+export async function getBusinessContext(): Promise<BusinessContext> {
   const now = Date.now();
   if (businessContextCache && now - businessContextCache.fetchedAt < BUSINESS_CONTEXT_TTL_MS) {
     return businessContextCache.ctx;
