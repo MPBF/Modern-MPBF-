@@ -1,5 +1,5 @@
 // ⚙️ صفحة إعدادات مستخدمي النظام الآليين (داخل صفحة الإعدادات)
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bot, Play, Save } from "lucide-react";
 
@@ -116,16 +116,41 @@ function NumberField({
 function BotSettingsCard({
   bot,
   allUsers,
+  usersLoading,
+  usersError,
 }: {
   bot: any;
   allUsers: any[];
+  usersLoading: boolean;
+  usersError: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<BotSettingsForm>(() => toForm(bot.settings));
+  const [dirty, setDirty] = useState(false);
+  // رقم مراجعة التعديلات: لا نعتبر النموذج "نظيفاً" بعد الحفظ إلا إذا لم يعدّل المستخدم شيئاً أثناء الطلب
+  const editRevision = useRef(0);
+  const submittedRevision = useRef(0);
+
+  // مزامنة النموذج مع البيانات المعاد جلبها ما لم توجد تعديلات غير محفوظة
+  const settingsJson = JSON.stringify(bot.settings ?? null);
+  const lastSynced = useRef(settingsJson);
+  useEffect(() => {
+    if (settingsJson !== lastSynced.current) {
+      lastSynced.current = settingsJson;
+      if (!dirty) setForm(toForm(bot.settings));
+    }
+  }, [settingsJson, dirty, bot.settings]);
+
+  const setFormDirty: typeof setForm = (v) => {
+    editRevision.current += 1;
+    setDirty(true);
+    setForm(v);
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      submittedRevision.current = editRevision.current;
       const res = await fetch(`/api/system-users/${bot.id}/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -138,18 +163,26 @@ function BotSettingsCard({
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "فشل الحفظ");
+        const err = await res.json().catch(() => ({}) as any);
+        let msg = err.message || "فشل الحفظ";
+        if (err.errors && typeof err.errors === "object") {
+          const details = Object.values(err.errors).flat().filter(Boolean);
+          if (details.length) msg += ": " + details.join("، ");
+        }
+        throw new Error(msg);
       }
       return res.json();
     },
     onSuccess: () => {
+      // إذا عدّل المستخدم شيئاً بعد إرسال الحفظ، تبقى التعديلات غير المحفوظة محمية
+      if (editRevision.current === submittedRevision.current) setDirty(false);
       queryClient.invalidateQueries({ queryKey: ["/api/system-users"] });
-      toast({ title: "تم حفظ إعدادات المستخدم" });
+      toast({ title: "تم حفظ إعدادات المستخدم بنجاح" });
     },
     onError: (e: any) => {
       toast({
-        title: e?.message || "خطأ في حفظ الإعدادات",
+        title: "لم يتم الحفظ",
+        description: e?.message || "خطأ في حفظ الإعدادات",
         variant: "destructive",
       });
     },
@@ -157,7 +190,7 @@ function BotSettingsCard({
 
   const name = bot.display_name_ar || bot.display_name || bot.username;
   const toggleDay = (d: number) => {
-    setForm((f) => ({
+    setFormDirty((f) => ({
       ...f,
       allowed_days: f.allowed_days.includes(d)
         ? f.allowed_days.filter((x) => x !== d)
@@ -183,7 +216,7 @@ function BotSettingsCard({
             <Switch
               id={`enabled-${bot.id}`}
               checked={form.enabled}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))}
+              onCheckedChange={(v) => setFormDirty((f) => ({ ...f, enabled: v }))}
             />
           </div>
         </div>
@@ -217,7 +250,7 @@ function BotSettingsCard({
             <Select
               value={form.shift}
               onValueChange={(v) =>
-                setForm((f) => ({ ...f, shift: v as "day" | "night" }))
+                setFormDirty((f) => ({ ...f, shift: v as "day" | "night" }))
               }
             >
               <SelectTrigger className="h-8 mt-1">
@@ -232,33 +265,33 @@ function BotSettingsCard({
           <NumberField
             label="احتمال الغياب"
             value={form.absence_pct}
-            onChange={(n) => setForm((f) => ({ ...f, absence_pct: n }))}
+            onChange={(n) => setFormDirty((f) => ({ ...f, absence_pct: n }))}
             suffix="%"
           />
           <NumberField
             label="احتمال التأخير"
             value={form.late_pct}
-            onChange={(n) => setForm((f) => ({ ...f, late_pct: n }))}
+            onChange={(n) => setFormDirty((f) => ({ ...f, late_pct: n }))}
             suffix="%"
           />
           <NumberField
             label="أقصى تأخير"
             value={form.late_max_minutes}
-            onChange={(n) => setForm((f) => ({ ...f, late_max_minutes: n }))}
+            onChange={(n) => setFormDirty((f) => ({ ...f, late_max_minutes: n }))}
             max={600}
             suffix="دقيقة"
           />
           <NumberField
             label="احتمال الانصراف المبكر"
             value={form.early_leave_pct}
-            onChange={(n) => setForm((f) => ({ ...f, early_leave_pct: n }))}
+            onChange={(n) => setFormDirty((f) => ({ ...f, early_leave_pct: n }))}
             suffix="%"
           />
           <NumberField
             label="أقصى انصراف مبكر"
             value={form.early_leave_max_minutes}
             onChange={(n) =>
-              setForm((f) => ({ ...f, early_leave_max_minutes: n }))
+              setFormDirty((f) => ({ ...f, early_leave_max_minutes: n }))
             }
             max={600}
             suffix="دقيقة"
@@ -267,14 +300,14 @@ function BotSettingsCard({
             label="رسائل مبادَرة يومياً"
             value={form.daily_message_target}
             onChange={(n) =>
-              setForm((f) => ({ ...f, daily_message_target: n }))
+              setFormDirty((f) => ({ ...f, daily_message_target: n }))
             }
             max={20}
           />
           <NumberField
             label="حد الرسائل اليومي"
             value={form.daily_message_cap}
-            onChange={(n) => setForm((f) => ({ ...f, daily_message_cap: n }))}
+            onChange={(n) => setFormDirty((f) => ({ ...f, daily_message_cap: n }))}
             max={50}
           />
         </div>
@@ -285,7 +318,7 @@ function BotSettingsCard({
           <Textarea
             value={form.persona}
             onChange={(e) =>
-              setForm((f) => ({ ...f, persona: e.target.value }))
+              setFormDirty((f) => ({ ...f, persona: e.target.value }))
             }
             placeholder="مثال: مشرف وردية قسم الفيلم، يتابع الإنتاج اليومي والجودة ويهتم بتقليل الهالك…"
             rows={2}
@@ -306,7 +339,7 @@ function BotSettingsCard({
             <Switch
               checked={form.weekly_report_enabled}
               onCheckedChange={(v) =>
-                setForm((f) => ({ ...f, weekly_report_enabled: v }))
+                setFormDirty((f) => ({ ...f, weekly_report_enabled: v }))
               }
               data-testid={`weekly-report-${bot.id}`}
             />
@@ -321,25 +354,41 @@ function BotSettingsCard({
                     : "none"
                 }
                 onValueChange={(v) =>
-                  setForm((f) => ({
+                  setFormDirty((f) => ({
                     ...f,
                     weekly_report_recipient_id:
                       v === "none" ? null : Number(v),
                   }))
                 }
               >
-                <SelectTrigger className="h-8 mt-1">
+                <SelectTrigger
+                  className="h-8 mt-1"
+                  data-testid={`recipient-trigger-${bot.id}`}
+                >
                   <SelectValue placeholder="اختر المستلم" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent dir="rtl">
                   <SelectItem value="none">غير محدد</SelectItem>
-                  {allUsers
-                    .filter((u) => u.id !== bot.id)
-                    .map((u) => (
-                      <SelectItem key={u.id} value={String(u.id)}>
-                        {u.display_name_ar || u.display_name || u.username}
-                      </SelectItem>
-                    ))}
+                  {usersLoading ? (
+                    <div className="px-3 py-2 text-xs text-gray-500">
+                      جارٍ تحميل المستخدمين…
+                    </div>
+                  ) : usersError ? (
+                    <div className="px-3 py-2 text-xs text-red-600">
+                      تعذر تحميل قائمة المستخدمين — أعد تحميل الصفحة
+                    </div>
+                  ) : (
+                    allUsers
+                      .filter((u) => u.id !== bot.id)
+                      .map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.display_name_ar ||
+                            u.display_name ||
+                            u.username ||
+                            `مستخدم ${u.id}`}
+                        </SelectItem>
+                      ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -373,9 +422,19 @@ export function SystemUsersSettingsContent() {
     queryKey: ["/api/system-users"],
   });
 
-  const { data: allUsers = [] } = useQuery<any[]>({
+  const {
+    data: allUsersRaw = [],
+    isLoading: usersLoading,
+    isError: usersError,
+  } = useQuery<any[]>({
     queryKey: ["/api/users"],
   });
+  // حماية من أي شكل استجابة غير متوقع
+  const allUsers = Array.isArray(allUsersRaw)
+    ? allUsersRaw
+    : Array.isArray((allUsersRaw as any)?.data)
+      ? (allUsersRaw as any).data
+      : [];
 
   const toggleSimulation = useMutation({
     mutationFn: async (enabled: boolean) => {
@@ -468,7 +527,13 @@ export function SystemUsersSettingsContent() {
         </Card>
       ) : (
         bots.map((bot) => (
-          <BotSettingsCard key={bot.id} bot={bot} allUsers={allUsers} />
+          <BotSettingsCard
+            key={bot.id}
+            bot={bot}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            usersError={usersError}
+          />
         ))
       )}
     </div>
