@@ -750,6 +750,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           "birth_date",
           "service_start_date",
           "profession",
+          "is_system_user",
         ];
         const candidate: Record<string, any> = {
           role_id: roleId,
@@ -852,6 +853,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           "birth_date",
           "service_start_date",
           "profession",
+          "is_system_user",
         ];
         const candidate: Record<string, any> = {
           role_id: roleId,

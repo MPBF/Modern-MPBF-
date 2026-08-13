@@ -52,6 +52,7 @@ import {
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { Switch } from "../../components/ui/switch";
 import { SearchableSelect } from "../../components/ui/searchable-select";
 import {
   Select,
@@ -473,6 +474,7 @@ export default function Definitions() {
     birth_date: "",
     service_start_date: "",
     profession: "",
+    is_system_user: false,
   });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -2439,6 +2441,7 @@ export default function Definitions() {
       birth_date: "",
       service_start_date: "",
       profession: "",
+      is_system_user: false,
     });
     setMasterBatchColorForm({
       id: "",
@@ -4169,8 +4172,16 @@ export default function Definitions() {
                                         {u.username || "-"}
                                       </td>
                                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
-                                        <div className="font-medium">
-                                          {u.display_name_ar || "-"}
+                                        <div className="font-medium flex items-center justify-center gap-1.5">
+                                          <span>{u.display_name_ar || "-"}</span>
+                                          {u.is_system_user && (
+                                            <Badge
+                                              variant="secondary"
+                                              className="text-[10px] px-1.5 py-0 bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+                                            >
+                                              مستخدم نظام
+                                            </Badge>
+                                          )}
                                         </div>
                                         <div className="text-xs text-gray-500 dark:text-gray-400" dir="ltr">
                                           {u.display_name || u.name || "-"}
@@ -4229,6 +4240,7 @@ export default function Definitions() {
                                                   birth_date: u.birth_date ? String(u.birth_date).slice(0, 10) : "",
                                                   service_start_date: u.service_start_date ? String(u.service_start_date).slice(0, 10) : "",
                                                   profession: u.profession || "",
+                                                  is_system_user: !!u.is_system_user,
                                                 });
                                                 setSelectedTab("users");
                                                 setShowPassword(false);
@@ -7364,6 +7376,25 @@ export default function Definitions() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="col-span-2 flex items-center justify-between rounded-lg border p-3 mt-1">
+                    <div>
+                      <Label htmlFor="is_system_user" className="font-medium">
+                        مستخدم نظام
+                      </Label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        مستخدم آلي يحاكي الحضور والمراسلات والتقارير تلقائياً
+                        (يُضبط من الإعدادات ← مستخدمو النظام)
+                      </p>
+                    </div>
+                    <Switch
+                      id="is_system_user"
+                      checked={userForm.is_system_user}
+                      onCheckedChange={(checked) =>
+                        setUserForm({ ...userForm, is_system_user: checked })
+                      }
+                      data-testid="switch-system-user"
+                    />
                   </div>
                 </div>
               </div>

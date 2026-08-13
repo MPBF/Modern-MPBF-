@@ -184,6 +184,8 @@ import { registerMiscRoutes } from "./routes/misc";
 import { registerWarehouseRoutes } from "./routes/warehouse";
 import { registerMixingRoutes } from "./routes/mixing";
 import { registerHrRoutes } from "./routes/hr";
+import { registerSystemUsersRoutes } from "./routes/system-users";
+import { startSystemUserSimulator } from "./services/system-user-simulator";
 import { registerMaintenanceRoutes } from "./routes/maintenance";
 import { registerQualityRoutes } from "./routes/quality";
 import { registerMobileRoutes } from "./routes/mobile";
@@ -642,6 +644,8 @@ export async function registerRoutes(
   await registerWarehouseRoutes(app, ctx);
   await registerMixingRoutes(app, ctx);
   await registerHrRoutes(app, ctx);
+  await registerSystemUsersRoutes(app, ctx);
+  startSystemUserSimulator();
   await registerMaintenanceRoutes(app, ctx);
   await registerQualityRoutes(app, ctx);
   await registerMobileRoutes(app, ctx);

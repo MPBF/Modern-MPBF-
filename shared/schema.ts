@@ -136,6 +136,7 @@ export const users = pgTable(
     section_id: integer("section_id"),
     status: varchar("status", { length: 20 }).default("active"), // active / suspended / deleted
     must_change_password: boolean("must_change_password").default(false),
+    is_system_user: boolean("is_system_user").notNull().default(false), // مستخدم نظام (آلي/محاكى)
     created_at: timestamp("created_at").defaultNow(),
 
     // بيانات الموظف الإضافية (غير إلزامية)
@@ -1252,6 +1253,74 @@ export const shift_assignments = pgTable(
     ),
   ],
 );
+
+// 🤖 إعدادات مستخدمي النظام الآليين (محاكاة الحضور والمراسلات والتقارير)
+export const system_user_settings = pgTable(
+  "system_user_settings",
+  {
+    id: serial("id").primaryKey(),
+    user_id: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    enabled: boolean("enabled").notNull().default(true), // تفعيل المحاكاة لهذا المستخدم
+    allowed_days: text("allowed_days").notNull().default("[0,1,2,3,4]"), // JSON: أيام الأسبوع المسموحة (0=الأحد .. 6=السبت)
+    shift: varchar("shift", { length: 10 }).notNull().default("day"), // day | night
+    absence_pct: integer("absence_pct").notNull().default(10), // احتمال الغياب %
+    late_pct: integer("late_pct").notNull().default(20), // احتمال التأخير %
+    late_max_minutes: integer("late_max_minutes").notNull().default(45),
+    early_leave_pct: integer("early_leave_pct").notNull().default(20), // احتمال الانصراف المبكر %
+    early_leave_max_minutes: integer("early_leave_max_minutes")
+      .notNull()
+      .default(60),
+    persona: text("persona"), // وصف الدور/الشخصية لتوليد الرسائل والتقارير
+    daily_message_target: integer("daily_message_target").notNull().default(2), // رسائل مبادَرة يومياً
+    daily_message_cap: integer("daily_message_cap").notNull().default(10), // حد أقصى يومي (مبادَرة + ردود)
+    weekly_report_enabled: boolean("weekly_report_enabled")
+      .notNull()
+      .default(false),
+    weekly_report_recipient_id: integer("weekly_report_recipient_id").references(
+      () => users.id,
+    ),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_system_user_settings_user").on(table.user_id),
+  ],
+);
+
+export type SystemUserSettings = typeof system_user_settings.$inferSelect;
+
+const pctSchema = z.coerce.number().int().min(0).max(100);
+export const updateSystemUserSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    allowed_days: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    shift: z.enum(["day", "night"]).optional(),
+    absence_pct: pctSchema.optional(),
+    late_pct: pctSchema.optional(),
+    late_max_minutes: z.coerce.number().int().min(0).max(600).optional(),
+    early_leave_pct: pctSchema.optional(),
+    early_leave_max_minutes: z.coerce.number().int().min(0).max(600).optional(),
+    persona: z.string().max(2000).optional().nullable(),
+    daily_message_target: z.coerce.number().int().min(0).max(20).optional(),
+    daily_message_cap: z.coerce.number().int().min(0).max(50).optional(),
+    weekly_report_enabled: z.boolean().optional(),
+    weekly_report_recipient_id: z
+      .union([z.coerce.number().int().positive(), z.null()])
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (d) =>
+      d.daily_message_target === undefined ||
+      d.daily_message_cap === undefined ||
+      d.daily_message_target <= d.daily_message_cap,
+    {
+      message: "عدد الرسائل المبادَرة يجب ألا يتجاوز الحد اليومي",
+      path: ["daily_message_target"],
+    },
+  );
 
 // 📋 جدول المخالفات
 export const violations = pgTable("violations", {
@@ -2900,6 +2969,7 @@ export const createUserApiSchema = z
     birth_date: emptyToNull(isoDateString().nullable()).optional(),
     service_start_date: emptyToNull(isoDateString().nullable()).optional(),
     profession: emptyToNull(z.string().max(100).nullable()).optional(),
+    is_system_user: z.boolean().optional(),
   })
   .strict();
 
@@ -2920,6 +2990,7 @@ export const updateUserSchema = z
     birth_date: emptyToNull(isoDateString().nullable()).optional(),
     service_start_date: emptyToNull(isoDateString().nullable()).optional(),
     profession: emptyToNull(z.string().max(100).nullable()).optional(),
+    is_system_user: z.boolean().optional(),
   })
   .strict();
 

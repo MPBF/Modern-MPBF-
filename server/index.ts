@@ -1332,6 +1332,36 @@ function sanitizeResponseForLogging(response: any): any {
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_shift_assignment_user_month
         ON shift_assignments (user_id, year, month)
       `);
+      // مستخدمو النظام الآليون: علم على جدول المستخدمين + جدول إعدادات المحاكاة.
+      await db.execute(sql`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS is_system_user boolean NOT NULL DEFAULT false
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS system_user_settings (
+          id serial PRIMARY KEY,
+          user_id integer NOT NULL REFERENCES users(id),
+          enabled boolean NOT NULL DEFAULT true,
+          allowed_days text NOT NULL DEFAULT '[0,1,2,3,4]',
+          shift varchar(10) NOT NULL DEFAULT 'day',
+          absence_pct integer NOT NULL DEFAULT 10,
+          late_pct integer NOT NULL DEFAULT 20,
+          late_max_minutes integer NOT NULL DEFAULT 45,
+          early_leave_pct integer NOT NULL DEFAULT 20,
+          early_leave_max_minutes integer NOT NULL DEFAULT 60,
+          persona text,
+          daily_message_target integer NOT NULL DEFAULT 2,
+          daily_message_cap integer NOT NULL DEFAULT 10,
+          weekly_report_enabled boolean NOT NULL DEFAULT false,
+          weekly_report_recipient_id integer REFERENCES users(id),
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uniq_system_user_settings_user
+        ON system_user_settings (user_id)
+      `);
       // Extend violations with disciplinary penalty + status fields.
       await db.execute(sql`
         ALTER TABLE violations

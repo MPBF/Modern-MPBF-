@@ -89,6 +89,7 @@ import {
 import { McpSettingsContent } from "./mcp-settings";
 import { ExternalDbSettingsContent } from "./external-db-settings";
 import { SystemMonitoringContent } from "./system-monitoring";
+import { SystemUsersSettingsContent } from "./system-users-settings";
 
 const SECTIONS = [
   { id: "system", icon: SettingsIcon, label: "النظام" },
@@ -103,6 +104,7 @@ const SECTIONS = [
   { id: "mcp", icon: Plug, label: "إعدادات MCP" },
   { id: "modern-agent", icon: Bot, label: "الوكيل الذكي مودرن" },
   { id: "external-db", icon: HardDrive, label: "قاعدة بيانات خارجية" },
+  { id: "system-users", icon: Bot, label: "مستخدمو النظام" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -244,6 +246,7 @@ export default function Settings() {
             </div>
           )}
           {activeSection === "external-db" && <ExternalDbSettingsContent />}
+          {activeSection === "system-users" && <SystemUsersSettingsContent />}
         </main>
       </div>
     </PageLayout>
