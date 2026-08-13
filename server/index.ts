@@ -1362,6 +1362,23 @@ function sanitizeResponseForLogging(response: any): any {
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_system_user_settings_user
         ON system_user_settings (user_id)
       `);
+      // منع تكرار سجلات حضور المحاكاة لنفس المستخدم في نفس اليوم:
+      // تسجيل الحضور الذاتي الحقيقي قد يُدخل صفوفاً متعددة لليوم الواحد،
+      // لذا القيد الفريد جزئي على صفوف المحاكاة فقط (notes = 'مستخدم نظام (محاكاة)').
+      await db.execute(sql`
+        DELETE FROM attendance a
+        USING attendance b
+        WHERE a.notes = 'مستخدم نظام (محاكاة)'
+          AND b.notes = 'مستخدم نظام (محاكاة)'
+          AND a.user_id = b.user_id
+          AND a.date = b.date
+          AND a.id > b.id
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uniq_attendance_sim_user_date
+        ON attendance (user_id, date)
+        WHERE notes = 'مستخدم نظام (محاكاة)'
+      `);
       // Extend violations with disciplinary penalty + status fields.
       await db.execute(sql`
         ALTER TABLE violations

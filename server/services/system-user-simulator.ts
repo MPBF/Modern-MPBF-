@@ -257,16 +257,24 @@ async function processAttendance(bot: BotUser, now: Date, force: boolean) {
       0,
       Math.round((checkInTime.getTime() - start.getTime()) / 60000),
     );
-    await db.insert(attendance).values({
-      user_id: bot.id,
-      status: "حاضر",
-      check_in_time: checkInTime,
-      shift_type: shiftTypeAr,
-      late_minutes: lateMinutes,
-      date: dateStr,
-      created_by: bot.id,
-      notes: "مستخدم نظام (محاكاة)",
-    });
+    await db
+      .insert(attendance)
+      .values({
+        user_id: bot.id,
+        status: "حاضر",
+        check_in_time: checkInTime,
+        shift_type: shiftTypeAr,
+        late_minutes: lateMinutes,
+        date: dateStr,
+        created_by: bot.id,
+        notes: "مستخدم نظام (محاكاة)",
+      })
+      // يطابق الفهرس الجزئي uniq_attendance_sim_user_date (server/index.ts)
+      // لمنع ازدواج سجل المحاكاة لنفس المستخدم/اليوم مهما تزامنت العمليات.
+      .onConflictDoNothing({
+        target: [attendance.user_id, attendance.date],
+        where: sql`notes = 'مستخدم نظام (محاكاة)'`,
+      });
     return;
   }
 
