@@ -13,6 +13,7 @@ export default {
   moduleNameMapper: {
     "^@shared/(.*)$": "<rootDir>/shared/$1",
     "^exceljs$": "<rootDir>/tests/__mocks__/exceljs.cjs",
+    "^multer$": "<rootDir>/tests/__mocks__/multer.cjs",
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   // Transform ESM-only packages that Jest can't handle natively
