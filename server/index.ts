@@ -815,6 +815,14 @@ function sanitizeResponseForLogging(response: any): any {
         CREATE INDEX IF NOT EXISTS idx_internal_messages_root
         ON internal_messages (root_id)
       `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_orders_created_at
+        ON orders (created_at)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_customers_created_at
+        ON customers (created_at)
+      `);
       // Ensure optional employee-info columns on users (existing DBs). Idempotent.
       await db.execute(sql`
         ALTER TABLE users

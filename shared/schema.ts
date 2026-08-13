@@ -286,6 +286,10 @@ export const customers = pgTable(
       "tax_number_length",
       sql`${table.tax_number} IS NULL OR (${table.tax_number} ~ '^[0-9]+$' AND LENGTH(${table.tax_number}) BETWEEN 10 AND 20)`,
     ),
+    // Bounded recent-customers retrieval (bot reference context)
+    idx_customers_created_at: index("idx_customers_created_at").on(
+      table.created_at,
+    ),
   }),
 );
 
@@ -496,6 +500,8 @@ export const orders = pgTable(
     idx_orders_customer_id: index("idx_orders_customer_id").on(
       table.customer_id,
     ),
+    // Recent-orders retrieval (bot reference context, dashboards)
+    idx_orders_created_at: index("idx_orders_created_at").on(table.created_at),
   }),
 );
 
