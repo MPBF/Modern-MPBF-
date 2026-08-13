@@ -7,6 +7,7 @@ import { and, desc, eq, isNull, or, sql, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   requireAuth,
+  requireAdmin,
   requirePermission,
   type AuthRequest,
 } from "../middleware/auth";
@@ -95,6 +96,99 @@ export async function registerMessagesRoutes(app: Express, _ctx: any) {
       res.status(500).json({ message: "خطأ في جلب الرسائل" });
     }
   });
+
+  // سجل المراسلات العام (للمدير فقط): جميع الرسائل بين كل المستخدمين
+  app.get(
+    "/api/messages/all",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const limit = Math.min(
+          Math.max(parseInt(String(req.query.limit)) || 50, 1),
+          200,
+        );
+        const offset = Math.max(parseInt(String(req.query.offset)) || 0, 0);
+        const search = String(req.query.search || "").trim();
+        const senderId = parseInt(String(req.query.sender_id)) || 0;
+        const recipientId = parseInt(String(req.query.recipient_id)) || 0;
+        const category = String(req.query.category || "").trim();
+
+        const conditions = [] as any[];
+        if (search) {
+          const pattern = `%${search.replace(/[%_\\]/g, "\\$&")}%`;
+          conditions.push(
+            or(
+              sql`${internal_messages.subject} ILIKE ${pattern}`,
+              sql`${internal_messages.body} ILIKE ${pattern}`,
+            ),
+          );
+        }
+        if (senderId > 0)
+          conditions.push(eq(internal_messages.sender_id, senderId));
+        if (recipientId > 0)
+          conditions.push(eq(internal_messages.recipient_id, recipientId));
+        if (category && (ALL_CATEGORIES as readonly string[]).includes(category))
+          conditions.push(eq(internal_messages.category, category));
+        const whereClause =
+          conditions.length > 0 ? and(...conditions) : undefined;
+
+        const senderUsers = alias(users, "msg_sender");
+        const recipientUsers = alias(users, "msg_recipient");
+        const baseQuery = db
+          .select({
+            id: internal_messages.id,
+            sender_id: internal_messages.sender_id,
+            recipient_id: internal_messages.recipient_id,
+            subject: internal_messages.subject,
+            body: internal_messages.body,
+            category: internal_messages.category,
+            parent_id: internal_messages.parent_id,
+            root_id: internal_messages.root_id,
+            read_at: internal_messages.read_at,
+            created_at: internal_messages.created_at,
+            sender_deleted: internal_messages.sender_deleted,
+            recipient_deleted: internal_messages.recipient_deleted,
+            sender_name: senderUsers.display_name_ar,
+            sender_name_en: senderUsers.display_name,
+            recipient_name: recipientUsers.display_name_ar,
+            recipient_name_en: recipientUsers.display_name,
+          })
+          .from(internal_messages)
+          .leftJoin(
+            senderUsers,
+            eq(internal_messages.sender_id, senderUsers.id),
+          )
+          .leftJoin(
+            recipientUsers,
+            eq(internal_messages.recipient_id, recipientUsers.id),
+          );
+        const rows = await (whereClause
+          ? baseQuery.where(whereClause)
+          : baseQuery)
+          .orderBy(desc(internal_messages.created_at), desc(internal_messages.id))
+          .limit(limit)
+          .offset(offset);
+
+        const countQuery = db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(internal_messages);
+        const [totalRow] = await (whereClause
+          ? countQuery.where(whereClause)
+          : countQuery);
+
+        res.json({
+          messages: rows,
+          total: totalRow?.count ?? 0,
+          limit,
+          offset,
+        });
+      } catch (error) {
+        console.error("Error fetching all messages log:", error);
+        res.status(500).json({ message: "خطأ في جلب سجل المراسلات العام" });
+      }
+    },
+  );
 
   // عدد الرسائل غير المقروءة
   app.get("/api/messages/unread-count", requireAuth, async (req, res) => {

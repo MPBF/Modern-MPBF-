@@ -35,7 +35,7 @@ import {
 } from "../../components/ui/dialog";
 import { useToast } from "../../hooks/use-toast";
 import { useAuth } from "../../hooks/use-auth";
-import { userHasPermission } from "../../utils/roleUtils";
+import { userHasPermission, isUserAdmin } from "../../utils/roleUtils";
 import {
   Mail,
   MailOpen,
@@ -44,6 +44,10 @@ import {
   Trash2,
   Reply,
   Inbox,
+  ShieldCheck,
+  Search,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 
 interface Message {
@@ -57,6 +61,8 @@ interface Message {
   root_id?: number | null;
   read_at?: string | null;
   created_at?: string | null;
+  sender_deleted?: boolean;
+  recipient_deleted?: boolean;
   sender_name?: string | null;
   sender_name_en?: string | null;
   recipient_name?: string | null;
@@ -95,6 +101,40 @@ export default function MessagesPage() {
     "edit_hr",
     "manage_users",
   ]);
+  const isAdmin = isUserAdmin(user);
+
+  // سجل المراسلات العام (للمدير فقط)
+  const [logSearch, setLogSearch] = useState("");
+  const [logSearchInput, setLogSearchInput] = useState("");
+  const [logCategory, setLogCategory] = useState("all");
+  const [logPage, setLogPage] = useState(0);
+  const LOG_PAGE_SIZE = 25;
+
+  const { data: logData, isLoading: logLoading } = useQuery<{
+    messages: Message[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>({
+    queryKey: [
+      "/api/messages/all",
+      { search: logSearch, category: logCategory, page: logPage },
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        limit: String(LOG_PAGE_SIZE),
+        offset: String(logPage * LOG_PAGE_SIZE),
+      });
+      if (logSearch) params.set("search", logSearch);
+      if (logCategory !== "all") params.set("category", logCategory);
+      const res = await fetch(`/api/messages/all?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("فشل جلب سجل المراسلات");
+      return res.json();
+    },
+    enabled: isAdmin,
+  });
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeForm, setComposeForm] = useState({
@@ -322,6 +362,12 @@ export default function MessagesPage() {
               <TabsTrigger value="sent" data-testid="tab-sent">
                 الصادر
               </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="log" data-testid="tab-log">
+                  <ShieldCheck className="h-4 w-4 ml-1" />
+                  سجل المراسلات العام
+                </TabsTrigger>
+              )}
             </TabsList>
             <TabsContent value="inbox">
               {renderThreadList(inboxThreads, "لا توجد رسائل واردة")}
@@ -329,6 +375,163 @@ export default function MessagesPage() {
             <TabsContent value="sent">
               {renderThreadList(sentThreads, "لا توجد رسائل صادرة")}
             </TabsContent>
+            {isAdmin && (
+              <TabsContent value="log">
+                <div className="px-3 pb-3 space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <form
+                      className="flex-1 flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setLogPage(0);
+                        setLogSearch(logSearchInput.trim());
+                      }}
+                    >
+                      <div className="relative flex-1">
+                        <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          className="pr-8"
+                          placeholder="بحث في الموضوع أو النص..."
+                          value={logSearchInput}
+                          onChange={(e) => setLogSearchInput(e.target.value)}
+                          data-testid="input-log-search"
+                        />
+                      </div>
+                      <Button type="submit" variant="secondary">
+                        بحث
+                      </Button>
+                    </form>
+                    <Select
+                      value={logCategory}
+                      onValueChange={(v) => {
+                        setLogPage(0);
+                        setLogCategory(v);
+                      }}
+                    >
+                      <SelectTrigger
+                        className="sm:w-44"
+                        data-testid="select-log-category"
+                      >
+                        <SelectValue placeholder="كل التصنيفات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">كل التصنيفات</SelectItem>
+                        <SelectItem value="عامة">عامة</SelectItem>
+                        {OFFICIAL_CATEGORIES.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {logLoading ? (
+                    <div className="py-8 text-center text-gray-500">
+                      جارٍ التحميل...
+                    </div>
+                  ) : (logData?.messages.length ?? 0) === 0 ? (
+                    <div className="py-8 text-center text-gray-500">
+                      لا توجد مراسلات مطابقة
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800 border rounded-lg">
+                      {logData!.messages.map((m) => (
+                        <div
+                          key={m.id}
+                          className="px-3 py-2.5"
+                          data-testid={`log-message-${m.id}`}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">
+                              {m.sender_name || m.sender_name_en || "-"}
+                            </span>
+                            <span className="text-gray-400 text-xs">←</span>
+                            <span className="font-medium text-sm">
+                              {m.recipient_name || m.recipient_name_en || "-"}
+                            </span>
+                            <Badge
+                              className={`${categoryBadgeClass(m.category)} border-0`}
+                            >
+                              {m.category}
+                            </Badge>
+                            {m.read_at ? (
+                              <Badge
+                                variant="outline"
+                                className="text-green-700 border-green-300 dark:text-green-300"
+                              >
+                                مقروءة
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-gray-500">
+                                غير مقروءة
+                              </Badge>
+                            )}
+                            {(m.sender_deleted || m.recipient_deleted) && (
+                              <Badge
+                                variant="outline"
+                                className="text-red-600 border-red-300"
+                              >
+                                محذوفة من أحد الطرفين
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm font-medium mt-1 truncate">
+                            {m.subject}
+                          </div>
+                          {m.body && (
+                            <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                              {m.body}
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-400 mt-1">
+                            {fmt(m.created_at)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(logData?.total ?? 0) > LOG_PAGE_SIZE && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">
+                        عرض {logPage * LOG_PAGE_SIZE + 1}–
+                        {Math.min(
+                          (logPage + 1) * LOG_PAGE_SIZE,
+                          logData!.total,
+                        )}{" "}
+                        من {logData!.total}
+                      </span>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={logPage === 0}
+                          onClick={() => setLogPage((p) => Math.max(0, p - 1))}
+                          data-testid="button-log-prev"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                          السابق
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            (logPage + 1) * LOG_PAGE_SIZE >=
+                            (logData?.total ?? 0)
+                          }
+                          onClick={() => setLogPage((p) => p + 1)}
+                          data-testid="button-log-next"
+                        >
+                          التالي
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>
