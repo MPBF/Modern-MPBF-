@@ -95,6 +95,7 @@ export default function EmployeeFile({ userId, onBack }: Props) {
     rewards: false,
     requests: false,
     production: false,
+    productionDetail: false,
   });
   const [printing, setPrinting] = useState(false);
 
@@ -250,6 +251,54 @@ export default function EmployeeFile({ userId, onBack }: Props) {
           <tr><td>تقطيع</td><td>${nf(ov.production?.cut_rolls)}</td><td>${nf(ov.production?.cut_weight_kg)}</td></tr>
           <tr><td>الهدر (على رولاته)</td><td>—</td><td>${nf(ov.production?.waste_kg)}</td></tr>
         </tbody></table>`);
+    }
+
+    if (sec.productionDetail) {
+      const PRINT_LIMIT = 200;
+      const pd = await fetchJson(
+        `/api/hr/employees/${userId}/production?from=${from}&to=${to}&limit=${PRINT_LIMIT}&offset=0`,
+      );
+      const records: any[] = pd?.data?.records || [];
+      const totalRec: number = pd?.data?.total_records ?? records.length;
+      const stageAr = (s: string) =>
+        s === "film" ? "فيلم" : s === "printing" ? "طباعة" : s === "cutting" ? "تقطيع" : s;
+      const fmtEvt = (iso: string | null) => {
+        if (!iso) return "—";
+        try {
+          return new Date(iso).toLocaleString("ar-SA", {
+            timeZone: "Asia/Riyadh",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+        } catch { return "—"; }
+      };
+      parts.push(`
+        <h2>سجل الإنتاج التفصيلي${totalRec > PRINT_LIMIT ? ` (أول ${PRINT_LIMIT} سجل من ${totalRec})` : ""}</h2>
+        ${
+          records.length
+            ? `<table>
+                <thead><tr><th>التاريخ</th><th>المرحلة</th><th>رقم الرول</th><th>أمر الإنتاج</th><th>الطلب</th><th>العميل</th><th>الوزن (كجم)</th></tr></thead>
+                <tbody>${records
+                  .map(
+                    (r: any) =>
+                      `<tr>
+                        <td>${esc(fmtEvt(r.event_at))}</td>
+                        <td>${esc(stageAr(r.stage))}</td>
+                        <td>${esc(r.roll_number)}</td>
+                        <td>${esc(r.production_order_number)}</td>
+                        <td>${esc(r.order_number)}</td>
+                        <td>${esc(r.customer_name || "—")}</td>
+                        <td>${nf(Number(r.weight_kg || 0).toFixed(1))}</td>
+                      </tr>`,
+                  )
+                  .join("")}</tbody>
+              </table>`
+            : `<div class="empty">لا يوجد إنتاج في هذه الفترة</div>`
+        }`);
     }
 
     return `<!DOCTYPE html>
@@ -523,7 +572,8 @@ export default function EmployeeFile({ userId, onBack }: Props) {
                 { key: "violations", ar: "المخالفات", en: "Violations" },
                 { key: "rewards", ar: "المكافآت", en: "Rewards" },
                 { key: "requests", ar: "الطلبات والإجازات", en: "Requests & leaves" },
-                { key: "production", ar: "الإنتاج", en: "Production" },
+                { key: "production", ar: "الإنتاج (إجماليات)", en: "Production (totals)" },
+                { key: "productionDetail", ar: "سجل الإنتاج التفصيلي", en: "Detailed production log" },
               ].map((s) => (
                 <div key={s.key} className="flex items-center gap-2">
                   <Checkbox
