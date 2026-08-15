@@ -823,6 +823,18 @@ function sanitizeResponseForLogging(response: any): any {
         CREATE INDEX IF NOT EXISTS idx_customers_created_at
         ON customers (created_at)
       `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_rolls_created_by_created_at
+        ON rolls (created_by, created_at)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_rolls_printed_by_printed_at
+        ON rolls (printed_by, printed_at) WHERE printed_at IS NOT NULL
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_rolls_cut_by_cut_completed_at
+        ON rolls (cut_by, cut_completed_at) WHERE cut_completed_at IS NOT NULL
+      `);
       // Ensure optional employee-info columns on users (existing DBs). Idempotent.
       await db.execute(sql`
         ALTER TABLE users

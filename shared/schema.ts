@@ -806,6 +806,19 @@ export const rolls = pgTable(
       table.film_machine_id,
     ),
     idx_rolls_created_by: index("idx_rolls_created_by").on(table.created_by),
+    // فهارس مركّبة لاستعلامات إنتاج الموظف حسب الفترة (ملف الموظف في الموارد البشرية)
+    idx_rolls_created_by_created_at: index("idx_rolls_created_by_created_at").on(
+      table.created_by,
+      table.created_at,
+    ),
+    idx_rolls_printed_by_printed_at: index("idx_rolls_printed_by_printed_at").on(
+      table.printed_by,
+      table.printed_at,
+    ),
+    idx_rolls_cut_by_cut_completed_at: index("idx_rolls_cut_by_cut_completed_at").on(
+      table.cut_by,
+      table.cut_completed_at,
+    ),
   }),
 );
 

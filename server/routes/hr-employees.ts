@@ -185,6 +185,139 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
     },
   );
 
+  // الإنتاج التفصيلي للموظف (كل الرولات المنسوبة له حسب المرحلة) لفترة محددة
+  app.get(
+    "/api/hr/employees/:userId/production",
+    requireAuth,
+    requirePermission("view_hr", "manage_hr"),
+    async (req, res) => {
+      try {
+        const userId = parseInt(req.params.userId, 10);
+        if (isNaN(userId) || userId <= 0) {
+          return res.status(400).json({ message: "معرف الموظف غير صحيح" });
+        }
+        const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+        const parseDay = (v: unknown): string | null => {
+          const s = String(v || "");
+          if (!dateRe.test(s)) return null;
+          const d = new Date(`${s}T00:00:00Z`);
+          if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s)
+            return null;
+          return s;
+        };
+        const from = parseDay(req.query.from);
+        const to = parseDay(req.query.to);
+        if (!from || !to || from > to) {
+          return res
+            .status(400)
+            .json({ message: "الفترة مطلوبة بصيغة YYYY-MM-DD وبترتيب صحيح" });
+        }
+        // نطاق نصف مفتوح [from, to + 1 يوم)
+        const toNextDate = new Date(`${to}T00:00:00Z`);
+        toNextDate.setUTCDate(toNextDate.getUTCDate() + 1);
+        const toNext = toNextDate.toISOString().slice(0, 10);
+        const fromTs = `${from} 00:00:00`;
+
+        const limitRaw = parseInt(String(req.query.limit ?? "50"), 10);
+        const limit = Math.min(Math.max(isNaN(limitRaw) ? 50 : limitRaw, 1), 200);
+        const offsetRaw = parseInt(String(req.query.offset ?? "0"), 10);
+        const offset = Math.max(isNaN(offsetRaw) ? 0 : offsetRaw, 0);
+
+        // الإجماليات تُحسب في SQL على كامل الفترة (وليس على صفحة واحدة)
+        const totalsResult = await db.execute(sql`
+          SELECT
+            count(*) FILTER (WHERE created_by = ${userId}
+              AND created_at >= ${fromTs}::timestamp AND created_at < ${toNext}::timestamp)::int AS film_rolls,
+            COALESCE(SUM(weight_kg) FILTER (WHERE created_by = ${userId}
+              AND created_at >= ${fromTs}::timestamp AND created_at < ${toNext}::timestamp),0)::numeric AS film_weight_kg,
+            count(*) FILTER (WHERE printed_by = ${userId} AND printed_at IS NOT NULL
+              AND printed_at >= ${fromTs}::timestamp AND printed_at < ${toNext}::timestamp)::int AS printed_rolls,
+            COALESCE(SUM(weight_kg) FILTER (WHERE printed_by = ${userId} AND printed_at IS NOT NULL
+              AND printed_at >= ${fromTs}::timestamp AND printed_at < ${toNext}::timestamp),0)::numeric AS printed_weight_kg,
+            count(*) FILTER (WHERE cut_by = ${userId} AND cut_completed_at IS NOT NULL
+              AND cut_completed_at >= ${fromTs}::timestamp AND cut_completed_at < ${toNext}::timestamp)::int AS cut_rolls,
+            COALESCE(SUM(cut_weight_total_kg) FILTER (WHERE cut_by = ${userId} AND cut_completed_at IS NOT NULL
+              AND cut_completed_at >= ${fromTs}::timestamp AND cut_completed_at < ${toNext}::timestamp),0)::numeric AS cut_weight_kg
+          FROM rolls
+          WHERE created_by = ${userId} OR printed_by = ${userId} OR cut_by = ${userId}
+        `);
+        const totalsRow: any = totalsResult.rows?.[0] || {};
+        const totals = {
+          film_rolls: Number(totalsRow.film_rolls) || 0,
+          film_weight_kg: Number(totalsRow.film_weight_kg) || 0,
+          printed_rolls: Number(totalsRow.printed_rolls) || 0,
+          printed_weight_kg: Number(totalsRow.printed_weight_kg) || 0,
+          cut_rolls: Number(totalsRow.cut_rolls) || 0,
+          cut_weight_kg: Number(totalsRow.cut_weight_kg) || 0,
+        };
+        const totalRecords =
+          totals.film_rolls + totals.printed_rolls + totals.cut_rolls;
+
+        const result = await db.execute(sql`
+          SELECT stage, roll_number, production_order_number, order_number,
+                 customer_name, weight_kg, event_at
+          FROM (
+            SELECT 'film'::text AS stage, r.roll_number,
+                   po.production_order_number, o.order_number,
+                   COALESCE(c.name_ar, c.name) AS customer_name,
+                   r.weight_kg::numeric AS weight_kg,
+                   r.created_at AS event_at
+            FROM rolls r
+            JOIN production_orders po ON po.id = r.production_order_id
+            JOIN orders o ON o.id = po.order_id
+            JOIN customers c ON c.id = o.customer_id
+            WHERE r.created_by = ${userId}
+              AND r.created_at >= ${fromTs}::timestamp
+              AND r.created_at < ${toNext}::timestamp
+            UNION ALL
+            SELECT 'printing', r.roll_number,
+                   po.production_order_number, o.order_number,
+                   COALESCE(c.name_ar, c.name),
+                   r.weight_kg::numeric,
+                   r.printed_at
+            FROM rolls r
+            JOIN production_orders po ON po.id = r.production_order_id
+            JOIN orders o ON o.id = po.order_id
+            JOIN customers c ON c.id = o.customer_id
+            WHERE r.printed_by = ${userId} AND r.printed_at IS NOT NULL
+              AND r.printed_at >= ${fromTs}::timestamp
+              AND r.printed_at < ${toNext}::timestamp
+            UNION ALL
+            SELECT 'cutting', r.roll_number,
+                   po.production_order_number, o.order_number,
+                   COALESCE(c.name_ar, c.name),
+                   r.cut_weight_total_kg::numeric,
+                   r.cut_completed_at
+            FROM rolls r
+            JOIN production_orders po ON po.id = r.production_order_id
+            JOIN orders o ON o.id = po.order_id
+            JOIN customers c ON c.id = o.customer_id
+            WHERE r.cut_by = ${userId} AND r.cut_completed_at IS NOT NULL
+              AND r.cut_completed_at >= ${fromTs}::timestamp
+              AND r.cut_completed_at < ${toNext}::timestamp
+          ) t
+          ORDER BY event_at DESC, roll_number DESC, stage DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `);
+
+        res.json({
+          data: {
+            from,
+            to,
+            totals,
+            total_records: totalRecords,
+            limit,
+            offset,
+            records: result.rows || [],
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching employee production:", error);
+        res.status(500).json({ message: "خطأ في جلب إنتاج الموظف" });
+      }
+    },
+  );
+
   // جدول الورديات الشهري لكل الموظفين
   app.get(
     "/api/hr/shifts",

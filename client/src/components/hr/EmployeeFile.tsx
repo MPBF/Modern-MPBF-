@@ -295,6 +295,7 @@ export default function EmployeeFile({ userId, onBack }: Props) {
   };
 
   const phase2Tabs: Array<{ key: string; ar: string; en: string }> = [
+    { key: "production", ar: "الإنتاج", en: "Production" },
     { key: "violations", ar: "المخالفات", en: "Violations" },
     { key: "rewards", ar: "المكافآت", en: "Rewards" },
     { key: "custody", ar: "العهد", en: "Custody" },
@@ -478,6 +479,9 @@ export default function EmployeeFile({ userId, onBack }: Props) {
                 </TabsTrigger>
               ))}
             </TabsList>
+            <TabsContent value="production">
+              <ProductionTab userId={userId} isRTL={isRTL} />
+            </TabsContent>
             <TabsContent value="violations">
               <ViolationsTab userId={userId} />
             </TabsContent>
@@ -551,6 +555,175 @@ export default function EmployeeFile({ userId, onBack }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function ProductionTab({ userId, isRTL }: { userId: number; isRTL: boolean }) {
+  const L = (ar: string, en: string) => (isRTL ? ar : en);
+  const { first, last } = monthRange();
+  const [pFrom, setPFrom] = useState(first);
+  const [pTo, setPTo] = useState(last);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  const { data: prodRes, isLoading, isError } = useQuery<{ data: any }>({
+    queryKey: [
+      `/api/hr/employees/${userId}/production?from=${pFrom}&to=${pTo}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`,
+    ],
+    enabled: !!pFrom && !!pTo && pFrom <= pTo,
+  });
+  const prod = prodRes?.data;
+  const totalRecords = Number(prod?.total_records ?? 0);
+
+  const stageLabel = (s: string) =>
+    s === "film"
+      ? L("فيلم", "Film")
+      : s === "printing"
+        ? L("طباعة", "Printing")
+        : s === "cutting"
+          ? L("تقطيع", "Cutting")
+          : s;
+  const stageClass = (s: string) =>
+    s === "film"
+      ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
+      : s === "printing"
+        ? "bg-purple-100 text-purple-800 hover:bg-purple-100"
+        : "bg-emerald-100 text-emerald-800 hover:bg-emerald-100";
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(isRTL ? "ar-SA" : "en-GB", {
+        timeZone: "Asia/Riyadh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    } catch {
+      return "—";
+    }
+  };
+  const nf = (v: any) => Number(v ?? 0).toLocaleString("en-US");
+
+  return (
+    <div className="space-y-4 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Label className="text-sm">{L("الفترة:", "Period:")}</Label>
+        <Input
+          type="date"
+          value={pFrom}
+          max={pTo}
+          onChange={(e) => {
+            setPage(0);
+            setPFrom(e.target.value);
+          }}
+          className="w-auto"
+          data-testid="input-prod-from"
+        />
+        <span className="text-gray-400">—</span>
+        <Input
+          type="date"
+          value={pTo}
+          min={pFrom}
+          onChange={(e) => {
+            setPage(0);
+            setPTo(e.target.value);
+          }}
+          className="w-auto"
+          data-testid="input-prod-to"
+        />
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : isError || !prod ? (
+        <div className="py-6 text-center text-gray-500">
+          {L("تعذر جلب بيانات الإنتاج", "Could not load production data")}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <Stat label={L("رولات فيلم", "Film rolls")} value={nf(prod.totals?.film_rolls)} />
+            <Stat label={L("وزن الفيلم (كجم)", "Film (kg)")} value={nf(prod.totals?.film_weight_kg?.toFixed?.(1) ?? prod.totals?.film_weight_kg)} />
+            <Stat label={L("رولات طباعة", "Printed rolls")} value={nf(prod.totals?.printed_rolls)} tone="indigo" />
+            <Stat label={L("وزن الطباعة (كجم)", "Printed (kg)")} value={nf(prod.totals?.printed_weight_kg?.toFixed?.(1) ?? prod.totals?.printed_weight_kg)} tone="indigo" />
+            <Stat label={L("رولات تقطيع", "Cut rolls")} value={nf(prod.totals?.cut_rolls)} tone="green" />
+            <Stat label={L("وزن التقطيع (كجم)", "Cut (kg)")} value={nf(prod.totals?.cut_weight_kg?.toFixed?.(1) ?? prod.totals?.cut_weight_kg)} tone="green" />
+          </div>
+
+          {!prod.records?.length ? (
+            <div className="py-6 text-center text-gray-500">
+              {L("لا يوجد إنتاج في هذه الفترة", "No production in this period")}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{L("التاريخ", "Date")}</TableHead>
+                    <TableHead>{L("المرحلة", "Stage")}</TableHead>
+                    <TableHead>{L("رقم الرول", "Roll #")}</TableHead>
+                    <TableHead>{L("أمر الإنتاج", "Prod. order")}</TableHead>
+                    <TableHead>{L("الطلب", "Order")}</TableHead>
+                    <TableHead>{L("العميل", "Customer")}</TableHead>
+                    <TableHead>{L("الوزن (كجم)", "Weight (kg)")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {prod.records.map((r: any, i: number) => (
+                    <TableRow key={`${r.stage}-${r.roll_number}-${i}`} data-testid={`row-prod-${i}`}>
+                      <TableCell className="whitespace-nowrap">{fmtDate(r.event_at)}</TableCell>
+                      <TableCell>
+                        <Badge className={`${stageClass(r.stage)} border-0 font-normal`}>
+                          {stageLabel(r.stage)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{r.roll_number}</TableCell>
+                      <TableCell className="whitespace-nowrap">{r.production_order_number}</TableCell>
+                      <TableCell className="whitespace-nowrap">{r.order_number}</TableCell>
+                      <TableCell>{r.customer_name || "—"}</TableCell>
+                      <TableCell>{nf(Number(r.weight_kg || 0).toFixed(1))}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalRecords > PAGE_SIZE && (
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <span className="text-gray-500">
+                    {L(
+                      `عرض ${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} من ${totalRecords}`,
+                      `Showing ${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} of ${totalRecords}`,
+                    )}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page === 0}
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      data-testid="button-prod-prev"
+                    >
+                      {L("السابق", "Previous")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={(page + 1) * PAGE_SIZE >= totalRecords}
+                      onClick={() => setPage((p) => p + 1)}
+                      data-testid="button-prod-next"
+                    >
+                      {L("التالي", "Next")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
