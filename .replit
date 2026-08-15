@@ -97,6 +97,36 @@ externalPort = 3003
 exposeLocalhost = true
 
 [[ports]]
+localPort = 9227
+externalPort = 4200
+exposeLocalhost = true
+
+[[ports]]
+localPort = 9228
+externalPort = 5000
+exposeLocalhost = true
+
+[[ports]]
+localPort = 9229
+externalPort = 5173
+exposeLocalhost = true
+
+[[ports]]
+localPort = 9230
+externalPort = 6000
+exposeLocalhost = true
+
+[[ports]]
+localPort = 9231
+externalPort = 6800
+exposeLocalhost = true
+
+[[ports]]
+localPort = 9232
+externalPort = 8008
+exposeLocalhost = true
+
+[[ports]]
 localPort = 9333
 externalPort = 3000
 exposeLocalhost = true

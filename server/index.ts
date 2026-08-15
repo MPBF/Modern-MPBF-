@@ -112,6 +112,14 @@ app.use(
       if (req.headers["x-no-compression"]) {
         return false;
       }
+      // بث SSE يجب ألا يُضغط أبداً: الضغط يُخزّن الأحداث مؤقتاً ولا تصل للمتصفح
+      if (req.path === "/api/notifications/stream") {
+        return false;
+      }
+      const contentType = String(res.getHeader("Content-Type") || "");
+      if (contentType.includes("text/event-stream")) {
+        return false;
+      }
       return compression.filter(req, res);
     },
   }),

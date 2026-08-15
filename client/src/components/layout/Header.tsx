@@ -6,6 +6,7 @@ import { useTheme, type Theme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../hooks/use-auth";
 import { useCompanyLogo } from "../../hooks/use-company-logo";
 import { NotificationBell } from "../notifications/NotificationBell";
+import { MessagesBell } from "../notifications/MessagesBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -131,6 +132,7 @@ export default function Header() {
             <LanguageSwitcher variant="dropdown" size="sm" />
           </div>
           <div style={{ color: "rgba(255,255,255,0.75)" }}>
+            <MessagesBell />
             <NotificationBell />
           </div>
 

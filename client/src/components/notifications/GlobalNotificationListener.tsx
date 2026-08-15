@@ -52,6 +52,15 @@ function GlobalNotificationListenerInner() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+
+      // رسالة داخلية جديدة: حدّث عداد غير المقروء وقائمة الرسائل فوراً
+      if (notification.context_type === "internal_message") {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/messages/unread-count"],
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
+      }
     },
     [toast, queryClient, onNotificationsPage],
   );

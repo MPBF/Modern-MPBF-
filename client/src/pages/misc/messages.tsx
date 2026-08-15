@@ -48,6 +48,7 @@ import {
   Search,
   ChevronRight,
   ChevronLeft,
+  Printer,
 } from "lucide-react";
 
 interface Message {
@@ -135,6 +136,104 @@ export default function MessagesPage() {
     },
     enabled: isAdmin,
   });
+
+  const [printingLog, setPrintingLog] = useState(false);
+
+  // طباعة سجل المراسلات (بحسب الفلاتر الحالية) — للمدير فقط
+  const handlePrintLog = async () => {
+    // فتح النافذة فوراً ضمن نقرة المستخدم لتفادي مانع النوافذ المنبثقة
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast({ title: "يرجى السماح بالنوافذ المنبثقة للطباعة" });
+      return;
+    }
+    w.document.write(
+      `<html dir="rtl"><body style="font-family:sans-serif;padding:20px">جارٍ تجهيز سجل المراسلات...</body></html>`,
+    );
+    setPrintingLog(true);
+    try {
+      const PRINT_MAX = 1000;
+      const PAGE = 200;
+      const all: Message[] = [];
+      let total = 0;
+      for (let offset = 0; offset < PRINT_MAX; offset += PAGE) {
+        const params = new URLSearchParams({
+          limit: String(PAGE),
+          offset: String(offset),
+        });
+        if (logSearch) params.set("search", logSearch);
+        if (logCategory !== "all") params.set("category", logCategory);
+        const res = await fetch(`/api/messages/all?${params.toString()}`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("فشل جلب سجل المراسلات");
+        const data = await res.json();
+        total = data.total ?? 0;
+        all.push(...(data.messages || []));
+        if (all.length >= total || (data.messages || []).length < PAGE) break;
+      }
+
+      const esc = (s: unknown) =>
+        String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      const filters: string[] = [];
+      if (logSearch) filters.push(`بحث: "${esc(logSearch)}"`);
+      if (logCategory !== "all") filters.push(`التصنيف: ${esc(logCategory)}`);
+      const rowsHtml = all
+        .map(
+          (m) => `<tr>
+            <td>${esc(fmt(m.created_at))}</td>
+            <td>${esc(m.sender_name || m.sender_name_en || "-")}</td>
+            <td>${esc(m.recipient_name || m.recipient_name_en || "-")}</td>
+            <td>${esc(m.category)}</td>
+            <td>${esc(m.subject)}</td>
+            <td class="body-cell">${esc(m.body || "")}</td>
+            <td>${m.read_at ? "مقروءة" : "غير مقروءة"}</td>
+          </tr>`,
+        )
+        .join("");
+      const html = `<!DOCTYPE html>
+        <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>سجل المراسلات العام</title>
+        <style>
+          @page { size: A4 landscape; margin: 10mm; }
+          body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; color: #111; font-size: 11px; }
+          h1 { font-size: 18px; margin: 0 0 4px; }
+          .meta { color: #555; margin-bottom: 10px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #bbb; padding: 3px 5px; text-align: right; vertical-align: top; }
+          th { background: #f3f4f6; }
+          .body-cell { max-width: 260px; word-break: break-word; white-space: pre-wrap; }
+          .note { color: #b45309; margin-top: 6px; }
+        </style></head><body>
+        <h1>سجل المراسلات العام</h1>
+        <div class="meta">
+          تاريخ الطباعة: ${esc(new Date().toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" }))}
+          ${filters.length ? " | " + filters.join(" | ") : ""}
+          | عدد السجلات: ${all.length}${total > all.length ? ` من أصل ${total}` : ""}
+        </div>
+        ${
+          all.length === 0
+            ? `<div>لا توجد مراسلات مطابقة</div>`
+            : `<table><thead><tr>
+                <th>التاريخ</th><th>المرسل</th><th>المستلم</th><th>التصنيف</th>
+                <th>الموضوع</th><th>النص</th><th>الحالة</th>
+              </tr></thead><tbody>${rowsHtml}</tbody></table>`
+        }
+        ${total > all.length ? `<div class="note">تنبيه: طُبعت أول ${all.length} رسالة فقط من أصل ${total} — استخدم البحث أو التصنيف لتضييق النتائج.</div>` : ""}
+        <script>window.onload = function(){ window.print(); };</script>
+        </body></html>`;
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    } catch {
+      w.close();
+      toast({ title: "تعذر تجهيز سجل المراسلات للطباعة" });
+    } finally {
+      setPrintingLog(false);
+    }
+  };
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeForm, setComposeForm] = useState({
@@ -424,6 +523,15 @@ export default function MessagesPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button
+                      variant="outline"
+                      onClick={handlePrintLog}
+                      disabled={printingLog}
+                      data-testid="button-print-log"
+                    >
+                      <Printer className="h-4 w-4 ml-1" />
+                      {printingLog ? "جارٍ التجهيز..." : "طباعة السجل"}
+                    </Button>
                   </div>
 
                   {logLoading ? (

@@ -317,8 +317,9 @@ export async function registerMessagesRoutes(app: Express, _ctx: any) {
           title_ar: `رسالة جديدة: ${subject}`,
           message: `You received a "${category}" message from ${senderName}`,
           message_ar: `وصلتك رسالة "${category}" من ${senderName}`,
-          type: "system",
-          priority: "medium",
+          type: "push",
+          priority: "high",
+          icon: "📩",
           context_type: "internal_message",
           context_id: String(message.id),
         } as any);
