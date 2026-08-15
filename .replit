@@ -74,6 +74,10 @@ ADOBE_CLIENT_ID = "8aa5634f5c82489a944a48f93ef723da"
 ADOBE_ORGANIZATION_ID = "530624B567F2CE210A495EAC@AdobeOrg"
 
 [[ports]]
+localPort = 3000
+externalPort = 8080
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
