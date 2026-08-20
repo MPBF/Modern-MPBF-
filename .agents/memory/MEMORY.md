@@ -48,3 +48,4 @@
 - [Route tests under ts-jest](route-tests-jest-cjs.md) — mock routes/shared, notification-manager & storage or jest crashes (multer TDZ) or hangs; x-test-user header auth pattern.
 - [SSE vs gzip compression](sse-compression-buffering.md) — SSE endpoints must be excluded from compression() or browsers never receive events (curl works, misleading); in-app toasts need type "push" not "system".
 - [Bag-weight calculator types](bag-weight-calculator-types.md) — 6-type exclusion/layer physics; rolls store g/m as gramsPerBag with lengthCm=100; shared weight 0 for rolls means "enter manually".
+- [System-user automation boundaries](system-user-automation-boundaries.md) — bot context is grant-scoped; reply execution uses tokenized leases plus atomic send/finalize; blank windows inherit Riyadh shifts.

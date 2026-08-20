@@ -1300,6 +1300,18 @@ export const system_user_settings = pgTable(
     weekly_report_recipient_id: integer("weekly_report_recipient_id").references(
       () => users.id,
     ),
+    // ── حقول مركز التحكم الجديدة ──
+    attendance_start_date: date("attendance_start_date"), // تاريخ بداية اختياري للمستخدم الآلي
+    reply_style: varchar("reply_style", { length: 20 }).notNull().default("professional"), // professional | concise | detailed | custom
+    reply_instructions: text("reply_instructions"), // تعليمات رد إضافية (حد 4000 حرف)
+    reply_delay_min_minutes: integer("reply_delay_min_minutes").notNull().default(0),
+    reply_delay_max_minutes: integer("reply_delay_max_minutes").notNull().default(0),
+    reply_allowed_days: text("reply_allowed_days"), // JSON مصفوفة أيام الرد؛ null = يستخدم allowed_days
+    reply_window_start: varchar("reply_window_start", { length: 5 }), // HH:mm
+    reply_window_end: varchar("reply_window_end", { length: 5 }), // HH:mm
+    allowed_message_categories: text("allowed_message_categories")
+      .notNull()
+      .default('["عامة","تكليف عمل","إشعار خصم","إنذار","توكيل مهام"]'), // JSON
     created_at: timestamp("created_at").defaultNow(),
     updated_at: timestamp("updated_at").defaultNow(),
   },
@@ -1311,6 +1323,23 @@ export const system_user_settings = pgTable(
 export type SystemUserSettings = typeof system_user_settings.$inferSelect;
 
 const pctSchema = z.coerce.number().int().min(0).max(100);
+export const SYSTEM_USER_MESSAGE_CATEGORIES = [
+  "عامة",
+  "تكليف عمل",
+  "إشعار خصم",
+  "إنذار",
+  "توكيل مهام",
+] as const;
+const hhmmSchema = z
+  .string()
+  .regex(/^\d{2}:\d{2}$/, "يجب أن يكون الوقت بصيغة HH:mm")
+  .refine((value) => {
+    const [hour, minute] = value.split(":").map(Number);
+    return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+  }, "الوقت غير صالح")
+  .nullable()
+  .optional();
+
 export const updateSystemUserSettingsSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -1328,6 +1357,28 @@ export const updateSystemUserSettingsSchema = z
     weekly_report_recipient_id: z
       .union([z.coerce.number().int().positive(), z.null()])
       .optional(),
+    // حقول مركز التحكم الجديدة
+    attendance_start_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "يجب أن يكون التاريخ بصيغة YYYY-MM-DD")
+      .nullable()
+      .optional(),
+    reply_style: z.enum(["professional", "concise", "detailed", "custom"]).optional(),
+    reply_instructions: z.string().max(4000).nullable().optional(),
+    reply_delay_min_minutes: z.coerce.number().int().min(0).max(1440).optional(),
+    reply_delay_max_minutes: z.coerce.number().int().min(0).max(1440).optional(),
+    reply_allowed_days: z
+      .array(z.number().int().min(0).max(6))
+      .min(1, "اختر يوم رد واحداً على الأقل أو استخدم أيام التشغيل")
+      .max(7)
+      .nullable()
+      .optional(),
+    reply_window_start: hhmmSchema,
+    reply_window_end: hhmmSchema,
+    allowed_message_categories: z
+      .array(z.enum(SYSTEM_USER_MESSAGE_CATEGORIES))
+      .max(SYSTEM_USER_MESSAGE_CATEGORIES.length)
+      .optional(),
   })
   .strict()
   .refine(
@@ -1339,7 +1390,81 @@ export const updateSystemUserSettingsSchema = z
       message: "عدد الرسائل المبادَرة يجب ألا يتجاوز الحد اليومي",
       path: ["daily_message_target"],
     },
+  )
+  .refine(
+    (d) =>
+      d.reply_delay_min_minutes === undefined ||
+      d.reply_delay_max_minutes === undefined ||
+      d.reply_delay_min_minutes <= d.reply_delay_max_minutes,
+    {
+      message: "الحد الأدنى لتأخير الرد يجب ألا يتجاوز الحد الأعلى",
+      path: ["reply_delay_min_minutes"],
+    },
   );
+
+// ── جدول صلاحيات الوصول للبيانات لمستخدمي النظام ──
+export const system_user_data_access = pgTable(
+  "system_user_data_access",
+  {
+    id: serial("id").primaryKey(),
+    user_id: integer("user_id").notNull().references(() => users.id),
+    access_kind: varchar("access_kind", { length: 10 }).notNull(), // 'source' | 'table'
+    access_key: varchar("access_key", { length: 100 }).notNull(),
+    created_by: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_system_user_data_access").on(
+      table.user_id,
+      table.access_kind,
+      table.access_key,
+    ),
+    index("idx_system_user_data_access_user").on(table.user_id),
+  ],
+);
+
+export type SystemUserDataAccess = typeof system_user_data_access.$inferSelect;
+
+// ── جدول سجل نشاط مستخدمي النظام ──
+export const system_user_activity = pgTable(
+  "system_user_activity",
+  {
+    id: serial("id").primaryKey(),
+    system_user_id: integer("system_user_id").references(() => users.id, { onDelete: "set null" }),
+    actor_id: integer("actor_id").references(() => users.id, { onDelete: "set null" }),
+    action: varchar("action", { length: 50 }).notNull(),
+    details: jsonb("details").notNull().default({}),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_system_user_activity_user").on(table.system_user_id),
+    index("idx_system_user_activity_created").on(table.created_at),
+  ],
+);
+
+export type SystemUserActivity = typeof system_user_activity.$inferSelect;
+
+// ── جدول طابور ردود مستخدمي النظام ──
+export const system_user_message_queue = pgTable(
+  "system_user_message_queue",
+  {
+    id: serial("id").primaryKey(),
+    system_user_id: integer("system_user_id").notNull().references(() => users.id),
+    incoming_message_id: integer("incoming_message_id").notNull().unique(),
+    scheduled_at: timestamp("scheduled_at").notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | sent | skipped
+    reason: varchar("reason", { length: 100 }),
+    response_message_id: integer("response_message_id"),
+    processed_at: timestamp("processed_at"),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_system_user_queue_status").on(table.status, table.scheduled_at),
+    index("idx_system_user_queue_user").on(table.system_user_id),
+  ],
+);
+
+export type SystemUserMessageQueue = typeof system_user_message_queue.$inferSelect;
 
 // 📋 جدول المخالفات
 export const violations = pgTable("violations", {
@@ -5950,7 +6075,7 @@ export const customer_service_activity = pgTable(
   }),
 );
 
-// 📚 قاعدة المعرفة لخدمة العملاء
+// 📚 قاعدة المعرفة لخدمة العملاء / مستخدمي النظام
 export const customer_service_knowledge = pgTable(
   "customer_service_knowledge",
   {
@@ -5965,6 +6090,13 @@ export const customer_service_knowledge = pgTable(
     }),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
+    // ── حقول مركز تحكم مستخدمي النظام ──
+    // null = عنصر عام مشترك؛ قيمة = خاص بمستخدم آلي محدد
+    system_user_id: integer("system_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    item_type: varchar("item_type", { length: 20 }).notNull().default("knowledge"), // knowledge | instruction | command
+    priority: integer("priority").notNull().default(100),
   },
   (table) => ({
     idx_cs_knowledge_category: index("idx_cs_knowledge_category").on(
@@ -5972,6 +6104,9 @@ export const customer_service_knowledge = pgTable(
     ),
     idx_cs_knowledge_published: index("idx_cs_knowledge_published").on(
       table.is_published,
+    ),
+    idx_cs_knowledge_system_user: index("idx_cs_knowledge_system_user").on(
+      table.system_user_id,
     ),
   }),
 );
@@ -6019,4 +6154,16 @@ export const insertCustomerServiceKnowledgeSchema = createInsertSchema(
   created_by: true,
   created_at: true,
   updated_at: true,
+});
+
+// مخطط قاعدة معرفة مستخدمي النظام (إنشاء/تحديث)
+export const systemUserKnowledgeSchema = z.object({
+  title: z.string().min(1).max(300),
+  content: z.string().min(1),
+  category: z.string().max(100).nullable().optional(),
+  tags: z.array(z.string().max(50)).max(20).nullable().optional(),
+  is_published: z.boolean().optional().default(true),
+  system_user_id: z.number().int().positive().nullable().optional(),
+  item_type: z.enum(["knowledge", "instruction", "command"]).optional().default("knowledge"),
+  priority: z.number().int().min(1).max(1000).optional().default(100),
 });

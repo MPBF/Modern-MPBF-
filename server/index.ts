@@ -11,6 +11,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 
 import { db, pool, sessionPool, isTransientDbError } from "./db";
+import { runLegacySystemUserDataAccessBackfill } from "./services/system-user-data-access";
 import { MemoryMonitor } from "./middleware/memory-monitor";
 import { performanceMonitor } from "./middleware/performance-monitor";
 import { populateUserFromSession } from "./middleware/session-auth";
@@ -2059,6 +2060,111 @@ function sanitizeResponseForLogging(response: any): any {
       console.log("✅ orders.share_token تم التحقق منه");
     } catch (shareTokenErr: any) {
       console.warn("⚠️ فشل تهيئة orders.share_token:", shareTokenErr?.message);
+    }
+
+    // ── مركز تحكم مستخدمي النظام (System Users Control Center) ──
+    // Idempotent: adds new columns/tables for the system-user control center spec.
+    try {
+      // توسيع system_user_settings بالحقول الجديدة
+      await db.execute(sql`
+        ALTER TABLE system_user_settings
+          ADD COLUMN IF NOT EXISTS attendance_start_date date,
+          ADD COLUMN IF NOT EXISTS reply_style varchar(20) NOT NULL DEFAULT 'professional',
+          ADD COLUMN IF NOT EXISTS reply_instructions text,
+          ADD COLUMN IF NOT EXISTS reply_delay_min_minutes integer NOT NULL DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS reply_delay_max_minutes integer NOT NULL DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS reply_allowed_days text,
+          ADD COLUMN IF NOT EXISTS reply_window_start varchar(5),
+          ADD COLUMN IF NOT EXISTS reply_window_end varchar(5),
+          ADD COLUMN IF NOT EXISTS allowed_message_categories text NOT NULL DEFAULT '["عامة","تكليف عمل","إشعار خصم","إنذار","توكيل مهام"]'
+      `);
+
+      // توسيع customer_service_knowledge بحقول مستخدمي النظام
+      await db.execute(sql`
+        ALTER TABLE customer_service_knowledge
+          ADD COLUMN IF NOT EXISTS system_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+          ADD COLUMN IF NOT EXISTS item_type varchar(20) NOT NULL DEFAULT 'knowledge',
+          ADD COLUMN IF NOT EXISTS priority integer NOT NULL DEFAULT 100
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_knowledge_system_user
+        ON customer_service_knowledge (system_user_id)
+      `);
+
+      // جدول صلاحيات الوصول للبيانات لمستخدمي النظام
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS system_user_data_access (
+          id serial PRIMARY KEY,
+          user_id integer NOT NULL REFERENCES users(id),
+          access_kind varchar(10) NOT NULL,
+          access_key varchar(100) NOT NULL,
+          created_by integer REFERENCES users(id) ON DELETE SET NULL,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uniq_system_user_data_access
+        ON system_user_data_access (user_id, access_kind, access_key)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_system_user_data_access_user
+        ON system_user_data_access (user_id)
+      `);
+
+      // جدول سجل نشاط مستخدمي النظام
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS system_user_activity (
+          id serial PRIMARY KEY,
+          system_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+          actor_id integer REFERENCES users(id) ON DELETE SET NULL,
+          action varchar(50) NOT NULL,
+          details jsonb NOT NULL DEFAULT '{}',
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_system_user_activity_user
+        ON system_user_activity (system_user_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_system_user_activity_created
+        ON system_user_activity (created_at)
+      `);
+
+      // جدول طابور ردود مستخدمي النظام
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS system_user_message_queue (
+          id serial PRIMARY KEY,
+          system_user_id integer NOT NULL REFERENCES users(id),
+          incoming_message_id integer NOT NULL UNIQUE,
+          scheduled_at timestamp NOT NULL,
+          status varchar(20) NOT NULL DEFAULT 'pending',
+          reason varchar(100),
+          response_message_id integer,
+          processed_at timestamp,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_system_user_queue_status
+        ON system_user_message_queue (status, scheduled_at)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_system_user_queue_user
+        ON system_user_message_queue (system_user_id)
+      `);
+
+      // ترحيل أحادي التنفيذ للمستخدمين الموجودين وقت إطلاق الميزة فقط.
+      // العلامة الدائمة تمنع أي تشغيل لاحق من إعادة منح صلاحيات سحبها المدير،
+      // كما تمنع منح المستخدمين الآليين المنشأين بعد الترحيل وصولاً ضمنياً.
+      await runLegacySystemUserDataAccessBackfill(pool);
+
+      console.log("✅ مركز تحكم مستخدمي النظام: تم التحقق من قاعدة البيانات");
+    } catch (sucErr: any) {
+      console.warn(
+        "⚠️ فشل تهيئة مركز تحكم مستخدمي النظام (سيتم المحاولة لاحقاً):",
+        sucErr?.message,
+      );
     }
 
   } catch (error: any) {

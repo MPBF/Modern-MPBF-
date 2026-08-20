@@ -1482,7 +1482,11 @@ export async function registerCustomerServiceRoutes(app: Express, _ctx: any) {
         const search = String(req.query.search || "").trim();
         const canManage = canManageKnowledge(req);
 
-        const conditions: any[] = [];
+        // المسارات القديمة تعرض المعرفة العامة فقط؛ تعليمات المستخدم الآلي
+        // الخاصة لا يجوز كشفها خارج مركز تحكم مستخدمي النظام.
+        const conditions: any[] = [
+          isNull(customer_service_knowledge.system_user_id),
+        ];
         // Non-managers only see published articles
         if (!canManage) {
           conditions.push(eq(customer_service_knowledge.is_published, true));
@@ -1527,7 +1531,12 @@ export async function registerCustomerServiceRoutes(app: Express, _ctx: any) {
         const [row] = await db
           .select()
           .from(customer_service_knowledge)
-          .where(eq(customer_service_knowledge.id, id));
+          .where(
+            and(
+              eq(customer_service_knowledge.id, id),
+              isNull(customer_service_knowledge.system_user_id),
+            ),
+          );
         const canManage = canManageKnowledge(req);
         if (!row || (!row.is_published && !canManage)) {
           return res.status(404).json({ message: "المقال غير موجود" });
@@ -1540,110 +1549,59 @@ export async function registerCustomerServiceRoutes(app: Express, _ctx: any) {
     },
   );
 
-  // POST create
+  // POST create – مُوقف: انتقلت إدارة المعرفة إلى /api/system-users/knowledge
   app.post(
     "/api/customer-service/knowledge",
     requireAuth,
     KNOWLEDGE_WRITE,
-    async (req, res) => {
-      try {
-        const uid = authUserId(req);
-        const parsed = knowledgeSchema.safeParse(req.body ?? {});
-        if (!parsed.success) {
-          return res.status(400).json({
-            message: "بيانات المقال غير صحيحة",
-            errors: parsed.error.flatten().fieldErrors,
-          });
-        }
-        const data = parsed.data;
-        const [row] = await db
-          .insert(customer_service_knowledge)
-          .values({
-            title: data.title,
-            content: data.content,
-            category: data.category ?? null,
-            tags: data.tags ?? null,
-            is_published: data.is_published,
-            created_by: uid,
-          })
-          .returning();
-        res.status(201).json(row);
-      } catch (error) {
-        console.error("Error creating knowledge article:", error);
-        res.status(500).json({ message: "خطأ في إنشاء المقال" });
-      }
+    (_req, res) => {
+      res.status(410).json({
+        message:
+          "انتقلت إدارة قاعدة المعرفة إلى مركز تحكم مستخدمي النظام. استخدم POST /api/system-users/knowledge",
+        moved_to: "/api/system-users/knowledge",
+      });
     },
   );
 
-  // PATCH update
+  // PATCH update – مُوقف
   app.patch(
     "/api/customer-service/knowledge/:id",
     requireAuth,
     KNOWLEDGE_WRITE,
-    async (req, res) => {
-      try {
-        const id = parseId(req.params.id);
-        if (id === null) {
-          return res.status(400).json({ message: "معرف المقال غير صحيح" });
-        }
-        const parsed = knowledgeSchema.partial().safeParse(req.body ?? {});
-        if (!parsed.success) {
-          return res.status(400).json({
-            message: "بيانات المقال غير صحيحة",
-            errors: parsed.error.flatten().fieldErrors,
-          });
-        }
-        const data = parsed.data;
-        const updates: Record<string, any> = {};
-        if ("title" in data) updates.title = data.title;
-        if ("content" in data) updates.content = data.content;
-        if ("category" in data) updates.category = data.category ?? null;
-        if ("tags" in data) updates.tags = data.tags ?? null;
-        if ("is_published" in data) updates.is_published = data.is_published;
-        if (Object.keys(updates).length === 0) {
-          return res.status(400).json({ message: "لا توجد تغييرات صالحة" });
-        }
-        updates.updated_at = new Date();
-
-        const [row] = await db
-          .update(customer_service_knowledge)
-          .set(updates)
-          .where(eq(customer_service_knowledge.id, id))
-          .returning();
-        if (!row) {
-          return res.status(404).json({ message: "المقال غير موجود" });
-        }
-        res.json(row);
-      } catch (error) {
-        console.error("Error updating knowledge article:", error);
-        res.status(500).json({ message: "خطأ في تحديث المقال" });
-      }
+    (_req, res) => {
+      res.status(410).json({
+        message:
+          "انتقلت إدارة قاعدة المعرفة إلى مركز تحكم مستخدمي النظام. استخدم PUT /api/system-users/knowledge/:id",
+        moved_to: "/api/system-users/knowledge/:id",
+      });
     },
   );
 
-  // DELETE
+  // PUT update – مُوقف (دعم PUT بجانب PATCH)
+  app.put(
+    "/api/customer-service/knowledge/:id",
+    requireAuth,
+    KNOWLEDGE_WRITE,
+    (_req, res) => {
+      res.status(410).json({
+        message:
+          "انتقلت إدارة قاعدة المعرفة إلى مركز تحكم مستخدمي النظام. استخدم PUT /api/system-users/knowledge/:id",
+        moved_to: "/api/system-users/knowledge/:id",
+      });
+    },
+  );
+
+  // DELETE – مُوقف
   app.delete(
     "/api/customer-service/knowledge/:id",
     requireAuth,
     KNOWLEDGE_WRITE,
-    async (req, res) => {
-      try {
-        const id = parseId(req.params.id);
-        if (id === null) {
-          return res.status(400).json({ message: "معرف المقال غير صحيح" });
-        }
-        const [row] = await db
-          .delete(customer_service_knowledge)
-          .where(eq(customer_service_knowledge.id, id))
-          .returning();
-        if (!row) {
-          return res.status(404).json({ message: "المقال غير موجود" });
-        }
-        res.json({ message: "تم حذف المقال" });
-      } catch (error) {
-        console.error("Error deleting knowledge article:", error);
-        res.status(500).json({ message: "خطأ في حذف المقال" });
-      }
+    (_req, res) => {
+      res.status(410).json({
+        message:
+          "انتقلت إدارة قاعدة المعرفة إلى مركز تحكم مستخدمي النظام. استخدم DELETE /api/system-users/knowledge/:id",
+        moved_to: "/api/system-users/knowledge/:id",
+      });
     },
   );
 }

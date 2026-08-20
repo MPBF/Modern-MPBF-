@@ -481,14 +481,6 @@ export default function CustomerServicePage() {
   const canManageCases = hasAny(["service_manage", "manage_users", "manage_hr", "admin"]);
   // service_create or any manager = can open new case
   const canCreateCase  = hasAny(["service_create", "service_manage", "manage_users", "manage_hr", "admin"]);
-  // knowledge managers
-  const canManageKnowledge = hasAny([
-    "service_manage_knowledge",
-    "service_manage",
-    "manage_users",
-    "manage_hr",
-    "admin",
-  ]);
   // reports viewers
   const canViewReports = hasAny([
     "service_view_reports",
@@ -537,9 +529,6 @@ export default function CustomerServicePage() {
           <TabsTrigger value="cases" data-testid="tab-cases">
             <Ticket className="h-4 w-4 ml-1.5" />الحالات
           </TabsTrigger>
-          <TabsTrigger value="knowledge" data-testid="tab-knowledge">
-            <BookOpen className="h-4 w-4 ml-1.5" />قاعدة المعرفة
-          </TabsTrigger>
           {canViewReports && (
             <TabsTrigger value="reports" data-testid="tab-reports">
               <BarChart3 className="h-4 w-4 ml-1.5" />التقارير
@@ -559,9 +548,6 @@ export default function CustomerServicePage() {
             queryClient={queryClient}
             toast={toast}
           />
-        </TabsContent>
-        <TabsContent value="knowledge">
-          <KnowledgeTab canManage={canManageKnowledge} queryClient={queryClient} toast={toast} />
         </TabsContent>
         {canViewReports && (
           <TabsContent value="reports">
