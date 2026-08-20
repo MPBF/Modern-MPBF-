@@ -19,6 +19,7 @@ import {
   ListOrdered,
   ShieldAlert,
   Mail,
+  Headphones,
 } from "lucide-react";
 
 export interface NavigationItem {
@@ -112,6 +113,15 @@ export const navigationItems: NavigationItem[] = [
     path: "/messages",
     priority: 5.5,
     group: "primary",
+  },
+  {
+    name: "خدمة العملاء",
+    name_ar: "خدمة العملاء",
+    name_en: "Customer Service",
+    icon: Headphones,
+    path: "/customer-service",
+    priority: 8.5,
+    group: "support",
   },
   {
     name: "الموارد البشرية",

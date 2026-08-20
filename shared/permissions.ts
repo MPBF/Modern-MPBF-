@@ -133,6 +133,12 @@ export type PermissionKey =
   | "manage_legacy_database"
   | "use_modern_agent"
   | "manage_modern_agent"
+  | "service_create"
+  | "service_view_own"
+  | "service_view_all"
+  | "service_manage"
+  | "service_manage_knowledge"
+  | "service_view_reports"
   | "admin"; // Super admin permission
 
 export interface Permission {
@@ -1084,6 +1090,50 @@ export const PERMISSIONS: Permission[] = [
       "Configure Modern AI agent tasks, knowledge, access and settings",
   },
 
+  // Customer Service Center
+  {
+    id: "service_create",
+    name: "Create Service Cases",
+    name_ar: "إنشاء حالات خدمة العملاء",
+    category: "خدمة العملاء",
+    description: "Create customer service cases (requests, complaints, notes)",
+  },
+  {
+    id: "service_view_own",
+    name: "View Own Service Cases",
+    name_ar: "عرض حالاتي في خدمة العملاء",
+    category: "خدمة العملاء",
+    description: "View cases the user requested or is assigned to",
+  },
+  {
+    id: "service_view_all",
+    name: "View All Service Cases",
+    name_ar: "عرض جميع حالات خدمة العملاء",
+    category: "خدمة العملاء",
+    description: "View all customer service cases across the system",
+  },
+  {
+    id: "service_manage",
+    name: "Manage Service Cases",
+    name_ar: "إدارة حالات خدمة العملاء",
+    category: "خدمة العملاء",
+    description: "Modify, reassign, and reopen any customer service case",
+  },
+  {
+    id: "service_manage_knowledge",
+    name: "Manage Service Knowledge Base",
+    name_ar: "إدارة قاعدة معرفة خدمة العملاء",
+    category: "خدمة العملاء",
+    description: "Create, edit, and delete customer service knowledge articles",
+  },
+  {
+    id: "service_view_reports",
+    name: "View Service Reports",
+    name_ar: "عرض تقارير خدمة العملاء",
+    category: "خدمة العملاء",
+    description: "View customer service statistics and reports",
+  },
+
   // Admin
   {
     id: "admin",
@@ -1117,6 +1167,17 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/virtual-warehouse": ["view_warehouse", "manage_warehouse"],
   "/inventory": ["view_inventory", "manage_inventory"],
   "/hr": ["view_hr", "manage_hr", "edit_hr", "delete_hr"],
+  "/customer-service": [
+    "service_create",
+    "service_view_own",
+    "service_view_all",
+    "service_manage",
+    "service_manage_knowledge",
+    "service_view_reports",
+    "manage_users",
+    "manage_hr",
+    "admin",
+  ],
   // المراسلات الداخلية متاحة لعموم المستخدمين النشطين (أي صلاحية أساسية)
   "/messages": [
     "view_dashboard",
@@ -1358,6 +1419,7 @@ export const PERMISSION_CATEGORIES = [
   "شاشة العرض",
   "التكامل",
   "الذكاء الاصطناعي",
+  "خدمة العملاء",
   "النظام",
 ];
 
@@ -1867,6 +1929,37 @@ export const PERMISSION_TREE: PermissionTreeNode[] = [
         name: "MCP Settings",
         name_ar: "إعدادات MCP",
         keys: ["view_mcp_settings"],
+      },
+    ],
+  },
+  {
+    id: "customer_service",
+    name: "Customer Service Center",
+    name_ar: "مركز خدمة العملاء",
+    icon: "Headset",
+    children: [
+      {
+        id: "customer_service.cases",
+        name: "Service Cases",
+        name_ar: "حالات خدمة العملاء",
+        keys: [
+          "service_create",
+          "service_view_own",
+          "service_view_all",
+          "service_manage",
+        ],
+      },
+      {
+        id: "customer_service.knowledge",
+        name: "Knowledge Base",
+        name_ar: "قاعدة المعرفة",
+        keys: ["service_manage_knowledge"],
+      },
+      {
+        id: "customer_service.reports",
+        name: "Service Reports",
+        name_ar: "تقارير خدمة العملاء",
+        keys: ["service_view_reports"],
       },
     ],
   },

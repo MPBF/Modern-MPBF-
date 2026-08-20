@@ -61,6 +61,13 @@ function GlobalNotificationListenerInner() {
         });
         queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
       }
+
+      // تحديث مركز خدمة العملاء ولوحة المهام فور وصول تكليف أو تحديث
+      if (notification.context_type === "customer_service_case") {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/customer-service"],
+        });
+      }
     },
     [toast, queryClient, onNotificationsPage],
   );

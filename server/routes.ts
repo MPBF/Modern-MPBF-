@@ -191,6 +191,7 @@ import { registerQualityRoutes } from "./routes/quality";
 import { registerMobileRoutes } from "./routes/mobile";
 import { registerLegacyRoutes } from "./routes/legacy";
 import { registerAdminRoutes } from "./routes/admin";
+import { registerCustomerServiceRoutes } from "./routes/customer-service";
 
 // Orchestrator: the original 20,000-line registerRoutes was split into domain
 // modules under server/routes/ (see server/routes/README.md). Shared
@@ -651,6 +652,7 @@ export async function registerRoutes(
   await registerMobileRoutes(app, ctx);
   await registerLegacyRoutes(app, ctx);
   await registerAdminRoutes(app, ctx);
+  await registerCustomerServiceRoutes(app, ctx);
 
 
   return httpServer;}

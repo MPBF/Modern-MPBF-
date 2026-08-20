@@ -49,6 +49,7 @@ const Warehouse = lazyWithRetry(() => import("./pages/warehouse/warehouse"));
 const Maintenance = lazyWithRetry(() => import("./pages/misc/maintenance"));
 const HR = lazyWithRetry(() => import("./pages/hr/hr"));
 const Messages = lazyWithRetry(() => import("./pages/misc/messages"));
+const CustomerService = lazyWithRetry(() => import("./pages/customer-service"));
 const Reports = lazyWithRetry(() => import("./pages/reports/reports"));
 const Settings = lazyWithRetry(() => import("./pages/settings/settings"));
 const Definitions = lazyWithRetry(() => import("./pages/settings/definitions"));
@@ -319,6 +320,12 @@ function AppRoutes() {
         <Route path="/messages">
           <ProtectedRoute path="/messages">
             <Messages />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/customer-service">
+          <ProtectedRoute path="/customer-service">
+            <CustomerService />
           </ProtectedRoute>
         </Route>
 

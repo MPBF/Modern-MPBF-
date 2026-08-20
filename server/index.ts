@@ -1285,6 +1285,249 @@ function sanitizeResponseForLogging(response: any): any {
       );
     }
 
+    // Ensure the Customer Service Center tables exist on existing databases.
+    // drizzle-kit push only runs for fresh databases, so create them here
+    // idempotently (CREATE TABLE IF NOT EXISTS never drops or alters data).
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS customer_service_cases (
+          id serial PRIMARY KEY,
+          reference varchar(30) NOT NULL UNIQUE,
+          type varchar(20) NOT NULL DEFAULT 'request',
+          title varchar(200) NOT NULL,
+          description text,
+          priority varchar(20) NOT NULL DEFAULT 'normal',
+          status varchar(20) NOT NULL DEFAULT 'open',
+          requester_id integer NOT NULL REFERENCES users(id),
+          customer_id varchar(20) REFERENCES customers(id) ON DELETE SET NULL,
+          assignee_id integer REFERENCES users(id) ON DELETE SET NULL,
+          due_date timestamp,
+          resolved_at timestamp,
+          closed_at timestamp,
+          created_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_cases_requester
+        ON customer_service_cases (requester_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_cases_assignee
+        ON customer_service_cases (assignee_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_cases_status
+        ON customer_service_cases (status)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_cases_customer
+        ON customer_service_cases (customer_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_cases_created_at
+        ON customer_service_cases (created_at)
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS customer_service_comments (
+          id serial PRIMARY KEY,
+          case_id integer NOT NULL REFERENCES customer_service_cases(id) ON DELETE CASCADE,
+          author_id integer NOT NULL REFERENCES users(id),
+          body text NOT NULL,
+          is_internal boolean NOT NULL DEFAULT false,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_comments_case
+        ON customer_service_comments (case_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_comments_created_at
+        ON customer_service_comments (created_at)
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS customer_service_activity (
+          id serial PRIMARY KEY,
+          case_id integer NOT NULL REFERENCES customer_service_cases(id) ON DELETE CASCADE,
+          actor_id integer REFERENCES users(id) ON DELETE SET NULL,
+          action varchar(20) NOT NULL,
+          details jsonb,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      // Match the shared Drizzle schema on existing databases. NOT VALID keeps
+      // startup non-destructive if legacy rows are malformed while still
+      // enforcing each constraint for all new/updated rows immediately.
+      await db.execute(sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'cs_case_type_valid'
+              AND conrelid = 'customer_service_cases'::regclass
+          ) THEN
+            ALTER TABLE customer_service_cases
+              ADD CONSTRAINT cs_case_type_valid
+              CHECK (type IN ('request', 'complaint', 'note')) NOT VALID;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'cs_case_priority_valid'
+              AND conrelid = 'customer_service_cases'::regclass
+          ) THEN
+            ALTER TABLE customer_service_cases
+              ADD CONSTRAINT cs_case_priority_valid
+              CHECK (priority IN ('low', 'normal', 'high', 'urgent')) NOT VALID;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'cs_case_status_valid'
+              AND conrelid = 'customer_service_cases'::regclass
+          ) THEN
+            ALTER TABLE customer_service_cases
+              ADD CONSTRAINT cs_case_status_valid
+              CHECK (status IN ('open', 'in_progress', 'waiting', 'resolved', 'closed')) NOT VALID;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'cs_activity_action_valid'
+              AND conrelid = 'customer_service_activity'::regclass
+          ) THEN
+            ALTER TABLE customer_service_activity
+              ADD CONSTRAINT cs_activity_action_valid
+              CHECK (action IN ('create', 'update', 'reassign', 'status', 'comment')) NOT VALID;
+          END IF;
+        END
+        $$;
+      `);
+
+      const customerServiceConstraintValidations = [
+        {
+          name: "cs_case_type_valid",
+          statement: sql`ALTER TABLE customer_service_cases VALIDATE CONSTRAINT cs_case_type_valid`,
+        },
+        {
+          name: "cs_case_priority_valid",
+          statement: sql`ALTER TABLE customer_service_cases VALIDATE CONSTRAINT cs_case_priority_valid`,
+        },
+        {
+          name: "cs_case_status_valid",
+          statement: sql`ALTER TABLE customer_service_cases VALIDATE CONSTRAINT cs_case_status_valid`,
+        },
+        {
+          name: "cs_activity_action_valid",
+          statement: sql`ALTER TABLE customer_service_activity VALIDATE CONSTRAINT cs_activity_action_valid`,
+        },
+      ];
+      for (const constraint of customerServiceConstraintValidations) {
+        try {
+          await db.execute(constraint.statement);
+        } catch (constraintErr: any) {
+          console.warn(
+            `⚠️ تعذر اعتماد قيد ${constraint.name} لوجود بيانات قديمة غير مطابقة:`,
+            constraintErr?.message,
+          );
+        }
+      }
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_activity_case
+        ON customer_service_activity (case_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_activity_created_at
+        ON customer_service_activity (created_at)
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS customer_service_knowledge (
+          id serial PRIMARY KEY,
+          title varchar(300) NOT NULL,
+          content text NOT NULL,
+          category varchar(100),
+          tags text[],
+          is_published boolean NOT NULL DEFAULT true,
+          created_by integer REFERENCES users(id) ON DELETE SET NULL,
+          created_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_knowledge_category
+        ON customer_service_knowledge (category)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_cs_knowledge_published
+        ON customer_service_knowledge (is_published)
+      `);
+
+      const customerServiceKnowledgeSeeds = [
+        {
+          title: "استقبال طلبات العملاء وتوثيقها",
+          category: "إجراءات العمل",
+          content:
+            "سجّل عنواناً واضحاً ووصفاً كاملاً للطلب، وحدد العميل المرتبط إن وجد، ثم اختر الأولوية وتاريخ الاستحقاق المناسبين. تجنب إدخال بيانات غير ضرورية أو حساسة في الوصف.",
+        },
+        {
+          title: "تصنيف الأولويات",
+          category: "إدارة الحالات",
+          content:
+            "عاجلة: توقف عمل أو خطر مباشر يتطلب تدخلاً فورياً. عالية: أثر كبير على العميل دون توقف كامل. عادية: طلب تشغيلي معتاد. منخفضة: تحسين أو استفسار غير مؤثر على سير العمل.",
+        },
+        {
+          title: "دورة حياة الحالة",
+          category: "إدارة الحالات",
+          content:
+            "تبدأ الحالة مفتوحة، ثم تنتقل إلى قيد المعالجة عند بدء العمل. استخدم بانتظار العميل عند الحاجة لمعلومة أو رد، وتم الحل عند اكتمال المعالجة، ثم مغلقة بعد التأكد من انتهاء المتابعة.",
+        },
+        {
+          title: "معالجة الشكاوى باحترافية",
+          category: "الشكاوى",
+          content:
+            "استمع للشكوى دون افتراضات، وثّق الوقائع والتواريخ، وضّح للعميل الخطوة التالية والمدة المتوقعة، ثم حدّث الحالة كلما تغيرت المعالجة حتى يتم الحل والتأكد من رضا العميل.",
+        },
+        {
+          title: "التعليقات وسجل النشاط",
+          category: "التوثيق",
+          content:
+            "استخدم التعليقات لتسجيل المستجدات والردود المرتبطة بالحالة. استخدم التعليق الداخلي للمعلومات التشغيلية التي لا ينبغي مشاركتها خارج فريق الإدارة، واحتفظ بجميع القرارات المهمة داخل سجل الحالة.",
+        },
+        {
+          title: "إغلاق الحالة وإعادة فتحها",
+          category: "إدارة الحالات",
+          content:
+            "قبل الإغلاق تأكد من تنفيذ الإجراء المطلوب وتوثيق النتيجة. إذا ظهرت معلومات جديدة أو لم يكتمل الحل، يستطيع المدير إعادة فتح الحالة وإسنادها من جديد مع بقاء سجل النشاط محفوظاً.",
+        },
+      ];
+      for (const article of customerServiceKnowledgeSeeds) {
+        await db.execute(sql`
+          INSERT INTO customer_service_knowledge
+            (title, content, category, tags, is_published)
+          SELECT
+            ${article.title},
+            ${article.content},
+            ${article.category},
+            ARRAY[]::text[],
+            true
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM customer_service_knowledge
+            WHERE title = ${article.title}
+          )
+        `);
+      }
+    } catch (csErr: any) {
+      console.warn(
+        "⚠️ فشل تهيئة جداول مركز خدمة العملاء (سيتم المحاولة لاحقاً):",
+        csErr?.message,
+      );
+    }
+
     // Ensure the Industrial Waste warehouse tables exist on existing databases.
     // drizzle-kit push only runs for fresh databases, so create them here
     // idempotently (CREATE TABLE IF NOT EXISTS never drops or alters data).

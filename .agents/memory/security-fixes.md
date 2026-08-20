@@ -47,6 +47,14 @@ description: Durable security/authorization patterns and gotchas for this codeba
 ## Silent catch blocks
 - Replace `catch {}` with `logger.warn` so fs/IO errors surface. When adding `logger.*` to a file, confirm `import { logger } from "./lib/logger"` exists or the call throws `ReferenceError` on the error path.
 
+## Scoped reports and auditable mutations
+- Own-scoped reporting must apply the ownership predicate to rows **and** every aggregate (total, breakdowns, averages); a reports permission alone must not imply global data access.
+  - **Why:** scoping only the list, or forgetting reports entirely, leaks other users' records through rows or aggregate values.
+  - **How to apply:** build one shared scoped filter first, append user filters to it, and reuse the resulting condition for every query in the report handler.
+- When a feature promises an audit trail, lock the current row and commit the mutation plus activity rows in the same transaction; audit inserts must never be best-effort.
+  - **Why:** post-commit logging can silently lose audit entries, while concurrent edits otherwise record stale “from” values.
+  - **How to apply:** `SELECT ... FOR UPDATE`, authorize against the locked row, calculate actual old/new deltas, update, and insert audit entries before commit; send notifications afterward.
+
 ## PDF template path traversal / arbitrary file read
 - `/api/pdf/generate` accepts `templateName` and `templatePath`; both must resolve within `server/services/adobe-pdf/templates` and reject anything escaping it (`path.resolve` then `startsWith(dir + sep)`), else any authed user can read arbitrary server files (fed to Adobe docx merge).
 - `templatePath` branch has no frontend caller — safe to keep constrained (or remove entirely).

@@ -5833,3 +5833,190 @@ export type InsertExternalDbReport = z.infer<
   typeof insertExternalDbReportSchema
 >;
 export type ExternalDbReport = typeof external_db_reports.$inferSelect;
+
+// =================================================================
+// 🛎️ مركز خدمة العملاء والمهام (Customer Service Center)
+// Independent tables — no destructive changes to existing schema.
+// =================================================================
+
+// 📋 حالات/تذاكر خدمة العملاء (طلبات / شكاوى / ملاحظات)
+export const customer_service_cases = pgTable(
+  "customer_service_cases",
+  {
+    id: serial("id").primaryKey(),
+    reference: varchar("reference", { length: 30 }).notNull().unique(), // مثال: CS-000123
+    // request | complaint | note
+    type: varchar("type", { length: 20 }).notNull().default("request"),
+    title: varchar("title", { length: 200 }).notNull(),
+    description: text("description"),
+    // low | normal | high | urgent
+    priority: varchar("priority", { length: 20 }).notNull().default("normal"),
+    // open | in_progress | waiting | resolved | closed
+    status: varchar("status", { length: 20 }).notNull().default("open"),
+    // مقدّم الطلب (المستخدم الذي أنشأ الحالة)
+    requester_id: integer("requester_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    // العميل المرتبط (اختياري)
+    customer_id: varchar("customer_id", { length: 20 }).references(
+      () => customers.id,
+      { onDelete: "set null" },
+    ),
+    // الموظف المسؤول (اختياري)
+    assignee_id: integer("assignee_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    due_date: timestamp("due_date"),
+    resolved_at: timestamp("resolved_at"),
+    closed_at: timestamp("closed_at"),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    typeValid: check(
+      "cs_case_type_valid",
+      sql`${table.type} IN ('request', 'complaint', 'note')`,
+    ),
+    priorityValid: check(
+      "cs_case_priority_valid",
+      sql`${table.priority} IN ('low', 'normal', 'high', 'urgent')`,
+    ),
+    statusValid: check(
+      "cs_case_status_valid",
+      sql`${table.status} IN ('open', 'in_progress', 'waiting', 'resolved', 'closed')`,
+    ),
+    idx_cs_cases_requester: index("idx_cs_cases_requester").on(
+      table.requester_id,
+    ),
+    idx_cs_cases_assignee: index("idx_cs_cases_assignee").on(table.assignee_id),
+    idx_cs_cases_status: index("idx_cs_cases_status").on(table.status),
+    idx_cs_cases_customer: index("idx_cs_cases_customer").on(table.customer_id),
+    idx_cs_cases_created_at: index("idx_cs_cases_created_at").on(
+      table.created_at,
+    ),
+  }),
+);
+
+// 💬 تعليقات على الحالة
+export const customer_service_comments = pgTable(
+  "customer_service_comments",
+  {
+    id: serial("id").primaryKey(),
+    case_id: integer("case_id")
+      .notNull()
+      .references(() => customer_service_cases.id, { onDelete: "cascade" }),
+    author_id: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    // ملاحظة داخلية (مرئية للمدراء فقط) أو عامة
+    is_internal: boolean("is_internal").notNull().default(false),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    idx_cs_comments_case: index("idx_cs_comments_case").on(table.case_id),
+    idx_cs_comments_created_at: index("idx_cs_comments_created_at").on(
+      table.created_at,
+    ),
+  }),
+);
+
+// 📝 سجل نشاط الحالة (create / update / reassign / status / comment)
+export const customer_service_activity = pgTable(
+  "customer_service_activity",
+  {
+    id: serial("id").primaryKey(),
+    case_id: integer("case_id")
+      .notNull()
+      .references(() => customer_service_cases.id, { onDelete: "cascade" }),
+    actor_id: integer("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // create | update | reassign | status | comment
+    action: varchar("action", { length: 20 }).notNull(),
+    // تفاصيل إضافية (القيمة القديمة/الجديدة ...)
+    details: jsonb("details"),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    actionValid: check(
+      "cs_activity_action_valid",
+      sql`${table.action} IN ('create', 'update', 'reassign', 'status', 'comment')`,
+    ),
+    idx_cs_activity_case: index("idx_cs_activity_case").on(table.case_id),
+    idx_cs_activity_created_at: index("idx_cs_activity_created_at").on(
+      table.created_at,
+    ),
+  }),
+);
+
+// 📚 قاعدة المعرفة لخدمة العملاء
+export const customer_service_knowledge = pgTable(
+  "customer_service_knowledge",
+  {
+    id: serial("id").primaryKey(),
+    title: varchar("title", { length: 300 }).notNull(),
+    content: text("content").notNull(),
+    category: varchar("category", { length: 100 }),
+    tags: text("tags").array(),
+    is_published: boolean("is_published").notNull().default(true),
+    created_by: integer("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    idx_cs_knowledge_category: index("idx_cs_knowledge_category").on(
+      table.category,
+    ),
+    idx_cs_knowledge_published: index("idx_cs_knowledge_published").on(
+      table.is_published,
+    ),
+  }),
+);
+
+export type CustomerServiceCase = typeof customer_service_cases.$inferSelect;
+export type InsertCustomerServiceCase =
+  typeof customer_service_cases.$inferInsert;
+export type CustomerServiceComment =
+  typeof customer_service_comments.$inferSelect;
+export type InsertCustomerServiceComment =
+  typeof customer_service_comments.$inferInsert;
+export type CustomerServiceActivity =
+  typeof customer_service_activity.$inferSelect;
+export type InsertCustomerServiceActivity =
+  typeof customer_service_activity.$inferInsert;
+export type CustomerServiceKnowledge =
+  typeof customer_service_knowledge.$inferSelect;
+export type InsertCustomerServiceKnowledge =
+  typeof customer_service_knowledge.$inferInsert;
+
+export const insertCustomerServiceCaseSchema = createInsertSchema(
+  customer_service_cases,
+).omit({
+  id: true,
+  reference: true,
+  requester_id: true,
+  resolved_at: true,
+  closed_at: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export const insertCustomerServiceCommentSchema = createInsertSchema(
+  customer_service_comments,
+).omit({
+  id: true,
+  author_id: true,
+  created_at: true,
+});
+
+export const insertCustomerServiceKnowledgeSchema = createInsertSchema(
+  customer_service_knowledge,
+).omit({
+  id: true,
+  created_by: true,
+  created_at: true,
+  updated_at: true,
+});

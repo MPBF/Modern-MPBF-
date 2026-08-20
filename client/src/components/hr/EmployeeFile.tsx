@@ -344,6 +344,7 @@ export default function EmployeeFile({ userId, onBack }: Props) {
   };
 
   const phase2Tabs: Array<{ key: string; ar: string; en: string }> = [
+    { key: "customerService", ar: "خدمة العملاء", en: "Customer Service" },
     { key: "production", ar: "الإنتاج", en: "Production" },
     { key: "violations", ar: "المخالفات", en: "Violations" },
     { key: "rewards", ar: "المكافآت", en: "Rewards" },
@@ -528,6 +529,9 @@ export default function EmployeeFile({ userId, onBack }: Props) {
                 </TabsTrigger>
               ))}
             </TabsList>
+            <TabsContent value="customerService">
+              <CustomerServiceTab userId={userId} isRTL={isRTL} />
+            </TabsContent>
             <TabsContent value="production">
               <ProductionTab userId={userId} isRTL={isRTL} />
             </TabsContent>
@@ -605,6 +609,254 @@ export default function EmployeeFile({ userId, onBack }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function CustomerServiceTab({
+  userId,
+  isRTL,
+}: {
+  userId: number;
+  isRTL: boolean;
+}) {
+  const L = (ar: string, en: string) => (isRTL ? ar : en);
+
+  const { data, isLoading, isError } = useQuery<{ data: any }>({
+    queryKey: [`/api/customer-service/users/${userId}/workload`],
+  });
+
+  const workload = data?.data ?? data;
+  const summary = workload?.summary ?? workload ?? {};
+  const cases: any[] = Array.isArray(workload?.cases)
+    ? workload.cases
+    : Array.isArray(workload?.assigned_cases)
+      ? workload.assigned_cases
+      : Array.isArray(workload)
+        ? workload
+        : [];
+
+  const nf = (v: any) => Number(v ?? 0).toLocaleString(isRTL ? "ar-SA" : "en-US");
+
+  const totalAssigned =
+    summary?.total_assigned ??
+    summary?.total ??
+    summary?.assigned ??
+    (Array.isArray(cases) ? cases.length : 0);
+  const openCount = summary?.open ?? summary?.open_count ?? 0;
+  const inProgressCount =
+    summary?.in_progress ?? summary?.inProgress ?? summary?.in_progress_count ?? 0;
+  const waitingCount =
+    summary?.waiting ?? summary?.on_hold ?? summary?.waiting_count ?? 0;
+  const overdueCount = summary?.overdue ?? summary?.overdue_count ?? 0;
+
+  const statusLabel = (s?: string | null) => {
+    switch (s) {
+      case "open":
+        return L("مفتوحة", "Open");
+      case "in_progress":
+      case "inProgress":
+        return L("قيد المعالجة", "In progress");
+      case "waiting":
+      case "on_hold":
+        return L("في الانتظار", "Waiting");
+      case "resolved":
+        return L("تمت المعالجة", "Resolved");
+      case "closed":
+        return L("مغلقة", "Closed");
+      case "overdue":
+        return L("متأخرة", "Overdue");
+      default:
+        return s || "—";
+    }
+  };
+  const statusClass = (s?: string | null) => {
+    switch (s) {
+      case "open":
+        return "bg-blue-100 text-blue-800 hover:bg-blue-100";
+      case "in_progress":
+      case "inProgress":
+        return "bg-indigo-100 text-indigo-800 hover:bg-indigo-100";
+      case "waiting":
+      case "on_hold":
+        return "bg-amber-100 text-amber-800 hover:bg-amber-100";
+      case "resolved":
+      case "closed":
+        return "bg-green-100 text-green-800 hover:bg-green-100";
+      case "overdue":
+        return "bg-red-100 text-red-800 hover:bg-red-100";
+      default:
+        return "";
+    }
+  };
+
+  const priorityLabel = (p?: string | null) => {
+    switch (p) {
+      case "urgent":
+        return L("عاجلة", "Urgent");
+      case "high":
+        return L("عالية", "High");
+      case "normal":
+        return L("متوسطة", "Medium");
+      case "low":
+        return L("منخفضة", "Low");
+      default:
+        return p || "—";
+    }
+  };
+  const priorityClass = (p?: string | null) => {
+    switch (p) {
+      case "urgent":
+        return "bg-red-100 text-red-800 hover:bg-red-100";
+      case "high":
+        return "bg-orange-100 text-orange-800 hover:bg-orange-100";
+      case "normal":
+        return "bg-amber-100 text-amber-800 hover:bg-amber-100";
+      case "low":
+        return "bg-gray-100 text-gray-800 hover:bg-gray-100";
+      default:
+        return "";
+    }
+  };
+
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(isRTL ? "ar-SA" : "en-GB", {
+        timeZone: "Asia/Riyadh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    } catch {
+      return "—";
+    }
+  };
+
+  return (
+    <div className="space-y-4 pt-3" data-testid="tab-content-customer-service">
+      {isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : isError ? (
+        <div
+          className="py-6 text-center text-gray-500"
+          data-testid="cs-workload-error"
+        >
+          {L(
+            "تعذر جلب بيانات خدمة العملاء",
+            "Could not load customer service data",
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <Stat
+              label={L("إجمالي المسند", "Total assigned")}
+              value={nf(totalAssigned)}
+            />
+            <Stat label={L("مفتوحة", "Open")} value={nf(openCount)} tone="indigo" />
+            <Stat
+              label={L("قيد المعالجة", "In progress")}
+              value={nf(inProgressCount)}
+              tone="indigo"
+            />
+            <Stat
+              label={L("في الانتظار", "Waiting")}
+              value={nf(waitingCount)}
+              tone="amber"
+            />
+            <Stat
+              label={L("متأخرة", "Overdue")}
+              value={nf(overdueCount)}
+              tone="red"
+            />
+          </div>
+
+          {!cases.length ? (
+            <div
+              className="py-6 text-center text-gray-500"
+              data-testid="cs-workload-empty"
+            >
+              {L(
+                "لا توجد حالات مسندة حالياً",
+                "No cases currently assigned",
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto" data-testid="cs-workload-cases">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{L("المرجع", "Reference")}</TableHead>
+                    <TableHead>{L("العنوان", "Title")}</TableHead>
+                    <TableHead>{L("الأولوية", "Priority")}</TableHead>
+                    <TableHead>{L("الحالة", "Status")}</TableHead>
+                    <TableHead>
+                      {L("تاريخ الاستحقاق", "Due date")}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cases.map((c: any, i: number) => {
+                    const ref =
+                      c.reference ??
+                      c.reference_number ??
+                      c.case_number ??
+                      c.number ??
+                      c.id;
+                    const title = c.title ?? c.subject ?? c.name ?? "—";
+                    const priority = c.priority ?? c.priority_level;
+                    const status = c.status ?? c.state;
+                    const due =
+                      c.due_date ?? c.due_at ?? c.deadline ?? c.sla_due_at ?? null;
+                    return (
+                      <TableRow
+                        key={c.id ?? ref ?? i}
+                        data-testid={`row-cs-case-${c.id ?? ref ?? i}`}
+                      >
+                        <TableCell className="whitespace-nowrap font-medium">
+                          {ref ?? "—"}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          {title}
+                        </TableCell>
+                        <TableCell>
+                          {priority ? (
+                            <Badge
+                              className={`${priorityClass(priority)} border-0 font-normal`}
+                            >
+                              {priorityLabel(priority)}
+                            </Badge>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {status ? (
+                            <Badge
+                              className={`${statusClass(status)} border-0 font-normal`}
+                            >
+                              {statusLabel(status)}
+                            </Badge>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {fmtDate(due)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
