@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 
 interface SlideData {
   id: number;
@@ -875,25 +876,27 @@ export default function DisplayScreen() {
   const [transitionClass, setTransitionClass] = useState("opacity-100");
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fastPolling = useSmartPolling(60_000);
+  const normalPolling = useSmartPolling(90_000);
 
   const { data: slides = [] } = useQuery<SlideData[]>({
     queryKey: ["/api/display/slides/active"],
-    refetchInterval: 30000,
+    refetchInterval: fastPolling,
   });
 
   const { data: recentProduction = [] } = useQuery<ProductionOrder[]>({
     queryKey: ["/api/display/live/recent-production"],
-    refetchInterval: 60000,
+    refetchInterval: normalPolling,
   });
 
   const { data: latestRolls = [] } = useQuery<RollData[]>({
     queryKey: ["/api/display/live/latest-rolls"],
-    refetchInterval: 45000,
+    refetchInterval: normalPolling,
   });
 
   const { data: productionStats } = useQuery<ProductionStats>({
     queryKey: ["/api/display/live/production-stats"],
-    refetchInterval: 45000,
+    refetchInterval: normalPolling,
   });
 
   const currentSlide = slides[currentSlideIndex];
@@ -905,7 +908,7 @@ export default function DisplayScreen() {
 
   const { data: attendanceData } = useQuery<AttendanceData>({
     queryKey: ["/api/display/live/attendance"],
-    refetchInterval: 30000,
+    refetchInterval: fastPolling,
     enabled: slides.some((s) => s.slide_type === "attendance"),
   });
 
@@ -923,7 +926,7 @@ export default function DisplayScreen() {
       if (!res.ok) throw new Error("Failed to fetch top producers");
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: fastPolling,
     enabled: slides.some((s) => s.slide_type === "top_producers"),
   });
 

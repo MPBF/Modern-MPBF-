@@ -316,8 +316,8 @@ export function getQueryClient(): QueryClient {
           queryFn: getQueryFn({ on401: "throw" }),
           refetchInterval: false,
           refetchOnWindowFocus: false,
-          refetchOnMount: true,
-          refetchOnReconnect: "always",
+          refetchOnMount: false,
+          refetchOnReconnect: true,
           // Increase staleTime to reduce unnecessary refetches
           staleTime: 2 * 60 * 1000, // 2 minutes - data considered fresh longer
           gcTime: 10 * 60 * 1000, // 10 minutes garbage collection - keep data longer

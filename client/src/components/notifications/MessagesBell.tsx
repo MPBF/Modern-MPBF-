@@ -3,6 +3,7 @@ import { Mail } from "lucide-react";
 import { Link } from "wouter";
 
 import { useAuth } from "../../hooks/use-auth";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
@@ -13,11 +14,12 @@ import { Button } from "../ui/button";
  */
 export function MessagesBell() {
   const { user } = useAuth();
+  const pollingInterval = useSmartPolling(60_000);
 
   const { data } = useQuery<{ count: number }>({
     queryKey: ["/api/messages/unread-count"],
     enabled: !!user?.id,
-    refetchInterval: 30000,
+    refetchInterval: pollingInterval,
   });
 
   const unreadCount = Number(data?.count ?? 0);

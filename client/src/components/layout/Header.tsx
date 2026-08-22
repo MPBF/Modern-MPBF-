@@ -51,13 +51,13 @@ export default function Header() {
 
   return (
     <header
-      className="sticky top-0 z-50 shadow-lg"
+      className="sticky top-0 z-50 shadow-lg pt-[env(safe-area-inset-top)]"
       style={{
         background: "#0f2341",
         borderBottom: "1px solid rgba(255,255,255,0.08)",
       }}
     >
-      <div className="flex items-center justify-between px-4 h-16">
+      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 h-14 sm:h-16">
         {/* Logo + wordmark */}
         <div className="flex items-center gap-3">
           <div

@@ -46,6 +46,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useLocalizedName } from "../../hooks/use-localized-name";
 
 // "الرول الأخير" (آخر رول) يظهر فقط عندما تكون الكمية المتبقية من مرحلة
@@ -130,17 +131,19 @@ export default function FilmOperatorDashboard({
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
     null,
   );
+  const ordersPolling = useSmartPolling(45_000);
+  const rollsPolling = useSmartPolling(60_000);
 
   const { data: productionOrders = [], isLoading } = useQuery<
     ActiveProductionOrderDetails[]
   >({
     queryKey: ["/api/production-orders/active-for-operator"],
-    refetchInterval: 30000,
+    refetchInterval: ordersPolling,
   });
 
   const { data: allRolls = [] } = useQuery<Roll[]>({
     queryKey: ["/api/rolls", { limit: 500 }],
-    refetchInterval: 30000,
+    refetchInterval: rollsPolling,
   });
 
   const handleCreateRoll = (

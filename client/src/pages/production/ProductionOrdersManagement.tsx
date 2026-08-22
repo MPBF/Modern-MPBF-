@@ -51,6 +51,7 @@ import {
 } from "../../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { formatNumberAr } from "../../../../shared/number-utils";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useAuth } from "../../hooks/use-auth";
 import { useLocalizedName } from "../../hooks/use-localized-name";
 
@@ -963,6 +964,7 @@ function ProductionStagesTab() {
   const { t } = useTranslation();
   const ln = useLocalizedName();
   const [selectedStage, setSelectedStage] = useState<"all" | StageKey>("all");
+  const summaryPolling = useSmartPolling(60_000);
 
   const { data: summary, isLoading: summaryLoading } = useQuery<
     Array<{
@@ -974,7 +976,7 @@ function ProductionStagesTab() {
     }>
   >({
     queryKey: ["/api/production-orders/stages-summary"],
-    refetchInterval: 30000,
+    refetchInterval: summaryPolling,
   });
 
   const stageFilter =

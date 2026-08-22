@@ -35,6 +35,7 @@ import {
 } from "../../components/ui/dialog";
 import { useToast } from "../../hooks/use-toast";
 import { useAuth } from "../../hooks/use-auth";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { userHasPermission, isUserAdmin } from "../../utils/roleUtils";
 import {
   Mail,
@@ -244,10 +245,11 @@ export default function MessagesPage() {
   });
   const [openThreadRoot, setOpenThreadRoot] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
+  const pollingInterval = useSmartPolling(60_000);
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages"],
-    refetchInterval: 30000,
+    refetchInterval: pollingInterval,
   });
   const { data: usersList = [] } = useQuery<any[]>({
     queryKey: ["/api/users"],

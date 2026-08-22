@@ -126,7 +126,7 @@ export default function MobileShell() {
   return (
     <>
       {/* Quick Actions Bar - Fixed Bottom */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 shadow-2xl" style={{ background: "#0f2341", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 shadow-2xl pb-[env(safe-area-inset-bottom)]" style={{ background: "#0f2341", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="flex items-center justify-around py-2 px-2">
           {/* Hamburger Menu Button */}
           <Drawer open={isOpen} onOpenChange={setIsOpen}>

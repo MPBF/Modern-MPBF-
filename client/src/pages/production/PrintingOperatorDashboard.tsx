@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { useLocalizedName } from "../../hooks/use-localized-name";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest, queryClient } from "../../lib/queryClient";
 
@@ -149,12 +150,13 @@ export default function PrintingOperatorDashboard({
       else localStorage.removeItem(PRINTING_MACHINE_STORAGE_KEY);
     } catch {}
   };
+  const pollingInterval = useSmartPolling(45_000);
 
   const { data: productionOrders = [], isLoading } = useQuery<
     ProductionOrderWithRolls[]
   >({
     queryKey: ["/api/rolls/active-for-printing"],
-    refetchInterval: 30000,
+    refetchInterval: pollingInterval,
   });
 
   const { data: allMachines = [] } = useQuery<Machine[]>({
