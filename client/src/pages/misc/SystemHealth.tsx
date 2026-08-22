@@ -84,7 +84,9 @@ interface SystemOverview {
 
 export default function SystemHealth() {
   const { t } = useTranslation();
-  const [selectedTimeRange, setSelectedTimeRange] = useState("24h");
+  // The performance API accepts hour/day/week. Keep the client value aligned
+  // with that contract so changing the query key changes the actual window.
+  const [selectedTimeRange] = useState<"hour" | "day" | "week">("day");
 
   const { data: overview } = useQuery<SystemOverview>({
     queryKey: ["/api/system/health/overview"],

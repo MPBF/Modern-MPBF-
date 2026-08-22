@@ -1310,6 +1310,14 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
 
   // Bag Configurator
   "/bag-configurator": ["view_bag_configurator", "manage_orders", "admin"],
+  // Batch QR lookups are authenticated traceability views. They must not
+  // require administrator access just because the route contains a parameter.
+  "/batch/:batchNumber": [
+    "view_production",
+    "view_orders",
+    "manage_production",
+    "admin",
+  ],
 
   // Modern AI Agent
   "/modern-agent": ["use_modern_agent", "manage_modern_agent", "admin"],

@@ -314,12 +314,21 @@ export function createPerformanceRouter(storage: IStorage) {
   // جلب مؤشرات الأداء
   router.get("/", async (req, res) => {
     try {
+      const timeRange = req.query.timeRange as "hour" | "day" | "week" | undefined;
+      const rangeStart =
+        timeRange === "hour"
+          ? new Date(Date.now() - 60 * 60 * 1000)
+          : timeRange === "week"
+            ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            : timeRange === "day"
+              ? new Date(Date.now() - 24 * 60 * 60 * 1000)
+              : undefined;
       const filters = {
         metric_name: req.query.metric_name as string,
         metric_category: req.query.metric_category as string,
         start_date: req.query.start_date
           ? new Date(req.query.start_date as string)
-          : undefined,
+          : rangeStart,
         end_date: req.query.end_date
           ? new Date(req.query.end_date as string)
           : undefined,

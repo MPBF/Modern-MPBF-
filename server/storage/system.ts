@@ -455,11 +455,39 @@ export class SystemStorage extends NotificationsStorage {
   async getSystemHealthStatus(): Promise<any> {
     const checks = await this.getSystemHealthChecks(20);
     const healthyCount = checks.filter((c) => c.status === "healthy").length;
+    const warningCount = checks.filter((c) => c.status === "warning").length;
+    const criticalCount = checks.filter((c) => c.status === "critical").length;
+    const checkTimes = checks
+      .map((c) => c.last_check_time)
+      .filter((value): value is Date => value instanceof Date);
+    const lastCheck = checkTimes.sort(
+      (a, b) => b.getTime() - a.getTime(),
+    )[0];
+    const overallStatus =
+      criticalCount > 0
+        ? "critical"
+        : warningCount > 0
+          ? "warning"
+          : checks.length > 0 && healthyCount === checks.length
+            ? "healthy"
+            : "unknown";
+    const uptimePercent =
+      checks.length > 0 ? (healthyCount / checks.length) * 100 : 0;
+
     return {
-      status: healthyCount === checks.length ? "healthy" : "degraded",
+      // Keep the original keys for existing consumers while exposing the
+      // snake_case contract used by the SystemHealth page.
+      status: overallStatus,
       checks,
       totalChecks: checks.length,
       healthyChecks: healthyCount,
+      overall_status: overallStatus,
+      healthy_checks: healthyCount,
+      warning_checks: warningCount,
+      critical_checks: criticalCount,
+      last_check: lastCheck ?? null,
+      uptime_percent: uptimePercent,
+      total_checks: checks.length,
     };
   }
 

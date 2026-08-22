@@ -815,9 +815,6 @@ export async function registerProductionRoutes(app: Express, ctx: any) {
     requirePermission(
       "edit_production",
       "manage_production",
-      "view_film_dashboard",
-      "view_printing_dashboard",
-      "view_cutting_dashboard",
     ),
     async (req, res) => {
       try {

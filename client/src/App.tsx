@@ -37,7 +37,6 @@ const BagConfigurator = lazyWithRetry(() => import("./pages/display/bag-configur
 const DisplayTools = lazyWithRetry(() => import("./pages/display/display-tools"));
 const Dashboard = lazyWithRetry(() => import("./pages/dashboard/dashboard"));
 const Orders = lazyWithRetry(() => import("./pages/orders/orders"));
-const Production = lazyWithRetry(() => import("./pages/production/production"));
 const ProductionOrdersManagement = lazyWithRetry(
   () => import("./pages/production/ProductionOrdersManagement"),
 );
@@ -98,13 +97,6 @@ const CuttingOperatorDashboard = lazyWithRetry(
 const ProductionDashboard = lazyWithRetry(
   () => import("./pages/production/ProductionDashboard"),
 );
-const RollSearch = lazyWithRetry(() => import("./pages/production/RollSearch"));
-const ProductionReports = lazyWithRetry(
-  () => import("./pages/production/ProductionReports"),
-);
-const SystemMonitoring = lazyWithRetry(
-  () => import("./pages/settings/system-monitoring"),
-);
 const FactorySimulation3D = lazyWithRetry(
   () => import("./pages/display/FactorySimulation3D"),
 );
@@ -119,7 +111,6 @@ const DisplayControlPanel = lazyWithRetry(
 const FactoryFloor = lazyWithRetry(() => import("./pages/production/FactoryFloor"));
 const MaterialMixing = lazyWithRetry(() => import("./pages/production/material-mixing"));
 const MyOrders = lazyWithRetry(() => import("./pages/orders/my-orders"));
-const McpSettings = lazyWithRetry(() => import("./pages/settings/mcp-settings"));
 const MpbfBagQuote = lazyWithRetry(() => import("./pages/orders/mpbf-bag-quote"));
 const ViewOrder = lazyWithRetry(() => import("./pages/orders/view-order"));
 const BatchLookup = lazyWithRetry(() => import("./pages/production/BatchLookup"));

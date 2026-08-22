@@ -545,7 +545,8 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
         const rollId = parseRouteParam(req.params.id, "id");
         const { net_weight, cutting_machine_id } = req.body;
 
-        if (!net_weight || net_weight <= 0) {
+        const parsedNetWeight = Number(net_weight);
+        if (!Number.isFinite(parsedNetWeight) || parsedNetWeight <= 0) {
           return res.status(400).json({
             message: "الوزن الصافي مطلوب ويجب أن يكون أكبر من صفر",
           });
@@ -557,7 +558,7 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
         }
         const result = await storage.completeCutting(
           rollId,
-          net_weight,
+          parsedNetWeight,
           operatorId,
           cutting_machine_id,
         );
