@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
+import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest } from "../../lib/queryClient";
 
@@ -95,6 +96,8 @@ export default function AlertsCenter() {
   const [filterStatus, setFilterStatus] = useState<string>("active");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const alertsPolling = useSmartPolling(60_000);
+  const statsPolling = useSmartPolling(120_000);
 
   const { data: alerts = [], isLoading: alertsLoading } = useQuery<
     SystemAlert[]
@@ -107,17 +110,17 @@ export default function AlertsCenter() {
         severity: filterSeverity === "all" ? undefined : filterSeverity,
       },
     ],
-    refetchInterval: 30000,
+    refetchInterval: alertsPolling,
   });
 
   const { data: stats } = useQuery<AlertStats>({
     queryKey: ["/api/alerts/stats"],
-    refetchInterval: 60000,
+    refetchInterval: statsPolling,
   });
 
   const { data: healthStatus } = useQuery<HealthStatus>({
     queryKey: ["/api/system/health"],
-    refetchInterval: 30000,
+    refetchInterval: alertsPolling,
   });
 
   const resolveAlertMutation = useMutation({

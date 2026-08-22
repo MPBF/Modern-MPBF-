@@ -24,32 +24,32 @@ export default function PageLayout({
   const hasChrome = shouldShowChrome(location);
 
   const sidebarSpacing = hasChrome ? (isRTL ? "lg:mr-64" : "lg:ml-64") : "";
-  const mobileNavSpacing = hasChrome ? "pb-24 lg:pb-4" : "";
+  const mobileNavSpacing = hasChrome ? "pb-24 lg:pb-6" : "pb-6";
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <main
-        className={`p-4 ${mobileNavSpacing} ${sidebarSpacing} ${className}`}
-      >
-        {(title || description || actions) && (
-          <div className="mb-6 flex items-start justify-between gap-4">
-            <div>
-              {title && (
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                  {title}
-                </h1>
-              )}
-              {description && (
-                <p className="text-gray-600 dark:text-gray-400">
-                  {description}
-                </p>
-              )}
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+      <main className={`page-layout-main ${mobileNavSpacing} ${sidebarSpacing}`}>
+        <div className={`page-layout-content ${className}`}>
+          {(title || description || actions) && (
+            <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                {title && (
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    {title}
+                  </h1>
+                )}
+                {description && (
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {description}
+                  </p>
+                )}
+              </div>
+              {actions && <div className="flex-shrink-0">{actions}</div>}
             </div>
-            {actions && <div className="flex-shrink-0">{actions}</div>}
-          </div>
-        )}
+          )}
 
-        {children}
+          {children}
+        </div>
       </main>
     </div>
   );
