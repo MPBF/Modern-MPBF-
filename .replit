@@ -74,66 +74,8 @@ ADOBE_CLIENT_ID = "8aa5634f5c82489a944a48f93ef723da"
 ADOBE_ORGANIZATION_ID = "530624B567F2CE210A495EAC@AdobeOrg"
 
 [[ports]]
-localPort = 3000
-externalPort = 8080
-
-[[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 8000
-externalPort = 8000
-
-[[ports]]
-localPort = 9224
-externalPort = 3001
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9225
-externalPort = 3002
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9226
-externalPort = 3003
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9227
-externalPort = 4200
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9228
-externalPort = 5000
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9229
-externalPort = 5173
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9230
-externalPort = 6000
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9231
-externalPort = 6800
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9232
-externalPort = 8008
-exposeLocalhost = true
-
-[[ports]]
-localPort = 9333
-externalPort = 3000
-exposeLocalhost = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
