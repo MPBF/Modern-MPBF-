@@ -5300,6 +5300,10 @@ export const mcp_api_keys = pgTable("mcp_api_keys", {
   created_by: integer("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  voice_access: boolean("voice_access").notNull().default(false),
+  voice_allowlist_bypass: boolean("voice_allowlist_bypass")
+    .notNull()
+    .default(false),
   is_active: boolean("is_active").default(true),
   last_used_at: timestamp("last_used_at"),
   created_at: timestamp("created_at").defaultNow(),
@@ -5312,6 +5316,61 @@ export const insertMcpApiKeySchema = createInsertSchema(mcp_api_keys).omit({
   created_at: true,
   last_used_at: true,
 });
+
+// Twilio Voice records retain the message only while it is required to serve
+// TwiML. Terminal call updates clear it to avoid keeping spoken content.
+export const twilio_allowed_phone_numbers = pgTable(
+  "twilio_allowed_phone_numbers",
+  {
+    id: serial("id").primaryKey(),
+    phone_number: varchar("phone_number", { length: 20 }).notNull().unique(),
+    label: varchar("label", { length: 200 }),
+    is_active: boolean("is_active").notNull().default(true),
+    created_by: integer("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    created_at: timestamp("created_at").defaultNow().notNull(),
+    updated_at: timestamp("updated_at").defaultNow().notNull(),
+  },
+);
+
+export const twilio_voice_calls = pgTable(
+  "twilio_voice_calls",
+  {
+    id: serial("id").primaryKey(),
+    call_sid: varchar("call_sid", { length: 64 }).unique(),
+    requested_by: integer("requested_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    mcp_api_key_id: integer("mcp_api_key_id")
+      .references(() => mcp_api_keys.id, { onDelete: "cascade" }),
+    to_number: varchar("to_number", { length: 20 }).notNull(),
+    from_number: varchar("from_number", { length: 20 }).notNull(),
+    message: text("message"),
+    language: varchar("language", { length: 10 }).notNull().default("ar-SA"),
+    voice_token_hash: varchar("voice_token_hash", { length: 128 })
+      .notNull()
+      .unique(),
+    status: varchar("status", { length: 30 }).notNull().default("pending"),
+    error_code: varchar("error_code", { length: 50 }),
+    error_message: varchar("error_message", { length: 500 }),
+    created_at: timestamp("created_at").defaultNow().notNull(),
+    updated_at: timestamp("updated_at").defaultNow().notNull(),
+    twiml_served_at: timestamp("twiml_served_at"),
+    completed_at: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_twilio_voice_calls_requested_created").on(
+      table.requested_by,
+      table.created_at,
+    ),
+    index("idx_twilio_voice_calls_status").on(table.status),
+  ],
+);
+
+export type TwilioAllowedPhoneNumber =
+  typeof twilio_allowed_phone_numbers.$inferSelect;
+export type TwilioVoiceCall = typeof twilio_voice_calls.$inferSelect;
 
 export const mcp_oauth_tokens = pgTable("mcp_oauth_tokens", {
   id: serial("id").primaryKey(),

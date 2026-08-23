@@ -147,7 +147,11 @@ const HUGE_UPLOAD_PREFIXES = [
 // Webhook prefixes that need raw-body capture for signature verification.
 // Both legacy "/webhook/..." and the actual "/api/notifications/webhook/..."
 // routes (Meta/Taqnyat/Twilio) must capture req.rawBody so HMAC checks work.
-const WEBHOOK_PREFIXES = ["/webhook/", "/api/notifications/webhook/"];
+const WEBHOOK_PREFIXES = [
+  "/webhook/",
+  "/api/notifications/webhook/",
+  "/api/twilio/",
+];
 
 const isWebhookUrl = (url?: string): boolean =>
   !!url && WEBHOOK_PREFIXES.some((p) => url.includes(p));
@@ -159,13 +163,22 @@ const captureRawBody = (req: any, _res: any, buf: Buffer) => {
 };
 
 const hugeJson = express.json({ limit: "500mb", verify: captureRawBody });
-const hugeUrlencoded = express.urlencoded({ extended: false, limit: "500mb" });
+const hugeUrlencoded = express.urlencoded({
+  extended: false,
+  limit: "500mb",
+  verify: captureRawBody,
+});
 const heavyJson = express.json({ limit: "10mb", verify: captureRawBody });
-const heavyUrlencoded = express.urlencoded({ extended: false, limit: "10mb" });
+const heavyUrlencoded = express.urlencoded({
+  extended: false,
+  limit: "10mb",
+  verify: captureRawBody,
+});
 const standardJson = express.json({ limit: "1mb", verify: captureRawBody });
 const standardUrlencoded = express.urlencoded({
   extended: false,
   limit: "1mb",
+  verify: captureRawBody,
 });
 
 app.use((req, res, next) => {
@@ -740,6 +753,8 @@ function sanitizeResponseForLogging(response: any): any {
         "mcp_api_keys",
         "mcp_oauth_tokens",
         "mcp_oauth_clients",
+        "twilio_allowed_phone_numbers",
+        "twilio_voice_calls",
         "delivery_manifests",
         "admin_tool_documents",
       ];

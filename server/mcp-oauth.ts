@@ -8,6 +8,7 @@ import {
 import { eq, and, lt, sql } from "drizzle-orm";
 
 import { db } from "./db";
+import type { McpAuthContext } from "./mcp-types";
 
 import type { Express, Request, Response } from "express";
 
@@ -52,7 +53,9 @@ setInterval(
   60 * 60 * 1000,
 );
 
-export async function validateOAuthToken(token: string): Promise<boolean> {
+export async function validateOAuthToken(
+  token: string,
+): Promise<McpAuthContext | null> {
   try {
     const tokenHash = hashToken(token);
     const results = await db
@@ -66,11 +69,11 @@ export async function validateOAuthToken(token: string): Promise<boolean> {
       )
       .limit(1);
 
-    if (results.length === 0) return false;
+    if (results.length === 0) return null;
 
     const tokenRow = results[0];
     if (new Date(tokenRow.access_token_expires_at) < new Date()) {
-      return false;
+      return null;
     }
 
     const apiKeyResult = await db
@@ -89,12 +92,21 @@ export async function validateOAuthToken(token: string): Promise<boolean> {
         .set({ last_used_at: new Date() })
         .where(eq(mcp_api_keys.id, apiKeyResult[0].id))
         .catch(() => {});
-      return true;
+      return {
+        apiKeyId: apiKeyResult[0].id,
+        userId: apiKeyResult[0].created_by,
+        scopes: (tokenRow.scope || "")
+          .split(/\s+/)
+          .map((scope) => scope.trim())
+          .filter(Boolean),
+        voiceAccess: apiKeyResult[0].voice_access,
+        voiceAllowlistBypass: apiKeyResult[0].voice_allowlist_bypass,
+      };
     }
-    return false;
+    return null;
   } catch (error) {
     console.error("Error validating OAuth token:", error);
-    return false;
+    return null;
   }
 }
 

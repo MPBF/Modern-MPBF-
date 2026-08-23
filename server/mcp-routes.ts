@@ -8,6 +8,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "./db";
 import { validateOAuthToken } from "./mcp-oauth";
 import { createMcpServer } from "./mcp-server";
+import type { McpAuthContext } from "./mcp-types";
 import { requireAuth, requireAdmin, type AuthRequest } from "./middleware/auth";
 
 import type { Express, Request, Response } from "express";
@@ -20,7 +21,7 @@ function generateApiKey(): string {
   return "mpbf_" + crypto.randomBytes(32).toString("hex");
 }
 
-async function validateApiKey(key: string): Promise<boolean> {
+async function validateApiKey(key: string): Promise<McpAuthContext | null> {
   try {
     const keyHash = hashApiKey(key);
     const result = await db
@@ -39,16 +40,24 @@ async function validateApiKey(key: string): Promise<boolean> {
         .set({ last_used_at: new Date() })
         .where(eq(mcp_api_keys.id, result[0].id))
         .catch(() => {});
-      return true;
+      return {
+        apiKeyId: result[0].id,
+        userId: result[0].created_by,
+        scopes: ["mcp:read"],
+        voiceAccess: result[0].voice_access,
+        voiceAllowlistBypass: result[0].voice_allowlist_bypass,
+      };
     }
-    return false;
+    return null;
   } catch (error) {
     console.error("Error validating MCP API key:", error);
-    return false;
+    return null;
   }
 }
 
-async function validateBearerToken(token: string): Promise<boolean> {
+async function validateBearerToken(
+  token: string,
+): Promise<McpAuthContext | null> {
   if (token.startsWith("mpbf_")) {
     return validateApiKey(token);
   }
@@ -105,7 +114,10 @@ function recordAuthFailure(ip: string): void {
 }
 
 export function registerMcpRoutes(app: Express) {
-  const transports = new Map<string, StreamableHTTPServerTransport>();
+  const transports = new Map<
+    string,
+    { transport: StreamableHTTPServerTransport; auth: McpAuthContext }
+  >();
 
   app.post("/mcp", async (req: Request, res: Response) => {
     try {
@@ -128,8 +140,8 @@ export function registerMcpRoutes(app: Express) {
         return;
       }
 
-      const isValid = await validateBearerToken(apiKey);
-      if (!isValid) {
+      const auth = await validateBearerToken(apiKey);
+      if (!auth) {
         recordAuthFailure(clientIp);
         res.status(403).json({ error: "Invalid or inactive API key" });
         return;
@@ -138,8 +150,12 @@ export function registerMcpRoutes(app: Express) {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
       if (sessionId && transports.has(sessionId)) {
-        const transport = transports.get(sessionId)!;
-        await transport.handleRequest(req, res, req.body);
+        const session = transports.get(sessionId)!;
+        if (session.auth.apiKeyId !== auth.apiKeyId) {
+          res.status(403).json({ error: "MCP session belongs to another API key" });
+          return;
+        }
+        await session.transport.handleRequest(req, res, req.body);
         return;
       }
 
@@ -147,7 +163,7 @@ export function registerMcpRoutes(app: Express) {
         sessionIdGenerator: () => randomUUID(),
       });
 
-      const mcpServer = createMcpServer();
+      const mcpServer = createMcpServer(auth);
 
       transport.onclose = () => {
         if (transport.sessionId) {
@@ -159,7 +175,7 @@ export function registerMcpRoutes(app: Express) {
       await transport.handleRequest(req, res, req.body);
 
       if (transport.sessionId) {
-        transports.set(transport.sessionId, transport);
+        transports.set(transport.sessionId, { transport, auth });
       }
     } catch (error) {
       console.error("MCP POST error:", error);
@@ -180,16 +196,20 @@ export function registerMcpRoutes(app: Express) {
         return;
       }
 
-      const isValid = await validateBearerToken(apiKey);
-      if (!isValid) {
+      const auth = await validateBearerToken(apiKey);
+      if (!auth) {
         res.status(403).json({ error: "Invalid or inactive API key" });
         return;
       }
 
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       if (sessionId && transports.has(sessionId)) {
-        const transport = transports.get(sessionId)!;
-        await transport.handleRequest(req, res);
+        const session = transports.get(sessionId)!;
+        if (session.auth.apiKeyId !== auth.apiKeyId) {
+          res.status(403).json({ error: "MCP session belongs to another API key" });
+          return;
+        }
+        await session.transport.handleRequest(req, res);
         return;
       }
 
@@ -216,16 +236,20 @@ export function registerMcpRoutes(app: Express) {
         return;
       }
 
-      const isValid = await validateBearerToken(apiKey);
-      if (!isValid) {
+      const auth = await validateBearerToken(apiKey);
+      if (!auth) {
         res.status(403).json({ error: "Invalid or inactive API key" });
         return;
       }
 
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       if (sessionId && transports.has(sessionId)) {
-        const transport = transports.get(sessionId)!;
-        await transport.close();
+        const session = transports.get(sessionId)!;
+        if (session.auth.apiKeyId !== auth.apiKeyId) {
+          res.status(403).json({ error: "MCP session belongs to another API key" });
+          return;
+        }
+        await session.transport.close();
         transports.delete(sessionId);
       }
       res.status(200).json({ message: "Session closed" });
@@ -251,6 +275,14 @@ export function registerMcpRoutes(app: Express) {
         const rawKey = generateApiKey();
         const keyHash = hashApiKey(rawKey);
         const keyPrefix = rawKey.slice(0, 12);
+        const voiceAccess = req.body.voice_access === true;
+        const voiceAllowlistBypass =
+          req.body.voice_allowlist_bypass === true;
+        if (voiceAllowlistBypass && !voiceAccess) {
+          return res.status(400).json({
+            error: "يتطلب تجاوز قائمة الأرقام تفعيل مكالمات Twilio للمفتاح",
+          });
+        }
 
         const userId = (req as AuthRequest).user?.id;
         if (!userId) {
@@ -264,6 +296,8 @@ export function registerMcpRoutes(app: Express) {
             key_hash: keyHash,
             key_prefix: keyPrefix,
             created_by: userId,
+            voice_access: voiceAccess,
+            voice_allowlist_bypass: voiceAllowlistBypass,
             is_active: true,
           })
           .returning();
@@ -272,6 +306,8 @@ export function registerMcpRoutes(app: Express) {
           id: created.id,
           name: created.name,
           key_prefix: created.key_prefix,
+          voice_access: created.voice_access,
+          voice_allowlist_bypass: created.voice_allowlist_bypass,
           api_key: rawKey,
           created_at: created.created_at,
           message:
@@ -295,6 +331,8 @@ export function registerMcpRoutes(app: Express) {
             id: mcp_api_keys.id,
             name: mcp_api_keys.name,
             key_prefix: mcp_api_keys.key_prefix,
+            voice_access: mcp_api_keys.voice_access,
+            voice_allowlist_bypass: mcp_api_keys.voice_allowlist_bypass,
             is_active: mcp_api_keys.is_active,
             last_used_at: mcp_api_keys.last_used_at,
             created_at: mcp_api_keys.created_at,
@@ -306,6 +344,51 @@ export function registerMcpRoutes(app: Express) {
       } catch (error: any) {
         console.error("Error listing MCP API keys:", error);
         res.status(500).json({ error: "فشل في جلب المفاتيح" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/mcp/api-keys/:id/voice-access",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        const { voice_access, voice_allowlist_bypass } = req.body;
+        if (
+          Number.isNaN(id) ||
+          typeof voice_access !== "boolean" ||
+          typeof voice_allowlist_bypass !== "boolean"
+        ) {
+          return res.status(400).json({
+            error: "بيانات صلاحيات المكالمات غير صالحة",
+          });
+        }
+        if (voice_allowlist_bypass && !voice_access) {
+          return res.status(400).json({
+            error: "يتطلب تجاوز قائمة الأرقام تفعيل مكالمات Twilio للمفتاح",
+          });
+        }
+        const [updated] = await db
+          .update(mcp_api_keys)
+          .set({
+            voice_access,
+            voice_allowlist_bypass,
+          })
+          .where(eq(mcp_api_keys.id, id))
+          .returning({
+            id: mcp_api_keys.id,
+            voice_access: mcp_api_keys.voice_access,
+            voice_allowlist_bypass: mcp_api_keys.voice_allowlist_bypass,
+          });
+        if (!updated) {
+          return res.status(404).json({ error: "المفتاح غير موجود" });
+        }
+        res.json(updated);
+      } catch (error) {
+        console.error("Error updating MCP Voice access:", error);
+        res.status(500).json({ error: "فشل تحديث صلاحيات المكالمات" });
       }
     },
   );

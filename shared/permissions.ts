@@ -139,6 +139,8 @@ export type PermissionKey =
   | "service_manage"
   | "service_manage_knowledge"
   | "service_view_reports"
+  | "use_twilio_voice"
+  | "manage_twilio_voice"
   | "admin"; // Super admin permission
 
 export interface Permission {
@@ -587,6 +589,20 @@ export const PERMISSIONS: Permission[] = [
     name_ar: "إدارة الأدوار",
     category: "النظام",
     description: "Create and modify user roles",
+  },
+  {
+    id: "use_twilio_voice",
+    name: "Use Twilio Voice",
+    name_ar: "استخدام مكالمات Twilio",
+    category: "النظام",
+    description: "Make approved outbound Twilio Voice calls",
+  },
+  {
+    id: "manage_twilio_voice",
+    name: "Manage Twilio Voice",
+    name_ar: "إدارة مكالمات Twilio",
+    category: "النظام",
+    description: "Manage Twilio Voice calls and bypass the phone allowlist",
   },
 
   // Definitions (sub-permissions)

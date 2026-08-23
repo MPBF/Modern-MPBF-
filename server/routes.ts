@@ -218,6 +218,10 @@ export async function registerRoutes(
   const { registerMcpRoutes } = await import("./mcp-routes");
   registerMcpRoutes(app);
 
+  // Twilio Voice callbacks are signature-verified and intentionally unauthenticated.
+  const { registerTwilioVoiceRoutes } = await import("./twilio-voice/routes");
+  registerTwilioVoiceRoutes(app);
+
   // Register Modern AI Agent routes
   const { registerModernAgentRoutes } = await import("./modern-agent/routes");
   registerModernAgentRoutes(app);

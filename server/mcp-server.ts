@@ -18,12 +18,14 @@ import { z } from "zod";
 
 import { db } from "./db";
 import { storage } from "./storage";
+import type { McpAuthContext } from "./mcp-types";
+import { registerTwilioVoiceTools } from "./twilio-voice/tools";
 
 function buildWhere(conditions: SQL[]): SQL | undefined {
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
-export function createMcpServer() {
+export function createMcpServer(authContext: McpAuthContext) {
   const server = new McpServer(
     {
       name: "MPBF Factory Management",
@@ -1538,5 +1540,6 @@ export function createMcpServer() {
     },
   );
 
+  registerTwilioVoiceTools(server, authContext);
   return server;
 }
