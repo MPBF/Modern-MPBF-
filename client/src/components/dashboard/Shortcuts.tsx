@@ -41,9 +41,6 @@ export default function Shortcuts() {
             >
               <it.Icon className="w-6 h-6 flex-shrink-0" />
               <span className="font-semibold truncate">{it.label}</span>
-              <span className="ml-auto text-sm opacity-80 flex-shrink-0">
-                اختصار
-              </span>
             </div>
           </Link>
         ))}
