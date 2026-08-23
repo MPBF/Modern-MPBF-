@@ -1152,6 +1152,12 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/": ["view_home", "view_dashboard"],
   "/dashboard": ["view_dashboard"],
   "/orders": ["view_orders", "manage_orders"],
+  "/customers": [
+    "view_orders",
+    "manage_orders",
+    "manage_customers",
+    "manage_definitions",
+  ],
   "/production": ["view_production", "manage_production"],
   "/production-dashboard": [
     "view_production",

@@ -37,6 +37,7 @@ const BagConfigurator = lazyWithRetry(() => import("./pages/display/bag-configur
 const DisplayTools = lazyWithRetry(() => import("./pages/display/display-tools"));
 const Dashboard = lazyWithRetry(() => import("./pages/dashboard/dashboard"));
 const Orders = lazyWithRetry(() => import("./pages/orders/orders"));
+const Customers = lazyWithRetry(() => import("./pages/customers/customers"));
 const ProductionOrdersManagement = lazyWithRetry(
   () => import("./pages/production/ProductionOrdersManagement"),
 );
@@ -236,6 +237,12 @@ function AppRoutes() {
         <Route path="/orders">
           <ProtectedRoute path="/orders">
             <Orders />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/customers">
+          <ProtectedRoute path="/customers">
+            <Customers />
           </ProtectedRoute>
         </Route>
 

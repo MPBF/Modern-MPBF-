@@ -5,8 +5,11 @@ import {
   ChevronDown,
   Archive,
   ArchiveRestore,
+  List,
+  LayoutGrid,
+  Columns3,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Alert, AlertDescription } from "../ui/alert";
@@ -28,6 +31,7 @@ import {
 import OrdersForm from "./OrdersForm";
 import OrdersSearch from "./OrdersSearch";
 import OrdersTable from "./OrdersTable";
+import OrdersBoardView, { type OrdersBoardMode } from "./OrdersBoardView";
 
 interface OrdersTabsProps {
   orders: any[];
@@ -120,6 +124,15 @@ export default function OrdersTabs({
 
   // Bulk selection state
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
+  const [ordersView, setOrdersView] = useState<"table" | OrdersBoardMode>(() => {
+    if (typeof window === "undefined") return "table";
+    const saved = window.localStorage.getItem("mpbf_orders_view");
+    return saved === "cards" || saved === "kanban" ? saved : "table";
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem("mpbf_orders_view", ordersView);
+  }, [ordersView]);
 
   const handleCloseOrderDialog = () => {
     setIsOrderDialogOpen(false);
@@ -257,6 +270,47 @@ export default function OrdersTabs({
                     setSalesRepFilter={setSalesRepFilter}
                   />
                 </div>
+                <div
+                  className="flex w-full items-center rounded-lg border border-slate-200 bg-slate-50 p-1 md:w-auto"
+                  aria-label="طريقة عرض الطلبات"
+                >
+                  <Button
+                    type="button"
+                    variant={ordersView === "table" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    onClick={() => setOrdersView("table")}
+                    title="عرض جدولي"
+                    data-testid="button-orders-view-table"
+                  >
+                    <List className="h-4 w-4" />
+                    <span className="hidden lg:inline">جدول</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={ordersView === "cards" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    onClick={() => setOrdersView("cards")}
+                    title="عرض بطاقات"
+                    data-testid="button-orders-view-cards"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                    <span className="hidden lg:inline">بطاقات</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={ordersView === "kanban" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    onClick={() => setOrdersView("kanban")}
+                    title="عرض كانبان حسب الحالة"
+                    data-testid="button-orders-view-kanban"
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    <span className="hidden lg:inline">كانبان</span>
+                  </Button>
+                </div>
                 <Dialog
                   open={isOrderDialogOpen}
                   onOpenChange={setIsOrderDialogOpen}
@@ -390,26 +444,49 @@ export default function OrdersTabs({
               </Alert>
             )}
 
-            <OrdersTable
-              orders={filteredOrders}
-              customers={customers}
-              users={users}
-              productionOrders={productionOrders}
-              customerProducts={customerProducts}
-              items={items}
-              onViewOrder={onViewOrder}
-              onPrintOrder={onPrintOrder}
-              onEditOrder={isAdmin ? onEditOrder : undefined}
-              onDeleteOrder={onDeleteOrder}
-              onStatusChange={onStatusChange}
-              onArchiveOrder={onArchiveOrder}
-              onUnarchiveOrder={onUnarchiveOrder}
-              currentUser={currentUser}
-              isAdmin={isAdmin}
-              selectedOrders={selectedOrders}
-              onOrderSelect={handleOrderSelect}
-              onSelectAll={handleSelectAll}
-            />
+            {filteredOrders.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 py-14 text-center text-slate-500">
+                {safeOrders.length === 0
+                  ? "لا توجد طلبات"
+                  : "لا توجد طلبات مطابقة للفلاتر الحالية"}
+              </div>
+            ) : ordersView === "table" ? (
+              <OrdersTable
+                orders={filteredOrders}
+                customers={customers}
+                users={users}
+                productionOrders={productionOrders}
+                customerProducts={customerProducts}
+                items={items}
+                onViewOrder={onViewOrder}
+                onPrintOrder={onPrintOrder}
+                onEditOrder={isAdmin ? onEditOrder : undefined}
+                onDeleteOrder={onDeleteOrder}
+                onStatusChange={onStatusChange}
+                onArchiveOrder={onArchiveOrder}
+                onUnarchiveOrder={onUnarchiveOrder}
+                currentUser={currentUser}
+                isAdmin={isAdmin}
+                selectedOrders={selectedOrders}
+                onOrderSelect={handleOrderSelect}
+                onSelectAll={handleSelectAll}
+              />
+            ) : (
+              <OrdersBoardView
+                mode={ordersView}
+                orders={filteredOrders}
+                customers={customers}
+                selectedOrders={selectedOrders}
+                onOrderSelect={handleOrderSelect}
+                onViewOrder={onViewOrder}
+                onPrintOrder={onPrintOrder}
+                onEditOrder={isAdmin ? onEditOrder : undefined}
+                onStatusChange={onStatusChange}
+                onArchiveOrder={onArchiveOrder}
+                onUnarchiveOrder={onUnarchiveOrder}
+                isAdmin={isAdmin}
+              />
+            )}
           </CardContent>
         </Card>
 

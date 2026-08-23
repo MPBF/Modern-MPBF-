@@ -61,6 +61,15 @@ export const navigationItems: NavigationItem[] = [
     group: "primary",
   },
   {
+    name: "العملاء",
+    name_ar: "العملاء",
+    name_en: "Customers",
+    icon: Users,
+    path: "/customers",
+    priority: 2.5,
+    group: "primary",
+  },
+  {
     name: "لوحة الإنتاج",
     name_ar: "لوحة الإنتاج",
     name_en: "Pro. Board",
