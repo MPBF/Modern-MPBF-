@@ -999,6 +999,20 @@ function sanitizeResponseForLogging(response: any): any {
         )
       `);
       await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS modern_agent_uploaded_references (
+          id serial PRIMARY KEY,
+          owner_id integer NOT NULL REFERENCES users(id),
+          title varchar(300) NOT NULL,
+          content text NOT NULL,
+          enabled boolean NOT NULL DEFAULT true,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_modern_agent_uploaded_refs_owner
+        ON modern_agent_uploaded_references (owner_id, created_at)
+      `);
+      await db.execute(sql`
         CREATE TABLE IF NOT EXISTS modern_agent_profiles (
           id serial PRIMARY KEY,
           user_id integer NOT NULL UNIQUE REFERENCES users(id),

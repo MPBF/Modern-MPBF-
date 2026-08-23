@@ -5569,6 +5569,30 @@ export type InsertModernAgentKnowledge = z.infer<
 >;
 export type ModernAgentKnowledge = typeof modern_agent_knowledge.$inferSelect;
 
+// Long-lived uploaded references are private to their administrator owner.
+// They are deliberately separate from the global system-prompt knowledge base.
+export const modern_agent_uploaded_references = pgTable(
+  "modern_agent_uploaded_references",
+  {
+    id: serial("id").primaryKey(),
+    owner_id: integer("owner_id")
+      .notNull()
+      .references(() => users.id),
+    title: varchar("title", { length: 300 }).notNull(),
+    content: text("content").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_modern_agent_uploaded_refs_owner").on(
+      table.owner_id,
+      table.created_at,
+    ),
+  ],
+);
+export type ModernAgentUploadedReference =
+  typeof modern_agent_uploaded_references.$inferSelect;
+
 // Per-user agent profile — name preference, notes, free-form preferences
 export const modern_agent_profiles = pgTable("modern_agent_profiles", {
   id: serial("id").primaryKey(),
