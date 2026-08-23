@@ -147,58 +147,72 @@ function OrderBoardCard({
               </div>
             </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                aria-label="إجراءات الطلب"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onViewOrder(order)}>
-                <Eye className="ml-2 h-4 w-4" />
-                عرض التفاصيل
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onPrintOrder(order, "html")}>
-                <Printer className="ml-2 h-4 w-4" />
-                طباعة الطلب
-              </DropdownMenuItem>
-              {isAdmin && onEditOrder && (
-                <DropdownMenuItem onClick={() => onEditOrder(order)}>
-                  <Edit className="ml-2 h-4 w-4" />
-                  تعديل الطلب
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              {status !== "archived" ? (
-                <DropdownMenuItem
-                  onClick={() =>
-                    onArchiveOrder
-                      ? onArchiveOrder(order)
-                      : onStatusChange(order, "archived")
-                  }
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              aria-label={t("common.print")}
+              title={t("common.print")}
+              data-testid={`button-board-print-${order.id}`}
+              onClick={() => onPrintOrder(order, "standalone")}
+            >
+              <Printer className="h-4 w-4" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="إجراءات الطلب"
                 >
-                  <Archive className="ml-2 h-4 w-4" />
-                  أرشفة
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onViewOrder(order)}>
+                  <Eye className="ml-2 h-4 w-4" />
+                  عرض التفاصيل
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={() =>
-                    onUnarchiveOrder
-                      ? onUnarchiveOrder(order)
-                      : onStatusChange(order, "completed")
-                  }
-                >
-                  <ArchiveRestore className="ml-2 h-4 w-4" />
-                  إلغاء الأرشفة
+                <DropdownMenuItem onClick={() => onPrintOrder(order, "html")}>
+                  <Printer className="ml-2 h-4 w-4" />
+                  طباعة الطلب
                 </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {isAdmin && onEditOrder && (
+                  <DropdownMenuItem onClick={() => onEditOrder(order)}>
+                    <Edit className="ml-2 h-4 w-4" />
+                    تعديل الطلب
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                {status !== "archived" ? (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      onArchiveOrder
+                        ? onArchiveOrder(order)
+                        : onStatusChange(order, "archived")
+                    }
+                  >
+                    <Archive className="ml-2 h-4 w-4" />
+                    أرشفة
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      onUnarchiveOrder
+                        ? onUnarchiveOrder(order)
+                        : onStatusChange(order, "completed")
+                    }
+                  >
+                    <ArchiveRestore className="ml-2 h-4 w-4" />
+                    إلغاء الأرشفة
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-2">
