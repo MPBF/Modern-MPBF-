@@ -236,12 +236,20 @@ export default function OrdersTable({
   const calculateDaysSinceCreation = (order: any) => {
     if (!order.created_at) return null;
     const createdDate = new Date(order.created_at);
+    if (Number.isNaN(createdDate.getTime())) return null;
     createdDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const timeDiff = today.getTime() - createdDate.getTime();
     return Math.max(0, Math.floor(timeDiff / (1000 * 3600 * 24)));
   };
+
+  const isAgingOpenOrder = (order: any, daysSinceCreation: number | null) =>
+    daysSinceCreation !== null &&
+    daysSinceCreation > 30 &&
+    !["archived", "completed", "delivered", "cancelled", "rejected"].includes(
+      String(order.status || "").toLowerCase(),
+    );
 
   return (
     <>
@@ -308,6 +316,7 @@ export default function OrdersTable({
                 (u: any) => u.id === parseInt(order.created_by),
               );
               const daysSinceCreation = calculateDaysSinceCreation(order);
+              const shouldBlink = isAgingOpenOrder(order, daysSinceCreation);
 
               // حساب نسب الإكمال من أوامر الإنتاج المرتبطة بهذا الطلب
               const orderProductionOrders = safeProductionOrders.filter(
@@ -371,9 +380,12 @@ export default function OrdersTable({
                 <React.Fragment key={order.id}>
                   <TableRow
                     data-testid={`order-row-${order.id}`}
-                    className={
-                      selectedOrders.includes(order.id) ? "bg-blue-50" : ""
-                    }
+                    className={[
+                      selectedOrders.includes(order.id) ? "bg-blue-50" : "",
+                      shouldBlink ? "order-aging-alert" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                   >
                     {onOrderSelect && onSelectAll && (
                       <TableCell>
@@ -776,6 +788,7 @@ export default function OrdersTable({
             (u: any) => u.id === parseInt(order.created_by),
           );
           const daysSinceCreation = calculateDaysSinceCreation(order);
+          const shouldBlink = isAgingOpenOrder(order, daysSinceCreation);
           const orderProductionOrders = safeProductionOrders.filter(
             (po: any) => po.order_id === order.id,
           );
@@ -829,7 +842,9 @@ export default function OrdersTable({
           return (
             <div
               key={order.id}
-              className="bg-white rounded-lg border p-4 space-y-3"
+              className={`bg-white rounded-lg border p-4 space-y-3 ${
+                shouldBlink ? "order-aging-alert" : ""
+              }`}
             >
               <div className="flex items-start justify-between">
                 <div>

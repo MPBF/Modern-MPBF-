@@ -580,6 +580,22 @@
   animation: bounce 2s infinite;
 }
 
+@keyframes agingOrderBlink {
+  0%,
+  100% {
+    background-color: hsl(var(--background));
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+  50% {
+    background-color: hsl(0 100% 97%);
+    box-shadow: inset 0 0 0 2px hsl(0 84% 60% / 0.9);
+  }
+}
+
+.order-aging-alert {
+  animation: agingOrderBlink 1.1s ease-in-out infinite;
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200px 0;
