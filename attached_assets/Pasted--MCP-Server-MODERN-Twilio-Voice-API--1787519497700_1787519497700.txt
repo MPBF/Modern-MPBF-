@@ -1,0 +1,387 @@
+أريدك تبني لي تكامل **MCP Server** داخل تطبيق **MODERN** لربط التطبيق مع **Twilio Voice API** بحيث أقدر من ChatGPT أو أي عميل MCP مصرح له أن أنفذ مكالمات هاتفية صادرة بشكل آمن ومنظم.
+
+## الهدف
+
+أريد أن أقدر أرسل أوامر مثل:
+
+- اتصل على الرقم `+9665XXXXXXXX`
+- قل له: "السلام عليكم، كيف حالك؟"
+- اتصل بفلان وبلغه رسالة محددة
+- لاحقًا نقدر نضيف محادثة صوتية تفاعلية بالذكاء الاصطناعي
+
+الإصدار الأول المطلوب حاليًا يكون بسيط ومستقر: **Outbound Call + Text-to-Speech فقط**.
+
+## البنية المطلوبة
+
+أريد الربط يكون بهذا الشكل:
+
+ChatGPT / MCP Client  
+→ MODERN MCP Server  
+→ Twilio REST API  
+→ المكالمة الهاتفية  
+→ TwiML  
+→ Text-to-Speech
+
+لا أريد وضع بيانات Twilio الحساسة داخل الواجهة الأمامية Frontend إطلاقًا. كل الاتصال مع Twilio يكون من خلال Backend في MODERN.
+
+## بيانات Twilio
+
+استخدم متغيرات بيئة Environment Variables فقط:
+
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_API_KEY_SID=
+TWILIO_API_KEY_SECRET=
+TWILIO_PHONE_NUMBER=
+PUBLIC_BASE_URL=
+```
+
+ممنوع Hardcode لأي Secret أو SID أو Token داخل الكود أو GitHub.
+
+استخدم API Key SID + API Key Secret للمصادقة مع Twilio متى ما كان ذلك مناسبًا، وليس Auth Token إذا لم نكن بحاجة له.
+
+## MCP Tools المطلوبة
+
+أنشئ MCP Tool باسم:
+
+```text
+twilio_make_call
+```
+
+ويقبل المدخلات التالية:
+
+```json
+{
+  "to": "+9665XXXXXXXX",
+  "message": "السلام عليكم، كيف حالك؟",
+  "language": "ar-SA"
+}
+```
+
+ويقوم بالآتي:
+
+1. يتحقق من صحة رقم الهاتف بصيغة E.164.
+2. يتحقق من أن الرسالة ليست فارغة.
+3. ينشئ مكالمة Outbound من رقم Twilio الخاص بنا.
+4. عند رد الطرف الآخر يتم تشغيل الرسالة باستخدام Twilio Text-to-Speech.
+5. يرجع إلى MCP Client نتيجة واضحة.
+
+النتيجة المطلوبة مثل:
+
+```json
+{
+  "success": true,
+  "callSid": "CAxxxxxxxxxxxxxxxx",
+  "status": "queued",
+  "to": "+9665XXXXXXXX"
+}
+```
+
+وفي حالة الخطأ:
+
+```json
+{
+  "success": false,
+  "error": "شرح واضح للخطأ"
+}
+```
+
+## TwiML
+
+أنشئ Endpoint في Backend مثل:
+
+```text
+POST /api/twilio/voice
+```
+
+يستقبل بيانات المكالمة ويرجع TwiML صحيح مثل:
+
+```xml
+<Response>
+  <Say language="ar-SA">السلام عليكم، كيف حالك؟</Say>
+</Response>
+```
+
+استخدم Twilio SDK الرسمي لإنشاء TwiML إذا كان ذلك أفضل من كتابة XML يدويًا.
+
+اهتم بعمل XML escaping للنص حتى لا تسبب الرموز الخاصة مشاكل.
+
+## إنشاء المكالمة
+
+استخدم Twilio REST API / SDK الرسمي.
+
+الفكرة تقريبًا:
+
+```javascript
+client.calls.create({
+  to,
+  from: process.env.TWILIO_PHONE_NUMBER,
+  url: `${PUBLIC_BASE_URL}/api/twilio/voice?...`
+})
+```
+
+لكن لا تمرر الرسالة الحساسة داخل Query String إذا كان بالإمكان تجنب ذلك.
+
+الأفضل استخدام Call ID أو Token مؤقت وربطه بالرسالة داخل السيرفر، ثم يقوم Twilio بطلب الـ webhook وجلب النص من السيرفر.
+
+## Webhook للأحداث
+
+أنشئ أيضًا Endpoint:
+
+```text
+POST /api/twilio/status
+```
+
+لاستقبال تحديثات حالة المكالمة مثل:
+
+- queued
+- initiated
+- ringing
+- in-progress
+- completed
+- busy
+- failed
+- no-answer
+- canceled
+
+واحفظ على الأقل:
+
+```text
+CallSid
+To
+From
+Status
+CreatedAt
+UpdatedAt
+ErrorCode
+ErrorMessage
+```
+
+## الأمان
+
+هذا الجزء مهم جدًا.
+
+طبّق الآتي:
+
+1. تحقق من Twilio webhook signature في كل Webhook قادم من Twilio.
+2. لا تسمح لأي شخص غير مصرح له باستخدام MCP Tool.
+3. لا تسمح بالاتصال بأي رقم بشكل مفتوح بدون Validation.
+4. ضع Rate Limiting.
+5. ضع Audit Log لكل مكالمة يتم طلبها.
+6. سجل:
+   - المستخدم الذي طلب المكالمة
+   - الرقم
+   - وقت الطلب
+   - Call SID
+   - النتيجة
+7. لا تسجل Secrets.
+8. لا تسجل محتوى حساس في Logs بدون داعٍ.
+
+## حماية إضافية
+
+في الإصدار الأول أريد إمكانية وضع Allowlist للأرقام المسموح الاتصال بها.
+
+مثلاً:
+
+```env
+TWILIO_ALLOWED_NUMBERS=+9665XXXXXXXX,+9665YYYYYYYY
+```
+
+أو الأفضل إنشاء جدول في قاعدة البيانات:
+
+```text
+AllowedPhoneNumbers
+```
+
+ويحتوي:
+
+```text
+id
+name
+phoneNumber
+isActive
+createdAt
+```
+
+ولا تتم أي مكالمة إلا إذا كان الرقم موجودًا ومفعّلًا، إلا إذا كان المستخدم المصرح له لديه Permission خاصة.
+
+## قاعدة البيانات
+
+إذا احتجنا حفظ المكالمات، أنشئ جدول مثل:
+
+```text
+TwilioCalls
+```
+
+الحقول المقترحة:
+
+```text
+id
+callSid
+requestedBy
+toNumber
+fromNumber
+message
+status
+errorCode
+errorMessage
+createdAt
+updatedAt
+completedAt
+```
+
+إذا كان حفظ `message` غير مناسب أمنيًا، اجعله اختياريًا أو احفظ Hash / metadata فقط.
+
+## MCP Tool إضافية
+
+أنشئ كذلك Tool:
+
+```text
+twilio_get_call_status
+```
+
+Input:
+
+```json
+{
+  "callSid": "CAxxxxxxxxxxxxxxxx"
+}
+```
+
+Output:
+
+```json
+{
+  "success": true,
+  "callSid": "CAxxxxxxxxxxxxxxxx",
+  "status": "completed",
+  "duration": 18
+}
+```
+
+## Tool ثالثة اختيارية
+
+أنشئ:
+
+```text
+twilio_list_recent_calls
+```
+
+Parameters:
+
+```json
+{
+  "limit": 20
+}
+```
+
+وتعيد آخر المكالمات مع الحالة فقط.
+
+## ngrok أثناء التطوير
+
+إذا كان MODERN يعمل محليًا على Windows أثناء التطوير، استخدم ngrok لعمل Public HTTPS URL.
+
+مثلاً إذا التطبيق يعمل على:
+
+```text
+http://localhost:5000
+```
+
+يتم تشغيل:
+
+```bash
+ngrok http 5000
+```
+
+ثم نضع الرابط الناتج في:
+
+```env
+PUBLIC_BASE_URL=https://xxxxx.ngrok-free.app
+```
+
+ويستخدم Twilio هذا الرابط للوصول إلى:
+
+```text
+/api/twilio/voice
+/api/twilio/status
+```
+
+لكن صمم النظام بحيث عند الانتقال إلى Production نستبدل ngrok بدومين حقيقي بدون تغيير منطق التطبيق.
+
+## جودة التنفيذ
+
+أريد التنفيذ يكون Production-oriented وليس Demo عشوائي.
+
+استخدم:
+
+- TypeScript إذا كان Backend الحالي يدعمه
+- Twilio official Node.js SDK
+- Zod أو Validator مشابه للتحقق من MCP inputs
+- Error handling مركزي
+- Structured logging
+- Environment validation عند تشغيل التطبيق
+
+## لا تكسر التطبيق الحالي
+
+قبل تنفيذ أي شيء:
+
+1. افحص بنية MODERN الحالية.
+2. اعرف Backend framework المستخدم.
+3. اعرف طريقة تعريف MCP Tools الموجودة حاليًا إن وجدت.
+4. اعرف نظام Authentication والصلاحيات الحالي.
+5. استخدم نفس Architecture وCoding conventions الموجودة.
+6. لا تنشئ Backend منفصل إذا كان MODERN لديه Backend قائم وقابل للتوسعة.
+7. لا تعدل ملفات رئيسية كبيرة بشكل غير ضروري.
+8. اجعل Twilio integration Module مستقل قدر الإمكان.
+
+اقترح بنية مثل:
+
+```text
+src/
+  integrations/
+    twilio/
+      twilio.client.ts
+      twilio.service.ts
+      twilio.routes.ts
+      twilio.webhooks.ts
+      twilio.schemas.ts
+      twilio.types.ts
+
+  mcp/
+    tools/
+      twilio.make-call.ts
+      twilio.call-status.ts
+```
+
+لكن التزم ببنية المشروع الفعلية إذا كانت مختلفة.
+
+## اختبار مطلوب
+
+أريدك بعد الانتهاء تختبر:
+
+1. الاتصال برقم مسموح به.
+2. قراءة رسالة قصيرة.
+3. استقبال status webhook.
+4. التحقق من Call SID.
+5. حالة no-answer.
+6. حالة busy.
+7. رقم غير صحيح.
+8. رقم غير موجود في Allowlist.
+9. Twilio credentials غير صحيحة.
+10. webhook signature غير صحيحة.
+
+## النتيجة النهائية التي أريدها منك
+
+بعد التنفيذ أعطني:
+
+- الملفات التي تم إنشاؤها أو تعديلها.
+- شرح Architecture.
+- أسماء Environment Variables المطلوبة.
+- طريقة تشغيل ngrok.
+- طريقة إعداد Twilio webhook.
+- أسماء MCP Tools.
+- مثال لكل MCP Tool.
+- أي إعداد مطلوب في Twilio Console.
+- طريقة اختبار المكالمة الأولى.
+
+ولا ترسل لي أجزاء كود متفرقة فقط. إذا احتجت تعديل ملف موجود، أعطني **الملف كامل بعد التعديل وجاهز للنسخ واللصق**.
