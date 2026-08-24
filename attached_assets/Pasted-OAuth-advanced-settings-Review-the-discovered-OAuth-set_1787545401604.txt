@@ -1,0 +1,61 @@
+OAuth advanced settings
+
+Review the discovered OAuth settings, choose how ChatGPT should obtain an OAuth client, and configure default scopes before you create the connector.
+
+Client registration
+
+Registration method
+Choose whether ChatGPT should use your client credentials, Dynamic Client Registration (DCR), or Client Identifier Metadata Document (CIMD). See the .
+
+
+User-Defined OAuth Client
+Use your own OAuth client ID and optional client secret for this connector.
+
+CIMD is unavailable because the server did not advertise CIMD support.
+Callback URL
+Click to copy
+
+https://chatgpt.com/connector/oauth/NbVwtZ8gBVm0
+OAuth Client ID
+OAuth Client Secret (Optional)
+Token endpoint auth method
+
+none
+Scopes
+
+Base scopes are always requested. Today, if every selected action defines OAuth scope tags, ChatGPT requests those action scopes plus base scopes. Otherwise it requests the default scopes plus base scopes. See the .
+
+Default scopes
+Choose the default scopes ChatGPT requests when action-level OAuth scope tags are not defined for every selected action.
+
+mcp:read
+Base scopes
+One value per line or comma-separated
+Scopes to request with every auth request, no matter which actions are chosen.
+
+OAuth endpoints
+
+These endpoints are discovered from the MCP server. If Registration URL is missing, Dynamic Client Registration will fail. See the .
+
+Auth URL
+https://m.modplastic.com/oauth/authorize
+Token URL
+https://m.modplastic.com/oauth/token
+Registration URL
+https://m.modplastic.com/oauth/register
+Authorization server base
+https://m.modplastic.com
+Resource
+https://m.modplastic.com/mcp
+OpenID support
+
+OpenID Connect (OIDC) lets ChatGPT fetch the authenticated user's email for authorization domain claiming.
+
+OIDC enabled
+This server did not advertise an OIDC configuration URL, so OpenID support is unavailable.
+OIDC configuration URL
+https://example.com
+OIDC userinfo endpoint
+https://example.com
+OIDC scopes supported
+One value per line or comma-separated
