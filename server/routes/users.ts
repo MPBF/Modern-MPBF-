@@ -751,6 +751,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           "service_start_date",
           "profession",
           "is_system_user",
+          "include_in_attendance",
         ];
         const candidate: Record<string, any> = {
           role_id: roleId,
@@ -854,11 +855,11 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           "service_start_date",
           "profession",
           "is_system_user",
+          "include_in_attendance",
         ];
-        const candidate: Record<string, any> = {
-          role_id: roleId,
-          section_id: sectionId,
-        };
+        const candidate: Record<string, any> = {};
+        if (req.body.role_id !== undefined) candidate.role_id = roleId;
+        if (req.body.section_id !== undefined) candidate.section_id = sectionId;
         for (const field of allowedFields) {
           if (req.body[field] !== undefined) {
             candidate[field] = req.body[field];

@@ -513,6 +513,7 @@ export class UsersStorage extends StorageBase {
             service_start_date: users.service_start_date,
             profession: users.profession,
             is_system_user: users.is_system_user,
+            include_in_attendance: users.include_in_attendance,
           })
           .from(users)
           .where(eq(users.id, id));
@@ -552,6 +553,7 @@ export class UsersStorage extends StorageBase {
             service_start_date: users.service_start_date,
             profession: users.profession,
             is_system_user: users.is_system_user,
+            include_in_attendance: users.include_in_attendance,
           })
           .from(users)
           .where(or(isNull(users.status), ne(users.status, "deleted")))
@@ -591,6 +593,7 @@ export class UsersStorage extends StorageBase {
             service_start_date: users.service_start_date,
             profession: users.profession,
             is_system_user: users.is_system_user,
+            include_in_attendance: users.include_in_attendance,
           })
           .from(users)
           .where(eq(users.role_id, roleId));

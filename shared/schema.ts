@@ -137,6 +137,9 @@ export const users = pgTable(
     status: varchar("status", { length: 20 }).default("active"), // active / suspended / deleted
     must_change_password: boolean("must_change_password").default(false),
     is_system_user: boolean("is_system_user").notNull().default(false), // مستخدم نظام (آلي/محاكى)
+    include_in_attendance: boolean("include_in_attendance")
+      .notNull()
+      .default(true), // إظهار المستخدم في سجلات وتقارير الحضور والانصراف
     created_at: timestamp("created_at").defaultNow(),
 
     // بيانات الموظف الإضافية (غير إلزامية)
@@ -3114,6 +3117,7 @@ export const createUserApiSchema = z
     service_start_date: emptyToNull(isoDateString().nullable()).optional(),
     profession: emptyToNull(z.string().max(100).nullable()).optional(),
     is_system_user: z.boolean().optional(),
+    include_in_attendance: z.boolean().optional(),
   })
   .strict();
 
@@ -3135,6 +3139,7 @@ export const updateUserSchema = z
     service_start_date: emptyToNull(isoDateString().nullable()).optional(),
     profession: emptyToNull(z.string().max(100).nullable()).optional(),
     is_system_user: z.boolean().optional(),
+    include_in_attendance: z.boolean().optional(),
   })
   .strict();
 

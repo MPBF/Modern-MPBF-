@@ -358,7 +358,12 @@ export class HrStorage extends MachinesStorage {
         })
         .from(users)
         .leftJoin(roles, eq(users.role_id, roles.id))
-        .where(eq(users.status, "active"));
+        .where(
+          and(
+            eq(users.status, "active"),
+            eq(users.include_in_attendance, true),
+          ),
+        );
 
       const attendanceRecords = await db
         .select()
@@ -522,6 +527,7 @@ export class HrStorage extends MachinesStorage {
 
     const conditions = [
       sql`${attendance.date} BETWEEN ${startStr} AND ${endStr}`,
+      eq(users.include_in_attendance, true),
     ];
 
     if (filters?.sectionId) {
@@ -564,23 +570,34 @@ export class HrStorage extends MachinesStorage {
     const totalUsers = await db
       .select({ count: count() })
       .from(users)
-      .where(eq(users.status, "active"));
+      .where(
+        and(
+          eq(users.status, "active"),
+          eq(users.include_in_attendance, true),
+        ),
+      );
 
     const total = totalUsers[0]?.count || 0;
 
     const attendanceRecords = await db
-      .select()
+      .select({ record: attendance })
       .from(attendance)
-      .where(eq(attendance.date, date));
+      .innerJoin(users, eq(attendance.user_id, users.id))
+      .where(
+        and(
+          eq(attendance.date, date),
+          eq(users.include_in_attendance, true),
+        ),
+      );
 
     const present = attendanceRecords.filter(
-      (r) => r.status === "حاضر" || r.check_in_time !== null,
+      ({ record }) => record.status === "حاضر" || record.check_in_time !== null,
     ).length;
     const onLeave = attendanceRecords.filter(
-      (r) => r.status === "إجازة",
+      ({ record }) => record.status === "إجازة",
     ).length;
     const late = attendanceRecords.filter(
-      (r) => (r.late_minutes || 0) > 0,
+      ({ record }) => (record.late_minutes || 0) > 0,
     ).length;
     const absent = total - present - onLeave;
 
@@ -794,7 +811,12 @@ export class HrStorage extends MachinesStorage {
           })
           .from(users)
           .leftJoin(roles, eq(users.role_id, roles.id))
-          .where(eq(users.status, "active"))
+          .where(
+            and(
+              eq(users.status, "active"),
+              eq(users.include_in_attendance, true),
+            ),
+          )
           .orderBy(users.display_name);
 
         const attRows = await db
@@ -1396,6 +1418,7 @@ export class HrStorage extends MachinesStorage {
           })
           .from(users)
           .leftJoin(roles, eq(users.role_id, roles.id))
+          .where(eq(users.include_in_attendance, true))
           .orderBy(users.display_name);
 
         const sectionsMap = await this.getSectionsMap();
@@ -1448,7 +1471,12 @@ export class HrStorage extends MachinesStorage {
           })
           .from(users)
           .leftJoin(roles, eq(users.role_id, roles.id))
-          .where(eq(users.id, userId))
+          .where(
+            and(
+              eq(users.id, userId),
+              eq(users.include_in_attendance, true),
+            ),
+          )
           .limit(1);
 
         if (!profile) return null;
@@ -1585,6 +1613,10 @@ export class HrStorage extends MachinesStorage {
         const fetchFrom = this.addDaysStr(from, -1);
         const fetchTo = this.addDaysStr(to, 1);
 
+        const employeeConditions = [eq(users.include_in_attendance, true)];
+        if (sectionId) {
+          employeeConditions.push(eq(users.section_id, sectionId));
+        }
         const empRows = await db
           .select({
             id: users.id,
@@ -1595,7 +1627,7 @@ export class HrStorage extends MachinesStorage {
             section_id: users.section_id,
           })
           .from(users)
-          .where(sectionId ? eq(users.section_id, sectionId) : sql`true`)
+          .where(and(...employeeConditions))
           .orderBy(users.display_name);
 
         const userIds = empRows.map((e) => e.id);

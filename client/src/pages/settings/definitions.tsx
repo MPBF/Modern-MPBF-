@@ -475,6 +475,7 @@ export default function Definitions() {
     service_start_date: "",
     profession: "",
     is_system_user: false,
+    include_in_attendance: true,
   });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -2198,15 +2199,34 @@ export default function Definitions() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => {
-      return fetch(`/api/users/${id}`, {
+    mutationFn: async ({ id, data }: { id: string | number; data: any }) => {
+      const response = await fetch(`/api/users/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
-      }).then((res) => res.json());
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.message || "فشل تحديث المستخدم");
+      }
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/attendance/daily"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/attendance/report"] });
+      if (
+        Object.keys(variables.data).length === 1 &&
+        "include_in_attendance" in variables.data
+      ) {
+        toast({
+          title: variables.data.include_in_attendance
+            ? "تم شمول المستخدم في الحضور والانصراف"
+            : "تم إخفاء المستخدم من الحضور والانصراف",
+        });
+        return;
+      }
       resetForm();
       setIsDialogOpen(false);
       toast({ title: t("definitions.messages.userUpdated") });
@@ -2442,6 +2462,7 @@ export default function Definitions() {
       service_start_date: "",
       profession: "",
       is_system_user: false,
+      include_in_attendance: true,
     });
     setMasterBatchColorForm({
       id: "",
@@ -4138,6 +4159,9 @@ export default function Definitions() {
                               <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
                                 {t("definitions.table.role")}
                               </th>
+                              <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide border-r border-blue-200 dark:border-gray-600 last:border-r-0">
+                                الحضور والانصراف
+                              </th>
                               <th className="px-6 py-3 text-center text-xs font-semibold text-blue-800 dark:text-blue-200 uppercase tracking-wide last:border-r-0">
                                 {t("definitions.table.actions")}
                               </th>
@@ -4207,6 +4231,37 @@ export default function Definitions() {
                                           return role ? role.name_ar || role.name : "-";
                                         })()}
                                       </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap text-sm text-center border-r border-gray-100 dark:border-gray-700">
+                                        {canEditUsers ? (
+                                          <div className="flex items-center justify-center gap-2">
+                                            <Switch
+                                              checked={u.include_in_attendance !== false}
+                                              disabled={updateUserMutation.isPending}
+                                              onCheckedChange={(checked) =>
+                                                updateUserMutation.mutate({
+                                                  id: u.id,
+                                                  data: {
+                                                    include_in_attendance: checked,
+                                                  },
+                                                })
+                                              }
+                                              aria-label={`شمول ${u.display_name_ar || u.display_name || u.username} في الحضور والانصراف`}
+                                              data-testid={`switch-attendance-inclusion-${u.id}`}
+                                            />
+                                            <span className={u.include_in_attendance !== false ? "text-xs text-green-700 dark:text-green-300" : "text-xs text-gray-500 dark:text-gray-400"}>
+                                              {u.include_in_attendance !== false
+                                                ? "مشمول"
+                                                : "غير مشمول"}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">
+                                            {u.include_in_attendance !== false
+                                              ? "مشمول"
+                                              : "غير مشمول"}
+                                          </span>
+                                        )}
+                                      </td>
                                       <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-center">
                                         <div className="flex items-center justify-center gap-2">
                                           {canEditUsers && (
@@ -4241,6 +4296,8 @@ export default function Definitions() {
                                                   service_start_date: u.service_start_date ? String(u.service_start_date).slice(0, 10) : "",
                                                   profession: u.profession || "",
                                                   is_system_user: !!u.is_system_user,
+                                                  include_in_attendance:
+                                                    u.include_in_attendance !== false,
                                                 });
                                                 setSelectedTab("users");
                                                 setShowPassword(false);
@@ -4274,7 +4331,7 @@ export default function Definitions() {
                               ) : (
                                 <tr>
                                   <td
-                                    colSpan={canDeleteUsers ? 7 : 6}
+                                    colSpan={canDeleteUsers ? 8 : 7}
                                     className="px-6 py-8 text-center text-gray-500"
                                   >
                                     {t("definitions.noSearchResults")}
@@ -7394,6 +7451,31 @@ export default function Definitions() {
                         setUserForm({ ...userForm, is_system_user: checked })
                       }
                       data-testid="switch-system-user"
+                    />
+                  </div>
+                  <div className="col-span-2 flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <Label
+                        htmlFor="include_in_attendance"
+                        className="font-medium"
+                      >
+                        مشمول في الحضور والانصراف
+                      </Label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        عند التعطيل، يُخفى المستخدم من سجل وكشوف الحضور
+                        والانصراف، بما فيها السجلات السابقة، دون حذف بياناته.
+                      </p>
+                    </div>
+                    <Switch
+                      id="include_in_attendance"
+                      checked={userForm.include_in_attendance}
+                      onCheckedChange={(checked) =>
+                        setUserForm({
+                          ...userForm,
+                          include_in_attendance: checked,
+                        })
+                      }
+                      data-testid="switch-attendance-inclusion-form"
                     />
                   </div>
                 </div>

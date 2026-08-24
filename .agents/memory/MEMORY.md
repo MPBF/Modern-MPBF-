@@ -51,3 +51,4 @@
 - [System-user automation boundaries](system-user-automation-boundaries.md) — bot context is grant-scoped; reply execution uses tokenized leases plus atomic send/finalize; blank windows inherit Riyadh shifts.
 - [Scoped transitive overrides](scoped-transitive-overrides.md) — never force one major across incompatible transitive consumers; pin the patched release by parent-major and verify a clean install plus runtime use.
 - [Modern-agent saved references](modern-agent-saved-references.md) — permanent AI uploads stay owner-scoped and enter requests as untrusted reference data, never global system knowledge.
+- [Schema drift migrations](schema-drift-migrations.md) — when drizzle-kit push prompts over existing drift, do not force a broad diff for one reviewed additive change.
