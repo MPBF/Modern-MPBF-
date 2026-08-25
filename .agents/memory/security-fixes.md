@@ -33,6 +33,11 @@ description: Durable security/authorization patterns and gotchas for this codeba
 - **Why:** production had working account credentials but no API Key pair, which made an otherwise authorized call fail as misconfigured. The owner explicitly chose the fallback rather than postponing service for a new restricted key.
 - **How to apply:** keep `PUBLIC_BASE_URL` on the HTTPS production domain, treat account-token fallback as a compatibility path, and move back to an API Key when it is provisioned.
 
+## Twilio Voice production configuration
+- Keep callback URL and phone allowlist scoped explicitly to production (and development if needed), and re-publish after any environment or secret update. A secret name being present is not proof that a running deployment has loaded a usable value.
+- **Why:** the live MCP call process reported required values missing even while the secret inventory listed their names; re-saving the affected credentials and preparing production-scoped runtime values resolves the deployment snapshot mismatch.
+- **How to apply:** verify only existence statuses, never print credentials; then publish a fresh production build before retrying a voice call.
+
 ## Private knowledge non-disclosure (must be server-side, not prompt-only)
 - Prompt instructions ("never quote verbatim") are NOT a control. Use a deterministic substring leak detector that normalizes private content and checks it against any user-visible output.
 - Windowing: `win = min(60, content.length)`, step ~20, PLUS an always-checked trailing window `content.slice(-win)`. A fixed `win=60` silently skips secrets of length 40–59 (loop never runs) and skips the tail — both exploitable.
