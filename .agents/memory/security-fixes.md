@@ -28,6 +28,11 @@ description: Durable security/authorization patterns and gotchas for this codeba
 - Phone-allowlist bypass stays separately gated by both the key-level bypass flag and the `manage_twilio_voice` permission; ordinary call permission never bypasses the approved-number list.
 - **Why:** the production call tool originally checked only the per-key `voice_access` flag, so an authorized administrator was rejected despite their explicit role permission. Role-based access is the selected policy; inactive keys remain rejected before tools are exposed.
 
+## Twilio Voice credential fallback
+- Prefer a restricted Twilio API Key when it is configured. If it is absent, outbound calls may use the existing Account SID and Auth Token pair; the Auth Token still verifies Twilio webhooks.
+- **Why:** production had working account credentials but no API Key pair, which made an otherwise authorized call fail as misconfigured. The owner explicitly chose the fallback rather than postponing service for a new restricted key.
+- **How to apply:** keep `PUBLIC_BASE_URL` on the HTTPS production domain, treat account-token fallback as a compatibility path, and move back to an API Key when it is provisioned.
+
 ## Private knowledge non-disclosure (must be server-side, not prompt-only)
 - Prompt instructions ("never quote verbatim") are NOT a control. Use a deterministic substring leak detector that normalizes private content and checks it against any user-visible output.
 - Windowing: `win = min(60, content.length)`, step ~20, PLUS an always-checked trailing window `content.slice(-win)`. A fixed `win=60` silently skips secrets of length 40–59 (loop never runs) and skips the tail — both exploitable.

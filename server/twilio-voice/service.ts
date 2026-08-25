@@ -30,8 +30,8 @@ export class TwilioVoiceError extends Error {
 
 interface TwilioVoiceConfig {
   accountSid: string;
-  apiKeySid: string;
-  apiKeySecret: string;
+  apiKeySid?: string;
+  apiKeySecret?: string;
   phoneNumber: string;
   publicBaseUrl: string;
   authToken: string;
@@ -48,13 +48,18 @@ function readConfig(requireWebhookSecret = false): TwilioVoiceConfig {
   };
   const required = [
     "TWILIO_ACCOUNT_SID",
-    "TWILIO_API_KEY_SID",
-    "TWILIO_API_KEY_SECRET",
     "TWILIO_PHONE_NUMBER",
     "PUBLIC_BASE_URL",
     ...(requireWebhookSecret ? ["TWILIO_AUTH_TOKEN"] : []),
   ];
   const missing = required.filter((name) => !values[name as keyof typeof values]);
+  const hasApiKey =
+    Boolean(values.apiKeySid) && Boolean(values.apiKeySecret);
+  const hasAuthToken = Boolean(values.authToken);
+
+  if (!hasApiKey && !hasAuthToken) {
+    missing.push("TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET أو TWILIO_AUTH_TOKEN");
+  }
   if (missing.length) {
     throw new TwilioVoiceError(
       `إعدادات Twilio غير مكتملة: ${missing.join(", ")}`,
@@ -100,9 +105,13 @@ function readConfig(requireWebhookSecret = false): TwilioVoiceConfig {
 }
 
 function twilioClient(config: TwilioVoiceConfig) {
-  return twilio(config.apiKeySid, config.apiKeySecret, {
-    accountSid: config.accountSid,
-  });
+  if (config.apiKeySid && config.apiKeySecret) {
+    return twilio(config.apiKeySid, config.apiKeySecret, {
+      accountSid: config.accountSid,
+    });
+  }
+
+  return twilio(config.accountSid, config.authToken);
 }
 
 function hashToken(token: string): string {
