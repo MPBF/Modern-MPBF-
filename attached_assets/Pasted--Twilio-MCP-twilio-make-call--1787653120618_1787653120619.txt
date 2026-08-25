@@ -1,0 +1,123 @@
+أريدك مراجعة وتعديل تعريف أدوات Twilio داخل MCP، خصوصًا أداة:
+
+`twilio_make_call`
+
+المشكلة الحالية أن ChatGPT يحظر استدعاء الأداة من جهة OpenAI قبل وصول الطلب فعليًا إلى الـ backend، بينما الأدوات نفسها ظاهرة ومكتشفة داخل MCP.
+
+المطلوب:
+
+1. استبدال تسجيل أداة `twilio_make_call` من الأسلوب الحالي:
+
+```ts
+server.tool(...)
+```
+
+إلى:
+
+```ts
+server.registerTool(...)
+```
+
+إذا كان إصدار `@modelcontextprotocol/sdk` المستخدم يدعم ذلك.
+
+2. إضافة تعريف واضح وصريح للأداة يتضمن:
+
+```ts
+title: "Make outbound phone call"
+```
+
+ووصف قريب من:
+
+```text
+Place an outbound phone call only when explicitly requested by the authenticated user. The call can only be made to an allowed phone number and reads the exact user-provided message using text-to-speech.
+```
+
+3. إضافة الـ MCP annotations التالية لأداة `twilio_make_call`:
+
+```ts
+annotations: {
+  title: "Make outbound phone call",
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+}
+```
+
+السبب:
+- الأداة تنفذ فعل خارجي حقيقي.
+- ليست Read Only.
+- إعادة تنفيذها قد تنشئ مكالمة ثانية، لذلك `idempotentHint` يجب أن يكون `false`.
+- تتفاعل مع خدمة Twilio ورقم هاتف خارجي، لذلك `openWorldHint` يجب أن يكون `true`.
+
+4. حافظ على نفس الـ input schema الحالي:
+
+```ts
+twilioMakeCallInputSchema
+```
+
+والذي يحتوي على:
+
+```text
+to
+message
+language
+```
+
+ولا تغيّر منطق الصلاحيات الحالي:
+
+```ts
+canUseTwilioVoice(auth)
+```
+
+ولا منطق قائمة الأرقام المسموحة:
+
+```ts
+isPhoneAllowed(...)
+```
+
+5. لا تجعل وصف الأداة يوحي بأنها تتصل تلقائيًا أو بدون طلب المستخدم.
+
+تجنب عبارات مثل:
+
+```text
+automatically call
+call any number
+call without confirmation
+initiate calls automatically
+```
+
+6. عدّل أيضًا أدوات القراءة:
+
+`twilio_get_call_status`
+
+و:
+
+`twilio_list_recent_calls`
+
+بحيث تستخدم metadata واضحة، ويفضل:
+
+```ts
+annotations: {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+}
+```
+
+7. بعد التعديل:
+- تأكد أن المشروع يبني بدون أخطاء TypeScript.
+- تأكد أن إصدار MCP SDK يدعم `registerTool` و`annotations`.
+- إذا كان الإصدار قديمًا، حدّثه للإصدار المناسب أو استخدم الطريقة الرسمية المكافئة في نفس الإصدار.
+- أعد نشر نسخة إنتاج جديدة.
+- تحقق من أن ChatGPT يرى التعريف الجديد للأداة بعد النشر.
+
+8. مهم جدًا: لا تغيّر منطق Twilio الداخلي أو Twilio credentials الآن إلا إذا ظهر خطأ جديد بعد تجاوز حظر OpenAI.
+
+الهدف الحالي فقط هو جعل تعريف أداة MCP واضحًا ومتوافقًا بحيث لا تُحجب أداة `twilio_make_call` قبل وصول الطلب إلى السيرفر.
+
+بعد الانتهاء، أعطني:
+- الكود النهائي لملف `twilio-voice/tools.ts`
+- إصدار `@modelcontextprotocol/sdk`
+- وما إذا كانت `annotations` ظاهرة فعلًا في `tools/list`
