@@ -9,6 +9,7 @@ import { db } from "./db";
 import { validateOAuthToken } from "./mcp-oauth";
 import { createMcpServer } from "./mcp-server";
 import type { McpAuthContext } from "./mcp-types";
+import { getMcpUserPermissions } from "./mcp-user-permissions";
 import { requireAuth, requireAdmin, type AuthRequest } from "./middleware/auth";
 
 import type { Express, Request, Response } from "express";
@@ -44,6 +45,7 @@ async function validateApiKey(key: string): Promise<McpAuthContext | null> {
         apiKeyId: result[0].id,
         userId: result[0].created_by,
         scopes: ["mcp:read"],
+        permissions: await getMcpUserPermissions(result[0].created_by),
         voiceAccess: result[0].voice_access,
         voiceAllowlistBypass: result[0].voice_allowlist_bypass,
       };

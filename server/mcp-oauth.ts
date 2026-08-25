@@ -9,6 +9,7 @@ import { eq, and, lt, sql } from "drizzle-orm";
 
 import { db } from "./db";
 import type { McpAuthContext } from "./mcp-types";
+import { getMcpUserPermissions } from "./mcp-user-permissions";
 
 import type { Express, Request, Response } from "express";
 
@@ -99,6 +100,7 @@ export async function validateOAuthToken(
           .split(/\s+/)
           .map((scope) => scope.trim())
           .filter(Boolean),
+        permissions: await getMcpUserPermissions(apiKeyResult[0].created_by),
         voiceAccess: apiKeyResult[0].voice_access,
         voiceAllowlistBypass: apiKeyResult[0].voice_allowlist_bypass,
       };

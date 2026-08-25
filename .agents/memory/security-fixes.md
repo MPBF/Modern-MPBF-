@@ -23,6 +23,11 @@ description: Durable security/authorization patterns and gotchas for this codeba
 - AI-generated SQL: block `UPDATE`/`INSERT INTO` against sensitive tables (permissions, agent settings/knowledge, sessions); SELECT may stay allowed.
 - Per-user data isolation: scope sandbox/agent data by an owner prefix (`u{userId}_`) on reads/writes/deletes; admins may wipe all, regular users only their prefix.
 
+## MCP Twilio Voice authorization
+- An active MCP key may make calls only when its creator's role has `use_twilio_voice`, `manage_twilio_voice`, or `admin`. Both direct API-key and OAuth token validation must hydrate the same role permissions before creating the MCP auth context.
+- Phone-allowlist bypass stays separately gated by both the key-level bypass flag and the `manage_twilio_voice` permission; ordinary call permission never bypasses the approved-number list.
+- **Why:** the production call tool originally checked only the per-key `voice_access` flag, so an authorized administrator was rejected despite their explicit role permission. Role-based access is the selected policy; inactive keys remain rejected before tools are exposed.
+
 ## Private knowledge non-disclosure (must be server-side, not prompt-only)
 - Prompt instructions ("never quote verbatim") are NOT a control. Use a deterministic substring leak detector that normalizes private content and checks it against any user-visible output.
 - Windowing: `win = min(60, content.length)`, step ~20, PLUS an always-checked trailing window `content.slice(-win)`. A fixed `win=60` silently skips secrets of length 40–59 (loop never runs) and skips the tail — both exploitable.

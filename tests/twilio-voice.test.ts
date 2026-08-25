@@ -74,13 +74,15 @@ describe("Twilio Voice MCP validation", () => {
       apiKeyId: 11,
       userId: 1,
       scopes: ["mcp:read"],
-      voiceAccess: true,
+      permissions: ["use_twilio_voice"],
+      voiceAccess: false,
       voiceAllowlistBypass: false,
     };
-    const disabledKey = { ...ordinaryKey, apiKeyId: 12, voiceAccess: false };
+    const disabledKey = { ...ordinaryKey, apiKeyId: 12, permissions: [] };
     const managerKey = {
       ...ordinaryKey,
       apiKeyId: 13,
+      permissions: ["manage_twilio_voice"],
       voiceAllowlistBypass: true,
     };
 
