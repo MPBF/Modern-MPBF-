@@ -41,10 +41,21 @@ export function registerTwilioVoiceTools(
   server: McpServer,
   auth: McpAuthContext,
 ): void {
-  server.tool(
+  server.registerTool(
     "twilio_make_call",
-    "Make a secure outbound phone call using Twilio and read a short text-to-speech message.",
-    twilioMakeCallInputSchema,
+    {
+      title: "Make outbound phone call",
+      description:
+        "Place an outbound phone call only when explicitly requested by the authenticated user. The call can only be made to an allowed phone number and reads the exact user-provided message using text-to-speech.",
+      inputSchema: twilioMakeCallInputSchema,
+      annotations: {
+        title: "Make outbound phone call",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
     async ({ to, message, language }) => {
       try {
         if (!canUseTwilioVoice(auth)) {
@@ -81,10 +92,21 @@ export function registerTwilioVoiceTools(
     },
   );
 
-  server.tool(
+  server.registerTool(
     "twilio_get_call_status",
-    "Get the current status and duration of a Twilio call previously created through MODERN.",
-    twilioCallStatusInputSchema,
+    {
+      title: "Get Twilio call status",
+      description:
+        "Get the current status and duration of a Twilio call previously created through MODERN.",
+      inputSchema: twilioCallStatusInputSchema,
+      annotations: {
+        title: "Get Twilio call status",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
     async ({ callSid }) => {
       try {
         if (!canUseTwilioVoice(auth)) {
@@ -112,10 +134,21 @@ export function registerTwilioVoiceTools(
     },
   );
 
-  server.tool(
+  server.registerTool(
     "twilio_list_recent_calls",
-    "List recent Twilio calls with status only; regular users see their own calls and managers may see all.",
-    twilioRecentCallsInputSchema,
+    {
+      title: "List recent Twilio calls",
+      description:
+        "List recent Twilio calls with status only; regular users see their own calls and managers may see all.",
+      inputSchema: twilioRecentCallsInputSchema,
+      annotations: {
+        title: "List recent Twilio calls",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
     async ({ limit }) => {
       try {
         if (!canUseTwilioVoice(auth)) {
