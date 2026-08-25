@@ -624,6 +624,32 @@ export function McpSettingsContent({
 
   const renderStepTwo = () => (
     <div className="space-y-5">
+      {generatedKey && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
+          <div className="mb-2 flex items-center gap-2 font-semibold text-green-800 dark:text-green-200">
+            <Key className="h-5 w-5" />
+            {isAr ? "مفتاح MCP الذي ستستخدمه في ChatGPT" : "MCP key to use in ChatGPT"}
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded bg-green-100 p-2 text-xs text-green-900 dark:bg-green-900 dark:text-green-100">
+              {generatedKey}
+            </code>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => copyToClipboard(generatedKey)}
+              aria-label={isAr ? "نسخ مفتاح MCP" : "Copy MCP key"}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-green-700 dark:text-green-300">
+            {isAr
+              ? "الصق هذا المفتاح في نافذة مصادقة MCP داخل ChatGPT. لن يظهر مرة أخرى بعد تحديث الصفحة."
+              : "Paste this key into the MCP authorization window in ChatGPT. It will not be shown again after refreshing this page."}
+          </p>
+        </div>
+      )}
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
         <div className="flex items-start gap-3">
           <ExternalLink className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
