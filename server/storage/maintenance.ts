@@ -18,6 +18,10 @@ import {
   preventive_maintenance_actions,
   preventive_maintenance_items,
   preventive_maintenance_action_machines,
+  maintenance_schedules,
+  maintenance_schedule_machines,
+  maintenance_schedule_items,
+  maintenance_schedule_runs,
   operator_negligence_reports,
   spare_parts,
   consumable_parts,
@@ -202,6 +206,9 @@ import {
   type PreventiveMaintenanceItem,
   type CreatePreventiveMaintenance,
   type UpdatePreventiveMaintenance,
+  type MaintenanceSchedule,
+  type CreateMaintenanceSchedule,
+  type UpdateMaintenanceSchedule,
   type OperatorNegligenceReport,
   type InsertOperatorNegligenceReport,
 
@@ -953,6 +960,455 @@ export class MaintenanceStorage extends HrStorage {
     await db
       .delete(preventive_maintenance_actions)
       .where(eq(preventive_maintenance_actions.id, id));
+  }
+
+  async getMaintenanceSchedules(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT
+        s.*,
+        sec.name AS section_name,
+        sec.name_ar AS section_name_ar,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id', sm.machine_id,
+            'name', m.name,
+            'name_ar', m.name_ar
+          )) FILTER (WHERE sm.machine_id IS NOT NULL),
+          '[]'::json
+        ) AS machines,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id', si.id,
+            'component_id', si.component_id,
+            'component_name_ar', si.component_name_ar,
+            'component_name_en', si.component_name_en,
+            'action_type', si.action_type,
+            'quantity', si.quantity,
+            'notes', si.notes
+          )) FILTER (WHERE si.id IS NOT NULL),
+          '[]'::json
+        ) AS items,
+        (
+          SELECT jsonb_build_object(
+            'id', r.id,
+            'scheduled_date', r.scheduled_date,
+            'status', r.status,
+            'created_action_ids', r.created_action_ids,
+            'error_message', r.error_message,
+            'completed_at', r.completed_at
+          )
+          FROM maintenance_schedule_runs r
+          WHERE r.schedule_id = s.id
+          ORDER BY r.scheduled_date DESC, r.id DESC
+          LIMIT 1
+        ) AS last_run
+      FROM maintenance_schedules s
+      LEFT JOIN sections sec ON sec.id = s.section_id
+      LEFT JOIN maintenance_schedule_machines sm ON sm.schedule_id = s.id
+      LEFT JOIN machines m ON m.id = sm.machine_id
+      LEFT JOIN maintenance_schedule_items si ON si.schedule_id = s.id
+      GROUP BY s.id, sec.name, sec.name_ar
+      ORDER BY s.next_due_date ASC, s.id DESC
+    `);
+    return result.rows as any[];
+  }
+
+  async getMaintenanceScheduleById(id: number): Promise<any | undefined> {
+    const schedules = await this.getMaintenanceSchedules();
+    const schedule = schedules.find((item) => Number(item.id) === id);
+    if (!schedule) return undefined;
+    const runs = await db
+      .select()
+      .from(maintenance_schedule_runs)
+      .where(eq(maintenance_schedule_runs.schedule_id, id))
+      .orderBy(desc(maintenance_schedule_runs.scheduled_date), desc(maintenance_schedule_runs.id));
+    return { ...schedule, runs };
+  }
+
+  private async assertScheduleTargets(
+    tx: any,
+    sectionId: string,
+    machineIds: string[],
+  ) {
+    const uniqueMachineIds = Array.from(new Set(machineIds));
+    if (uniqueMachineIds.length === 0) {
+      throw new Error("At least one machine is required");
+    }
+    const rows = await tx
+      .select({ id: machines.id })
+      .from(machines)
+      .where(
+        and(
+          eq(machines.section_id, sectionId),
+          inArray(machines.id, uniqueMachineIds),
+        ),
+      );
+    if (rows.length !== uniqueMachineIds.length) {
+      throw new Error("All schedule machines must belong to the selected section");
+    }
+    return uniqueMachineIds;
+  }
+
+  private scheduleDate(value: string | Date): string {
+    if (typeof value === "string") return value.slice(0, 10);
+    return value.toISOString().slice(0, 10);
+  }
+
+  private async getScheduleItemSnapshots(tx: any, items: any[]) {
+    type CatalogComponent = { id: number; name_ar: string; name_en: string };
+    const componentIds = Array.from(
+      new Set(items.map((item) => Number(item.component_id))),
+    );
+    const components: CatalogComponent[] = await tx
+      .select()
+      .from(maintenance_component_catalog)
+      .where(inArray(maintenance_component_catalog.id, componentIds));
+    if (components.length !== componentIds.length) {
+      throw new Error("One or more selected maintenance components do not exist");
+    }
+    const componentsById = new Map<number, CatalogComponent>(
+      components.map((component) => [component.id, component]),
+    );
+    return items.map((item) => {
+      const component = componentsById.get(Number(item.component_id));
+      if (!component) throw new Error("Selected maintenance component does not exist");
+      return {
+        component_id: component.id,
+        component_name_ar: component.name_ar,
+        component_name_en: component.name_en,
+        action_type: item.action_type || "inspection",
+        quantity: item.quantity || 1,
+        notes: item.notes || null,
+      };
+    });
+  }
+
+  async createMaintenanceSchedule(
+    payload: CreateMaintenanceSchedule & { created_by: number },
+  ): Promise<MaintenanceSchedule> {
+    return db.transaction(async (tx) => {
+      const machineIds = await this.assertScheduleTargets(
+        tx,
+        payload.section_id,
+        payload.machine_ids,
+      );
+      const itemSnapshots = await this.getScheduleItemSnapshots(tx, payload.items);
+      const [schedule] = await tx
+        .insert(maintenance_schedules)
+        .values({
+          name: payload.name.trim(),
+          section_id: payload.section_id,
+          start_date: this.scheduleDate(payload.start_date),
+          next_due_date: this.scheduleDate(payload.next_due_date),
+          is_active: payload.is_active ?? true,
+          description: payload.description || null,
+          created_by: payload.created_by,
+        })
+        .returning();
+      await tx.insert(maintenance_schedule_machines).values(
+        machineIds.map((machine_id) => ({
+          schedule_id: schedule.id,
+          machine_id,
+        })),
+      );
+      await tx.insert(maintenance_schedule_items).values(
+        itemSnapshots.map((item) => ({
+          schedule_id: schedule.id,
+          component_id: item.component_id,
+          component_name_ar: item.component_name_ar,
+          component_name_en: item.component_name_en,
+          action_type: item.action_type || "inspection",
+          quantity: item.quantity || 1,
+          notes: item.notes || null,
+        })),
+      );
+      return schedule;
+    });
+  }
+
+  async updateMaintenanceSchedule(
+    id: number,
+    payload: UpdateMaintenanceSchedule & { updated_by: number },
+  ): Promise<MaintenanceSchedule> {
+    return db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(maintenance_schedules)
+        .where(eq(maintenance_schedules.id, id))
+        .for("update");
+      if (!existing) throw new Error("Maintenance schedule not found");
+
+      const sectionId = payload.section_id ?? existing.section_id;
+      const machineIds = await this.assertScheduleTargets(
+        tx,
+        sectionId,
+        payload.machine_ids ?? (
+          await tx
+            .select({ machine_id: maintenance_schedule_machines.machine_id })
+            .from(maintenance_schedule_machines)
+            .where(eq(maintenance_schedule_machines.schedule_id, id))
+        ).map((row: any) => row.machine_id),
+      );
+      const [schedule] = await tx
+        .update(maintenance_schedules)
+        .set({
+          name: payload.name?.trim() || existing.name,
+          section_id: sectionId,
+          start_date: payload.start_date
+            ? this.scheduleDate(payload.start_date)
+            : existing.start_date,
+          next_due_date: payload.next_due_date
+            ? this.scheduleDate(payload.next_due_date)
+            : existing.next_due_date,
+          is_active: payload.is_active ?? existing.is_active,
+          description:
+            payload.description === undefined
+              ? existing.description
+              : payload.description || null,
+          updated_by: payload.updated_by,
+          updated_at: new Date(),
+        })
+        .where(eq(maintenance_schedules.id, id))
+        .returning();
+
+      if (payload.machine_ids) {
+        await tx
+          .delete(maintenance_schedule_machines)
+          .where(eq(maintenance_schedule_machines.schedule_id, id));
+        await tx.insert(maintenance_schedule_machines).values(
+          machineIds.map((machine_id) => ({
+            schedule_id: id,
+            machine_id,
+          })),
+        );
+      }
+      if (payload.items) {
+        const itemSnapshots = await this.getScheduleItemSnapshots(tx, payload.items);
+        await tx
+          .delete(maintenance_schedule_items)
+          .where(eq(maintenance_schedule_items.schedule_id, id));
+        await tx.insert(maintenance_schedule_items).values(
+          itemSnapshots.map((item) => ({
+            schedule_id: id,
+            component_id: item.component_id,
+            component_name_ar: item.component_name_ar,
+            component_name_en: item.component_name_en,
+            action_type: item.action_type || "inspection",
+            quantity: item.quantity || 1,
+            notes: item.notes || null,
+          })),
+        );
+      }
+      return schedule;
+    });
+  }
+
+  async deleteMaintenanceSchedule(id: number): Promise<boolean> {
+    const deleted = await db
+      .delete(maintenance_schedules)
+      .where(eq(maintenance_schedules.id, id))
+      .returning({ id: maintenance_schedules.id });
+    return deleted.length > 0;
+  }
+
+  private addAnnualDate(value: string | Date): string {
+    const dateValue = new Date(value);
+    const year = dateValue.getUTCFullYear() + 1;
+    const month = dateValue.getUTCMonth();
+    const day = dateValue.getUTCDate();
+    const next = new Date(Date.UTC(year, month, day));
+    if (next.getUTCMonth() !== month) {
+      next.setUTCDate(0);
+    }
+    return next.toISOString().slice(0, 10);
+  }
+
+  async runMaintenanceSchedule(
+    id: number,
+    options: { force?: boolean } = {},
+  ): Promise<any> {
+    return db.transaction(async (tx) => {
+      const [schedule] = await tx
+        .select()
+        .from(maintenance_schedules)
+        .where(eq(maintenance_schedules.id, id))
+        .for("update");
+      if (!schedule) throw new Error("Maintenance schedule not found");
+      if (!schedule.is_active && !options.force) {
+        throw new Error("Maintenance schedule is inactive");
+      }
+
+      const scheduledDate = String(schedule.next_due_date).slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      if (!options.force && scheduledDate > today) {
+        throw new Error("Maintenance schedule is not due yet");
+      }
+      // A manual early run is recorded for today and leaves the annual due
+      // date unchanged. This lets staff test or run an extra cycle without
+      // accidentally consuming the next year's scheduled work.
+      const runDate =
+        scheduledDate <= today ? scheduledDate : options.force ? today : scheduledDate;
+
+      const [existingRun] = await tx
+        .select()
+        .from(maintenance_schedule_runs)
+        .where(
+          and(
+            eq(maintenance_schedule_runs.schedule_id, id),
+            eq(maintenance_schedule_runs.scheduled_date, runDate),
+          ),
+        )
+        .for("update");
+      if (
+        existingRun?.status === "completed" &&
+        Array.isArray(existingRun.created_action_ids)
+      ) {
+        return {
+          schedule_id: id,
+          run_id: existingRun.id,
+          status: "already_completed",
+          created_action_ids: existingRun.created_action_ids,
+        };
+      }
+
+      const [run] = existingRun
+        ? [existingRun]
+        : await tx
+            .insert(maintenance_schedule_runs)
+            .values({
+              schedule_id: id,
+              scheduled_date: runDate,
+              status: "pending",
+              started_at: new Date(),
+            })
+            .returning();
+
+      await tx
+        .update(maintenance_schedule_runs)
+        .set({ status: "pending", started_at: new Date(), error_message: null })
+        .where(eq(maintenance_schedule_runs.id, run.id));
+
+      const createdActionIds: number[] = [];
+      try {
+        const targetMachines = await tx
+          .select({ machine_id: maintenance_schedule_machines.machine_id })
+          .from(maintenance_schedule_machines)
+          .where(eq(maintenance_schedule_machines.schedule_id, id));
+        const templateItems = await tx
+          .select()
+          .from(maintenance_schedule_items)
+          .where(eq(maintenance_schedule_items.schedule_id, id));
+        if (targetMachines.length === 0 || templateItems.length === 0) {
+          throw new Error("Maintenance schedule has no machines or components");
+        }
+        await tx.transaction(async (workTx) => {
+          for (const target of targetMachines) {
+            await workTx.execute(sql`SELECT pg_advisory_xact_lock(2089)`);
+            const maxResult = await workTx.execute(
+              sql`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM preventive_maintenance_actions`,
+            );
+            const nextId = Number((maxResult.rows?.[0] as any)?.next_id || 1);
+            const [action] = await workTx
+              .insert(preventive_maintenance_actions)
+              .values({
+                action_number: `PM${String(nextId).padStart(3, "0")}`,
+                section_id: schedule.section_id,
+                machine_id: target.machine_id,
+                performed_by: schedule.created_by,
+                action_date: new Date(`${runDate}T08:00:00.000Z`),
+                total_cost: "0",
+                notes: `${schedule.name} — ${schedule.description || "إجراء مجدول تلقائياً"}`,
+                status: "pending",
+              } as any)
+              .returning();
+            await workTx.insert(preventive_maintenance_items).values(
+              templateItems.map((item) => ({
+                preventive_action_id: action.id,
+                component_id: item.component_id,
+                component_name_ar: item.component_name_ar,
+                component_name_en: item.component_name_en,
+                action_type: item.action_type,
+                quantity: item.quantity,
+                cost: "0",
+                condition: null,
+                notes: item.notes,
+              })) as any,
+            );
+            await workTx.insert(preventive_maintenance_action_machines).values({
+              preventive_action_id: action.id,
+              machine_id: target.machine_id,
+            });
+            createdActionIds.push(action.id);
+          }
+        });
+        const nextDueDate =
+          scheduledDate <= today
+            ? this.addAnnualDate(scheduledDate)
+            : String(schedule.next_due_date).slice(0, 10);
+        await tx
+          .update(maintenance_schedule_runs)
+          .set({
+            status: "completed",
+            created_action_ids: createdActionIds,
+            completed_at: new Date(),
+          })
+          .where(eq(maintenance_schedule_runs.id, run.id));
+        await tx
+          .update(maintenance_schedules)
+          .set({ next_due_date: nextDueDate, updated_at: new Date() })
+          .where(eq(maintenance_schedules.id, id));
+        return {
+          schedule_id: id,
+          run_id: run.id,
+          status: "completed",
+          created_action_ids: createdActionIds,
+          next_due_date: nextDueDate,
+        };
+      } catch (error: any) {
+        await tx
+          .update(maintenance_schedule_runs)
+          .set({
+            status: "failed",
+            created_action_ids: createdActionIds,
+            error_message: error?.message || "Unknown schedule error",
+            completed_at: new Date(),
+          })
+          .where(eq(maintenance_schedule_runs.id, run.id));
+        return {
+          schedule_id: id,
+          run_id: run.id,
+          status: "failed",
+          created_action_ids: [],
+          error: error?.message || "Unknown schedule error",
+        };
+      }
+    });
+  }
+
+  async processDueMaintenanceSchedules(): Promise<any> {
+    const today = new Date().toISOString().slice(0, 10);
+    const due = await db
+      .select({ id: maintenance_schedules.id })
+      .from(maintenance_schedules)
+      .where(
+        and(
+          eq(maintenance_schedules.is_active, true),
+          lte(maintenance_schedules.next_due_date, today),
+        ),
+      );
+    const results = [];
+    for (const schedule of due) {
+      try {
+        results.push(await this.runMaintenanceSchedule(schedule.id));
+      } catch (error: any) {
+        results.push({
+          schedule_id: schedule.id,
+          status: "failed",
+          error: error?.message || "Unknown schedule error",
+        });
+      }
+    }
+    return { processed: results.length, results };
   }
 
 

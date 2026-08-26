@@ -2641,6 +2641,7 @@
   "maintenance": {
     "title": "إدارة الصيانة",
     "advancedOptions": "خيارات متقدمة",
+    "scheduleTab": "جدولة الصيانة",
     "preventiveActions": {
       "tab": "الإجراءات الوقائية",
       "title": "الإجراءات الوقائية",

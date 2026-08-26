@@ -9,6 +9,7 @@ import MaintenanceActionsTab from "../../components/maintenance/MaintenanceActio
 import { MAINTENANCE_GROUPS } from "../../components/maintenance/maintenanceGroups";
 import MaintenanceReportsTab from "../../components/maintenance/MaintenanceReportsTab";
 import MaintenanceRequestsTab from "../../components/maintenance/MaintenanceRequestsTab";
+import MaintenanceScheduleTab from "../../components/maintenance/MaintenanceScheduleTab";
 import MaintenanceSummaryCards from "../../components/maintenance/MaintenanceSummaryCards";
 import OperatorNegligenceTab from "../../components/maintenance/OperatorNegligenceTab";
 import PreventiveActionsTab from "../../components/maintenance/PreventiveActionsTab";
@@ -45,6 +46,9 @@ export default function Maintenance() {
   const [inventorySub, setInventorySub] = useState<string>(
     () => firstSubOf("inventory") || "spare-parts",
   );
+  const [preventiveSub, setPreventiveSub] = useState<string>(
+    () => firstSubOf("preventive") || "preventive-actions",
+  );
 
   // Auth/permissions can resolve after the first render, which changes
   // `visibleGroups`. Reconcile the selected group/sub-tabs so a user never
@@ -64,6 +68,10 @@ export default function Maintenance() {
     const inventorySubs = groupById.inventory?.subTabs;
     if (inventorySubs && !inventorySubs.some((s) => s.id === inventorySub)) {
       setInventorySub(inventorySubs[0].id);
+    }
+    const preventiveSubs = groupById.preventive?.subTabs;
+    if (preventiveSubs && !preventiveSubs.some((s) => s.id === preventiveSub)) {
+      setPreventiveSub(preventiveSubs[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleGroupsKey]);
@@ -197,7 +205,29 @@ export default function Maintenance() {
           {/* ═══ Group: Preventive ═══ */}
           {groupById.preventive && (
             <TabsContent value="preventive" className="mt-0">
-              <PreventiveActionsTab />
+              <Tabs value={preventiveSub} onValueChange={setPreventiveSub}>
+                <TabsList className="flex h-auto w-full justify-start gap-1 rounded-none border-b bg-transparent p-0">
+                  {groupById.preventive.subTabs.map((sub) => {
+                    const SubIcon = sub.icon;
+                    return (
+                      <TabsTrigger
+                        key={sub.id}
+                        value={sub.id}
+                        className="flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-2 text-muted-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-700 data-[state=active]:shadow-none"
+                      >
+                        <SubIcon className="h-4 w-4" />
+                        {t(sub.labelKey)}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+                <TabsContent value="preventive-actions" className="pt-4">
+                  <PreventiveActionsTab />
+                </TabsContent>
+                <TabsContent value="maintenance-schedules" className="pt-4">
+                  <MaintenanceScheduleTab />
+                </TabsContent>
+              </Tabs>
             </TabsContent>
           )}
 

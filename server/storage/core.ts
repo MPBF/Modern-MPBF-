@@ -18,6 +18,10 @@ import {
   preventive_maintenance_actions,
   preventive_maintenance_items,
   preventive_maintenance_action_machines,
+  maintenance_schedules,
+  maintenance_schedule_machines,
+  maintenance_schedule_items,
+  maintenance_schedule_runs,
   operator_negligence_reports,
   spare_parts,
   consumable_parts,
@@ -198,6 +202,11 @@ import {
   type MaintenanceComponent,
   type InsertMaintenanceComponent,
   type UpdateMaintenanceComponent,
+  type MaintenanceSchedule,
+  type MaintenanceScheduleItem,
+  type MaintenanceScheduleRun,
+  type CreateMaintenanceSchedule,
+  type UpdateMaintenanceSchedule,
   type PreventiveMaintenanceAction,
   type PreventiveMaintenanceItem,
   type CreatePreventiveMaintenance,
@@ -948,6 +957,18 @@ export interface IStorage {
   updatePreventiveMaintenanceAction(id: number, payload: UpdatePreventiveMaintenance): Promise<PreventiveMaintenanceAction>;
   deletePreventiveMaintenanceAction(id: number): Promise<void>;
   getLastActionPerComponent(machineId: string): Promise<any[]>;
+  getMaintenanceSchedules(): Promise<any[]>;
+  getMaintenanceScheduleById(id: number): Promise<any | undefined>;
+  createMaintenanceSchedule(
+    payload: CreateMaintenanceSchedule & { created_by: number },
+  ): Promise<MaintenanceSchedule>;
+  updateMaintenanceSchedule(
+    id: number,
+    payload: UpdateMaintenanceSchedule & { updated_by: number },
+  ): Promise<MaintenanceSchedule>;
+  deleteMaintenanceSchedule(id: number): Promise<boolean>;
+  runMaintenanceSchedule(id: number, options?: { force?: boolean }): Promise<any>;
+  processDueMaintenanceSchedules(): Promise<any>;
   getMaintenanceReports(): Promise<MaintenanceReport[]>;
   createMaintenanceReport(data: InsertMaintenanceReport): Promise<MaintenanceReport>;
   getOperatorNegligenceReports(): Promise<OperatorNegligenceReport[]>;

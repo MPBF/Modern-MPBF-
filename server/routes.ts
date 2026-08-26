@@ -652,6 +652,24 @@ export async function registerRoutes(
   await registerSystemUsersRoutes(app, ctx);
   startSystemUserSimulator();
   await registerMaintenanceRoutes(app, ctx);
+  // Schedules are also reconciled at startup, so a server restart never loses
+  // a due annual maintenance cycle. The database transaction in storage keeps
+  // this safe if multiple app instances happen to run at the same time.
+  const processMaintenanceSchedules = async () => {
+    try {
+      const result = await storage.processDueMaintenanceSchedules();
+      if (result.processed > 0) {
+        console.log(`📅 تمت معالجة ${result.processed} جدول صيانة مستحق`);
+      }
+    } catch (error: any) {
+      console.error(
+        "⚠️ تعذرت معالجة جداول الصيانة المستحقة:",
+        error?.message || error,
+      );
+    }
+  };
+  void processMaintenanceSchedules();
+  setInterval(() => void processMaintenanceSchedules(), 15 * 60 * 1000);
   await registerQualityRoutes(app, ctx);
   await registerMobileRoutes(app, ctx);
   await registerLegacyRoutes(app, ctx);

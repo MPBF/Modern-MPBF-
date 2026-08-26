@@ -2196,6 +2196,7 @@
   "maintenance": {
     "title": "Maintenance Management",
     "advancedOptions": "Advanced options",
+    "scheduleTab": "Maintenance schedules",
     "preventiveActions": {
       "tab": "Preventive Actions",
       "title": "Preventive Actions",

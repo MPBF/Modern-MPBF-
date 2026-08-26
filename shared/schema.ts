@@ -1218,6 +1218,104 @@ export const preventive_maintenance_action_machines = pgTable(
   ],
 );
 
+// 📅 قوالب جدولة الصيانة الوقائية السنوية
+export const maintenance_schedules = pgTable(
+  "maintenance_schedules",
+  {
+    id: serial("id").primaryKey(),
+    name: varchar("name", { length: 200 }).notNull(),
+    section_id: varchar("section_id", { length: 20 })
+      .notNull()
+      .references(() => sections.id),
+    start_date: date("start_date").notNull(),
+    next_due_date: date("next_due_date").notNull(),
+    is_active: boolean("is_active").notNull().default(true),
+    description: text("description"),
+    created_by: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    updated_by: integer("updated_by").references(() => users.id),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_maintenance_schedules_section").on(table.section_id),
+    index("idx_maintenance_schedules_due").on(
+      table.is_active,
+      table.next_due_date,
+    ),
+  ],
+);
+
+// 🔗 الماكينات المستهدفة بقالب الجدولة
+export const maintenance_schedule_machines = pgTable(
+  "maintenance_schedule_machines",
+  {
+    id: serial("id").primaryKey(),
+    schedule_id: integer("schedule_id")
+      .notNull()
+      .references(() => maintenance_schedules.id, { onDelete: "cascade" }),
+    machine_id: varchar("machine_id", { length: 20 })
+      .notNull()
+      .references(() => machines.id),
+  },
+  (table) => [
+    index("idx_schedule_machines_schedule").on(table.schedule_id),
+    index("idx_schedule_machines_machine").on(table.machine_id),
+    uniqueIndex("uniq_schedule_machine").on(table.schedule_id, table.machine_id),
+  ],
+);
+
+// 🧩 مكونات قالب الجدولة (لقطة ثابتة من الكتالوج)
+export const maintenance_schedule_items = pgTable(
+  "maintenance_schedule_items",
+  {
+    id: serial("id").primaryKey(),
+    schedule_id: integer("schedule_id")
+      .notNull()
+      .references(() => maintenance_schedules.id, { onDelete: "cascade" }),
+    component_id: integer("component_id").references(
+      () => maintenance_component_catalog.id,
+    ),
+    component_name_ar: varchar("component_name_ar", { length: 200 }).notNull(),
+    component_name_en: varchar("component_name_en", { length: 200 }).notNull(),
+    action_type: varchar("action_type", { length: 40 }).notNull().default("inspection"),
+    quantity: integer("quantity").notNull().default(1),
+    notes: text("notes"),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_schedule_items_schedule").on(table.schedule_id),
+    index("idx_schedule_items_component").on(table.component_id),
+  ],
+);
+
+// 🧾 سجل دورات الجدولة ومنع الإنشاء المكرر
+export const maintenance_schedule_runs = pgTable(
+  "maintenance_schedule_runs",
+  {
+    id: serial("id").primaryKey(),
+    schedule_id: integer("schedule_id")
+      .notNull()
+      .references(() => maintenance_schedules.id, { onDelete: "cascade" }),
+    scheduled_date: date("scheduled_date").notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    created_action_ids: jsonb("created_action_ids").$type<number[]>().default([]),
+    error_message: text("error_message"),
+    started_at: timestamp("started_at"),
+    completed_at: timestamp("completed_at"),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_schedule_run_date").on(
+      table.schedule_id,
+      table.scheduled_date,
+    ),
+    index("idx_schedule_runs_schedule").on(table.schedule_id),
+    index("idx_schedule_runs_status").on(table.status),
+  ],
+);
+
 // 📋 جدول فترات الانسحاب من صفحة الحضور (Anti-fraud)
 export const attendance_withdrawals = pgTable(
   "attendance_withdrawals",
@@ -3646,6 +3744,29 @@ export const createPreventiveMaintenanceSchema = z
 export const updatePreventiveMaintenanceSchema =
   createPreventiveMaintenanceSchema;
 
+const scheduleItemSchema = z.object({
+  component_id: z.coerce.number().int().positive(),
+  action_type: z.string().min(1).default("inspection"),
+  quantity: z.coerce.number().int().positive().default(1),
+  notes: z.string().nullish(),
+});
+
+export const createMaintenanceScheduleSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  section_id: z.string().trim().min(1),
+  start_date: z.coerce.date(),
+  next_due_date: z.coerce.date(),
+  is_active: z.boolean().default(true),
+  description: z.string().trim().nullish(),
+  machine_ids: z.array(z.string().min(1)).min(1),
+  items: z.array(scheduleItemSchema).min(1),
+});
+
+export const updateMaintenanceScheduleSchema =
+  createMaintenanceScheduleSchema.partial().extend({
+    is_active: z.boolean().optional(),
+  });
+
 // HR System Types
 export type Attendance = typeof attendance.$inferSelect;
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
@@ -3728,6 +3849,17 @@ export type UpdatePreventiveMaintenance = z.infer<
 >;
 export type PreventiveMaintenanceActionMachine =
   typeof preventive_maintenance_action_machines.$inferSelect;
+export type MaintenanceSchedule = typeof maintenance_schedules.$inferSelect;
+export type MaintenanceScheduleMachine =
+  typeof maintenance_schedule_machines.$inferSelect;
+export type MaintenanceScheduleItem = typeof maintenance_schedule_items.$inferSelect;
+export type MaintenanceScheduleRun = typeof maintenance_schedule_runs.$inferSelect;
+export type CreateMaintenanceSchedule = z.infer<
+  typeof createMaintenanceScheduleSchema
+>;
+export type UpdateMaintenanceSchedule = z.infer<
+  typeof updateMaintenanceScheduleSchema
+>;
 
 // Consumable Parts Types
 export type ConsumablePart = typeof consumable_parts.$inferSelect;

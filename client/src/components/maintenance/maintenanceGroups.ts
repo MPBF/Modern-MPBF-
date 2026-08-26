@@ -107,6 +107,17 @@ export const MAINTENANCE_GROUPS: MaintenanceGroup[] = [
         icon: Calendar,
         permissions: ["view_maintenance", "manage_maintenance"],
       },
+      {
+        id: "maintenance-schedules",
+        labelKey: "maintenance.scheduleTab",
+        icon: Calendar,
+        permissions: [
+          "view_maintenance",
+          "add_maintenance",
+          "manage_maintenance_actions",
+          "manage_maintenance",
+        ],
+      },
     ],
   },
   {

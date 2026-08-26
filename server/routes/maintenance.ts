@@ -19,6 +19,8 @@ import {
   updateMaintenanceComponentSchema,
   createPreventiveMaintenanceSchema,
   updatePreventiveMaintenanceSchema,
+  createMaintenanceScheduleSchema,
+  updateMaintenanceScheduleSchema,
   insertOperatorNegligenceReportSchema,
   insertConsumablePartSchema,
   insertConsumablePartTransactionSchema,
@@ -416,7 +418,12 @@ export async function registerMaintenanceRoutes(app: Express, ctx: any) {
   app.get(
     "/api/maintenance-components",
     requireAuth,
-    requirePermission("view_maintenance", "manage_maintenance"),
+    requirePermission(
+      "view_maintenance",
+      "add_maintenance",
+      "manage_maintenance_actions",
+      "manage_maintenance",
+    ),
     async (req, res) => {
       try {
         const { machineType } = req.query;
@@ -746,6 +753,147 @@ export async function registerMaintenanceRoutes(app: Express, ctx: any) {
       } catch (error) {
         console.error("Error deleting preventive action:", error);
         res.status(500).json({ message: "خطأ في حذف الإجراء الوقائي" });
+      }
+    },
+  );
+
+  // ===== Preventive Maintenance Schedule routes =====
+  app.get(
+    "/api/maintenance-schedules",
+    requireAuth,
+    requirePermission(
+      "view_maintenance",
+      "add_maintenance",
+      "manage_maintenance_actions",
+      "manage_maintenance",
+    ),
+    async (_req, res) => {
+      try {
+        res.json(await storage.getMaintenanceSchedules());
+      } catch (error) {
+        console.error("Error fetching maintenance schedules:", error);
+        res.status(500).json({ message: "خطأ في جلب جداول الصيانة" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/maintenance-schedules/:id",
+    requireAuth,
+    requirePermission(
+      "view_maintenance",
+      "add_maintenance",
+      "manage_maintenance_actions",
+      "manage_maintenance",
+    ),
+    async (req, res) => {
+      try {
+        const schedule = await storage.getMaintenanceScheduleById(
+          parseRouteParam(req.params.id, "ID"),
+        );
+        if (!schedule) {
+          return res.status(404).json({ message: "جدول الصيانة غير موجود" });
+        }
+        res.json(schedule);
+      } catch (error) {
+        res.status(400).json({ message: "معرّف الجدول غير صالح" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/maintenance-schedules",
+    requireAuth,
+    requirePermission("add_maintenance", "manage_maintenance_actions", "manage_maintenance"),
+    async (req, res) => {
+      try {
+        const data = createMaintenanceScheduleSchema.parse(req.body);
+        const userId = (req.user as any)?.id;
+        if (!userId) return res.status(401).json({ message: "غير مصرح" });
+        const schedule = await storage.createMaintenanceSchedule({
+          ...data,
+          created_by: userId,
+        });
+        res.status(201).json(schedule);
+      } catch (error: any) {
+        if (error?.name === "ZodError") {
+          return res.status(400).json({
+            message: "بيانات جدولة غير صالحة",
+            errors: error.errors,
+          });
+        }
+        if (error?.code === "23503") {
+          return res.status(400).json({ message: "القسم أو الماكينة غير موجودة" });
+        }
+        console.error("Error creating maintenance schedule:", error);
+        res.status(400).json({ message: error?.message || "خطأ في إنشاء جدول الصيانة" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/maintenance-schedules/:id",
+    requireAuth,
+    requirePermission("edit_maintenance", "manage_maintenance_actions", "manage_maintenance"),
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "ID");
+        const data = updateMaintenanceScheduleSchema.parse(req.body);
+        const userId = (req.user as any)?.id;
+        if (!userId) return res.status(401).json({ message: "غير مصرح" });
+        const schedule = await storage.updateMaintenanceSchedule(id, {
+          ...data,
+          updated_by: userId,
+        });
+        res.json(schedule);
+      } catch (error: any) {
+        if (error?.name === "ZodError") {
+          return res.status(400).json({
+            message: "بيانات جدولة غير صالحة",
+            errors: error.errors,
+          });
+        }
+        if (error?.message === "Maintenance schedule not found") {
+          return res.status(404).json({ message: "جدول الصيانة غير موجود" });
+        }
+        console.error("Error updating maintenance schedule:", error);
+        res.status(400).json({ message: error?.message || "خطأ في تعديل جدول الصيانة" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/maintenance-schedules/:id/run",
+    requireAuth,
+    requirePermission("add_maintenance", "manage_maintenance_actions", "manage_maintenance"),
+    async (req, res) => {
+      try {
+        const id = parseRouteParam(req.params.id, "ID");
+        const result = await storage.runMaintenanceSchedule(id, { force: true });
+        res.json(result);
+      } catch (error: any) {
+        console.error("Error running maintenance schedule:", error);
+        res.status(400).json({ message: error?.message || "خطأ في تشغيل جدول الصيانة" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/maintenance-schedules/:id",
+    requireAuth,
+    requirePermission("manage_maintenance"),
+    async (req, res) => {
+      try {
+        const deleted = await storage.deleteMaintenanceSchedule(
+          parseRouteParam(req.params.id, "ID"),
+        );
+        if (!deleted) {
+          return res.status(404).json({ message: "جدول الصيانة غير موجود" });
+        }
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error deleting maintenance schedule:", error);
+        res.status(500).json({ message: "خطأ في حذف جدول الصيانة" });
       }
     },
   );
