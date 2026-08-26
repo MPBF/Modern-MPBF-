@@ -107,8 +107,15 @@ export const MAINTENANCE_GROUPS: MaintenanceGroup[] = [
         icon: Calendar,
         permissions: ["view_maintenance", "manage_maintenance"],
       },
+    ],
+  },
+  {
+    id: "periodic",
+    labelKey: "maintenance.groups.periodic",
+    icon: Calendar,
+    subTabs: [
       {
-        id: "maintenance-schedules",
+        id: "periodic-maintenance",
         labelKey: "maintenance.scheduleTab",
         icon: Calendar,
         permissions: [

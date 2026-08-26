@@ -2448,6 +2448,7 @@
       "consumableParts": "Consumable Parts"
     },
     "groups": {
+      "periodic": "Periodic Maintenance",
       "corrective": "Corrective",
       "inventory": "Inventory & Parts",
       "preventive": "Preventive",

@@ -1,10 +1,10 @@
 ---
 name: Maintenance schedule run idempotency
-description: Rules for safely running annual preventive-maintenance schedules manually and automatically.
+description: Rules for safely creating and completing periodic-maintenance checklist runs manually and automatically.
 ---
 
-Annual schedules must use a unique run record keyed by the **actual run date**. An early manual run records today and leaves the upcoming annual due date unchanged; a due run records the due date and advances it by one year.
+Periodic schedules must use a unique run record keyed by the **actual run date**. Starting a run creates a historical checklist snapshot, not a preventive-maintenance action. The due date advances by the configured month interval only when a due run is completed; an early manual run records today and leaves the upcoming due date unchanged.
 
-**Why:** Treating every manual click as a forced run of `next_due_date` allows a concurrent second click to consume the following annual cycle and produce duplicate preventive actions.
+**Why:** Treating every manual click as a forced run of the due date lets concurrent clicks consume future cycles or create duplicate work. Advancing at start also loses overdue visibility when a technician abandons an unfinished checklist.
 
-**How to apply:** Lock the schedule before choosing its run date, check for an existing completed run for that date, and keep action creation in a savepoint. Persist a failed run status outside the failed savepoint so the history remains auditable.
+**How to apply:** Lock the schedule before choosing the run date, return the existing run for that date, snapshot catalog labels into run items, and advance the schedule only during successful checklist completion.

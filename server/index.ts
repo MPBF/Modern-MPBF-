@@ -2013,6 +2013,7 @@ function sanitizeResponseForLogging(response: any): any {
           section_id varchar(20) NOT NULL REFERENCES sections(id),
           start_date date NOT NULL,
           next_due_date date NOT NULL,
+           frequency_months integer NOT NULL DEFAULT 12,
           is_active boolean NOT NULL DEFAULT true,
           description text,
           created_by integer NOT NULL REFERENCES users(id),
@@ -2020,6 +2021,10 @@ function sanitizeResponseForLogging(response: any): any {
           created_at timestamp DEFAULT now(),
           updated_at timestamp DEFAULT now()
         )
+      `);
+      await db.execute(sql`
+        ALTER TABLE maintenance_schedules
+        ADD COLUMN IF NOT EXISTS frequency_months integer NOT NULL DEFAULT 12
       `);
       await db.execute(sql`
         CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_section
@@ -2076,11 +2081,26 @@ function sanitizeResponseForLogging(response: any): any {
           scheduled_date date NOT NULL,
           status varchar(20) NOT NULL DEFAULT 'pending',
           created_action_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+           performed_by integer REFERENCES users(id),
+           completed_by integer REFERENCES users(id),
+           report_notes text,
           error_message text,
           started_at timestamp,
           completed_at timestamp,
           created_at timestamp DEFAULT now()
         )
+      `);
+      await db.execute(sql`
+        ALTER TABLE maintenance_schedule_runs
+        ADD COLUMN IF NOT EXISTS performed_by integer REFERENCES users(id)
+      `);
+      await db.execute(sql`
+        ALTER TABLE maintenance_schedule_runs
+        ADD COLUMN IF NOT EXISTS completed_by integer REFERENCES users(id)
+      `);
+      await db.execute(sql`
+        ALTER TABLE maintenance_schedule_runs
+        ADD COLUMN IF NOT EXISTS report_notes text
       `);
       await db.execute(sql`
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_schedule_run_date
@@ -2093,6 +2113,31 @@ function sanitizeResponseForLogging(response: any): any {
       await db.execute(sql`
         CREATE INDEX IF NOT EXISTS idx_schedule_runs_status
         ON maintenance_schedule_runs (status)
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS maintenance_schedule_run_items (
+          id serial PRIMARY KEY,
+          run_id integer NOT NULL REFERENCES maintenance_schedule_runs(id) ON DELETE CASCADE,
+          component_id integer REFERENCES maintenance_component_catalog(id),
+          component_name_ar varchar(200) NOT NULL,
+          component_name_en varchar(200) NOT NULL,
+          required_action varchar(40) NOT NULL DEFAULT 'inspection',
+          checked boolean NOT NULL DEFAULT false,
+          condition varchar(20),
+          result varchar(20),
+          notes text,
+          sort_order integer NOT NULL DEFAULT 0,
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_schedule_run_items_run
+        ON maintenance_schedule_run_items (run_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_schedule_run_items_component
+        ON maintenance_schedule_run_items (component_id)
       `);
       // Backfill existing single-machine actions into the junction table.
       await db.execute(sql`

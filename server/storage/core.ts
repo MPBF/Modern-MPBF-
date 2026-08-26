@@ -22,6 +22,7 @@ import {
   maintenance_schedule_machines,
   maintenance_schedule_items,
   maintenance_schedule_runs,
+  maintenance_schedule_run_items,
   operator_negligence_reports,
   spare_parts,
   consumable_parts,
@@ -205,8 +206,10 @@ import {
   type MaintenanceSchedule,
   type MaintenanceScheduleItem,
   type MaintenanceScheduleRun,
+  type MaintenanceScheduleRunItem,
   type CreateMaintenanceSchedule,
   type UpdateMaintenanceSchedule,
+  type UpdateMaintenanceScheduleRun,
   type PreventiveMaintenanceAction,
   type PreventiveMaintenanceItem,
   type CreatePreventiveMaintenance,
@@ -967,7 +970,16 @@ export interface IStorage {
     payload: UpdateMaintenanceSchedule & { updated_by: number },
   ): Promise<MaintenanceSchedule>;
   deleteMaintenanceSchedule(id: number): Promise<boolean>;
-  runMaintenanceSchedule(id: number, options?: { force?: boolean }): Promise<any>;
+  runMaintenanceSchedule(
+    id: number,
+    options?: { force?: boolean; performedBy?: number },
+  ): Promise<any>;
+  getMaintenanceScheduleRun(id: number): Promise<any | undefined>;
+  updateMaintenanceScheduleRun(
+    id: number,
+    payload: UpdateMaintenanceScheduleRun & { completed_by: number },
+  ): Promise<any>;
+  getMachineMaintenanceFile(machineId: string): Promise<any | undefined>;
   processDueMaintenanceSchedules(): Promise<any>;
   getMaintenanceReports(): Promise<MaintenanceReport[]>;
   createMaintenanceReport(data: InsertMaintenanceReport): Promise<MaintenanceReport>;

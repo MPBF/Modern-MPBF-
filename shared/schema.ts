@@ -1229,6 +1229,7 @@ export const maintenance_schedules = pgTable(
       .references(() => sections.id),
     start_date: date("start_date").notNull(),
     next_due_date: date("next_due_date").notNull(),
+    frequency_months: integer("frequency_months").notNull().default(12),
     is_active: boolean("is_active").notNull().default(true),
     description: text("description"),
     created_by: integer("created_by")
@@ -1301,6 +1302,9 @@ export const maintenance_schedule_runs = pgTable(
     scheduled_date: date("scheduled_date").notNull(),
     status: varchar("status", { length: 20 }).notNull().default("pending"),
     created_action_ids: jsonb("created_action_ids").$type<number[]>().default([]),
+    performed_by: integer("performed_by").references(() => users.id),
+    completed_by: integer("completed_by").references(() => users.id),
+    report_notes: text("report_notes"),
     error_message: text("error_message"),
     started_at: timestamp("started_at"),
     completed_at: timestamp("completed_at"),
@@ -1313,6 +1317,36 @@ export const maintenance_schedule_runs = pgTable(
     ),
     index("idx_schedule_runs_schedule").on(table.schedule_id),
     index("idx_schedule_runs_status").on(table.status),
+  ],
+);
+
+// ☑️ نتائج قائمة الفحص لكل دورة صيانة دورية
+export const maintenance_schedule_run_items = pgTable(
+  "maintenance_schedule_run_items",
+  {
+    id: serial("id").primaryKey(),
+    run_id: integer("run_id")
+      .notNull()
+      .references(() => maintenance_schedule_runs.id, { onDelete: "cascade" }),
+    component_id: integer("component_id").references(
+      () => maintenance_component_catalog.id,
+    ),
+    component_name_ar: varchar("component_name_ar", { length: 200 }).notNull(),
+    component_name_en: varchar("component_name_en", { length: 200 }).notNull(),
+    required_action: varchar("required_action", { length: 40 })
+      .notNull()
+      .default("inspection"),
+    checked: boolean("checked").notNull().default(false),
+    condition: varchar("condition", { length: 20 }),
+    result: varchar("result", { length: 20 }),
+    notes: text("notes"),
+    sort_order: integer("sort_order").notNull().default(0),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_schedule_run_items_run").on(table.run_id),
+    index("idx_schedule_run_items_component").on(table.component_id),
   ],
 );
 
@@ -3756,9 +3790,10 @@ export const createMaintenanceScheduleSchema = z.object({
   section_id: z.string().trim().min(1),
   start_date: z.coerce.date(),
   next_due_date: z.coerce.date(),
+  frequency_months: z.coerce.number().int().min(1).max(60).default(12),
   is_active: z.boolean().default(true),
   description: z.string().trim().nullish(),
-  machine_ids: z.array(z.string().min(1)).min(1),
+  machine_ids: z.array(z.string().min(1)).length(1),
   items: z.array(scheduleItemSchema).min(1),
 });
 
@@ -3766,6 +3801,24 @@ export const updateMaintenanceScheduleSchema =
   createMaintenanceScheduleSchema.partial().extend({
     is_active: z.boolean().optional(),
   });
+
+export const updateMaintenanceScheduleRunSchema = z.object({
+  report_notes: z.string().trim().nullish(),
+  status: z.enum(["in_progress", "completed"]).default("in_progress"),
+  items: z
+    .array(
+      z.object({
+        id: z.coerce.number().int().positive(),
+        checked: z.boolean(),
+        condition: z
+          .enum(["good", "attention", "repair", "replace"])
+          .nullish(),
+        result: z.enum(["pass", "fail", "not_applicable"]).nullish(),
+        notes: z.string().trim().nullish(),
+      }),
+    )
+    .min(1),
+});
 
 // HR System Types
 export type Attendance = typeof attendance.$inferSelect;
@@ -3854,11 +3907,16 @@ export type MaintenanceScheduleMachine =
   typeof maintenance_schedule_machines.$inferSelect;
 export type MaintenanceScheduleItem = typeof maintenance_schedule_items.$inferSelect;
 export type MaintenanceScheduleRun = typeof maintenance_schedule_runs.$inferSelect;
+export type MaintenanceScheduleRunItem =
+  typeof maintenance_schedule_run_items.$inferSelect;
 export type CreateMaintenanceSchedule = z.infer<
   typeof createMaintenanceScheduleSchema
 >;
 export type UpdateMaintenanceSchedule = z.infer<
   typeof updateMaintenanceScheduleSchema
+>;
+export type UpdateMaintenanceScheduleRun = z.infer<
+  typeof updateMaintenanceScheduleRunSchema
 >;
 
 // Consumable Parts Types

@@ -9,7 +9,7 @@ import MaintenanceActionsTab from "../../components/maintenance/MaintenanceActio
 import { MAINTENANCE_GROUPS } from "../../components/maintenance/maintenanceGroups";
 import MaintenanceReportsTab from "../../components/maintenance/MaintenanceReportsTab";
 import MaintenanceRequestsTab from "../../components/maintenance/MaintenanceRequestsTab";
-import MaintenanceScheduleTab from "../../components/maintenance/MaintenanceScheduleTab";
+import PeriodicMaintenanceTab from "../../components/maintenance/PeriodicMaintenanceTab";
 import MaintenanceSummaryCards from "../../components/maintenance/MaintenanceSummaryCards";
 import OperatorNegligenceTab from "../../components/maintenance/OperatorNegligenceTab";
 import PreventiveActionsTab from "../../components/maintenance/PreventiveActionsTab";
@@ -224,10 +224,13 @@ export default function Maintenance() {
                 <TabsContent value="preventive-actions" className="pt-4">
                   <PreventiveActionsTab />
                 </TabsContent>
-                <TabsContent value="maintenance-schedules" className="pt-4">
-                  <MaintenanceScheduleTab />
-                </TabsContent>
               </Tabs>
+            </TabsContent>
+          )}
+
+          {groupById.periodic && (
+            <TabsContent value="periodic" className="mt-0">
+              <PeriodicMaintenanceTab />
             </TabsContent>
           )}
 

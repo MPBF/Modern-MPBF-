@@ -2959,6 +2959,7 @@
       "consumableParts": "القطع الاستهلاكية"
     },
     "groups": {
+      "periodic": "الصيانة الدورية",
       "corrective": "الصيانة التصحيحية",
       "inventory": "المخزون وقطع الغيار",
       "preventive": "الصيانة الوقائية",

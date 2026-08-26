@@ -21,6 +21,7 @@ import {
   updatePreventiveMaintenanceSchema,
   createMaintenanceScheduleSchema,
   updateMaintenanceScheduleSchema,
+  updateMaintenanceScheduleRunSchema,
   insertOperatorNegligenceReportSchema,
   insertConsumablePartSchema,
   insertConsumablePartTransactionSchema,
@@ -869,11 +870,90 @@ export async function registerMaintenanceRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "ID");
-        const result = await storage.runMaintenanceSchedule(id, { force: true });
+        const result = await storage.runMaintenanceSchedule(id, {
+          force: true,
+          performedBy: (req.user as any)?.id,
+        });
         res.json(result);
       } catch (error: any) {
         console.error("Error running maintenance schedule:", error);
         res.status(400).json({ message: error?.message || "خطأ في تشغيل جدول الصيانة" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/maintenance-schedule-runs/:id",
+    requireAuth,
+    requirePermission(
+      "view_maintenance",
+      "add_maintenance",
+      "edit_maintenance",
+      "manage_maintenance_actions",
+      "manage_maintenance",
+    ),
+    async (req, res) => {
+      try {
+        const run = await storage.getMaintenanceScheduleRun(
+          parseRouteParam(req.params.id, "ID"),
+        );
+        if (!run) return res.status(404).json({ message: "دورة الصيانة غير موجودة" });
+        res.json(run);
+      } catch (error: any) {
+        res.status(400).json({ message: error?.message || "تعذر جلب دورة الصيانة" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/maintenance-schedule-runs/:id",
+    requireAuth,
+    requirePermission(
+      "edit_maintenance",
+      "manage_maintenance_actions",
+      "manage_maintenance",
+    ),
+    async (req, res) => {
+      try {
+        const userId = (req.user as any)?.id;
+        if (!userId) return res.status(401).json({ message: "غير مصرح" });
+        const payload = updateMaintenanceScheduleRunSchema.parse(req.body);
+        const run = await storage.updateMaintenanceScheduleRun(
+          parseRouteParam(req.params.id, "ID"),
+          { ...payload, completed_by: userId },
+        );
+        res.json(run);
+      } catch (error: any) {
+        if (error?.name === "ZodError") {
+          return res.status(400).json({
+            message: "بيانات قائمة الفحص غير صالحة",
+            errors: error.errors,
+          });
+        }
+        console.error("Error updating periodic maintenance run:", error);
+        res.status(400).json({ message: error?.message || "تعذر حفظ تقرير الصيانة" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/machines/:machineId/maintenance-file",
+    requireAuth,
+    requirePermission(
+      "view_maintenance",
+      "add_maintenance",
+      "edit_maintenance",
+      "manage_maintenance_actions",
+      "manage_maintenance",
+    ),
+    async (req, res) => {
+      try {
+        const file = await storage.getMachineMaintenanceFile(req.params.machineId);
+        if (!file) return res.status(404).json({ message: "الماكينة غير موجودة" });
+        res.json(file);
+      } catch (error) {
+        console.error("Error fetching machine maintenance file:", error);
+        res.status(500).json({ message: "تعذر جلب ملف صيانة الماكينة" });
       }
     },
   );
