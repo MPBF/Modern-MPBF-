@@ -1174,6 +1174,11 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "manage_customers",
     "manage_definitions",
   ],
+  "/customer-management": [
+    "manage_customers",
+    "manage_definitions",
+    "admin",
+  ],
   "/production": ["view_production", "manage_production"],
   "/production-dashboard": [
     "view_production",

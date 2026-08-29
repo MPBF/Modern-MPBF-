@@ -282,7 +282,13 @@ export default function Customers() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => setLocation("/definitions?tab=customers")}
+            onClick={() =>
+              setLocation(
+                selectedCustomer
+                  ? `/customer-management?customer=${encodeURIComponent(selectedCustomer.id)}`
+                  : "/customer-management",
+              )
+            }
             data-testid="button-manage-customers"
           >
             <Pencil className="ml-2 h-4 w-4" />
@@ -460,7 +466,11 @@ export default function Customers() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setLocation("/definitions?tab=customers")}
+                        onClick={() =>
+                          setLocation(
+                            `/customer-management?customer=${encodeURIComponent(selectedCustomer.id)}`,
+                          )
+                        }
                       >
                         <Pencil className="ml-2 h-4 w-4" />
                         تعديل البيانات

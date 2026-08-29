@@ -974,7 +974,11 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
   app.delete(
     "/api/customer-products/:id",
     requireAuth,
-    requireAdmin,
+    requirePermission(
+      "delete_customer_products",
+      "manage_customers",
+      "manage_definitions",
+    ),
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "id");
