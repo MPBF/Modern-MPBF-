@@ -29,7 +29,7 @@ import { fetchAllCustomerProducts } from "../../lib/queryClient";
 import { formatNumberAr } from "../../../../shared/number-utils";
 import { useAuth } from "../../hooks/use-auth";
 import { useToast } from "../../hooks/use-toast";
-import { userHasPermission } from "../../utils/roleUtils";
+import { canDeleteInTab } from "../../utils/roleUtils";
 
 const CLOSED_ORDER_STATUSES = [
   "completed",
@@ -116,11 +116,7 @@ export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
-  const canDeleteCustomers = userHasPermission(user, [
-    "delete_customers",
-    "manage_customers",
-    "manage_definitions",
-  ]);
+  const canDeleteCustomers = canDeleteInTab(user, "customers");
 
   const deleteCustomerMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -261,6 +257,18 @@ export default function Customers() {
     setLocation(`/customers?${params.toString()}`);
   };
 
+  const confirmCustomerDeletion = () => {
+    if (!selectedCustomer || deleteCustomerMutation.isPending) return;
+    const name = customerName(selectedCustomer);
+    if (
+      window.confirm(
+        `هل أنت متأكد من حذف العميل «${name}»؟ سيتم الحذف فقط إذا لم توجد له سجلات مرتبطة.`,
+      )
+    ) {
+      deleteCustomerMutation.mutate(String(selectedCustomer.id));
+    }
+  };
+
   const isLoading =
     customersQuery.isLoading || productsQuery.isLoading || ordersQuery.isLoading;
   const hasError =
@@ -287,6 +295,17 @@ export default function Customers() {
             <Plus className="ml-2 h-4 w-4" />
             طلب جديد
           </Button>
+          {canDeleteCustomers && selectedCustomer && (
+            <Button
+              variant="destructive"
+              onClick={confirmCustomerDeletion}
+              disabled={deleteCustomerMutation.isPending}
+              data-testid="button-delete-customer-top"
+            >
+              <Trash2 className="ml-2 h-4 w-4" />
+              {deleteCustomerMutation.isPending ? "جاري الحذف..." : "حذف العميل"}
+            </Button>
+          )}
         </div>
       }
     >
@@ -451,16 +470,7 @@ export default function Customers() {
                           variant="destructive"
                           size="sm"
                           disabled={deleteCustomerMutation.isPending}
-                          onClick={() => {
-                            const name = customerName(selectedCustomer);
-                            if (
-                              window.confirm(
-                                `هل أنت متأكد من حذف العميل «${name}»؟ سيتم الحذف فقط إذا لم توجد له سجلات مرتبطة.`,
-                              )
-                            ) {
-                              deleteCustomerMutation.mutate(String(selectedCustomer.id));
-                            }
-                          }}
+                          onClick={confirmCustomerDeletion}
                           data-testid="button-delete-customer"
                         >
                           <Trash2 className="ml-2 h-4 w-4" />
