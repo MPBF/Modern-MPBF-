@@ -88,6 +88,72 @@ function calculateDistance(
   return R * c; // المسافة بالأمتار
 }
 
+interface FactoryLocation {
+  id: number;
+  latitude: string;
+  longitude: string;
+  allowed_radius: number;
+  name?: string;
+  name_ar?: string;
+}
+
+function normalizeFactoryLocation(location: unknown) {
+  if (!location || typeof location !== "object") return null;
+
+  const candidate = location as Partial<FactoryLocation>;
+  const latitude = Number(candidate.latitude);
+  const longitude = Number(candidate.longitude);
+  const allowedRadius = Number(candidate.allowed_radius);
+
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180 ||
+    !Number.isFinite(allowedRadius) ||
+    allowedRadius <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    latitude,
+    longitude,
+    allowedRadius,
+  };
+}
+
+function normalizeDateKey(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const directDate = value.trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(directDate)) return directDate;
+
+  const parsedDate = new Date(value);
+  return Number.isFinite(parsedDate.getTime())
+    ? parsedDate.toISOString().slice(0, 10)
+    : null;
+}
+
+function parseValidDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsedDate = new Date(value);
+  return Number.isFinite(parsedDate.getTime()) ? parsedDate : null;
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 // Types for dashboard data
 interface UserData {
   id: number;
@@ -167,7 +233,7 @@ export default function UserDashboard() {
 
   // جلب مواقع المصانع النشطة من قاعدة البيانات
   const { data: activeLocations, isLoading: isLoadingLocations } = useQuery<
-    any[]
+    FactoryLocation[]
   >({
     queryKey: ["/api/factory-locations/active"],
   });
@@ -528,6 +594,7 @@ export default function UserDashboard() {
           "Content-Type": "application/json",
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
+        credentials: "include",
         body: JSON.stringify({
           user_id: user?.id,
           status: data.status,
@@ -538,14 +605,28 @@ export default function UserDashboard() {
         }),
       });
 
+      const responseBody = await readResponseBody(response);
+
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData =
+          responseBody && typeof responseBody === "object"
+            ? (responseBody as { message?: unknown; error?: unknown })
+            : null;
+        const serverMessage =
+          typeof errorData?.message === "string"
+            ? errorData.message
+            : typeof errorData?.error === "string"
+              ? errorData.error
+              : typeof responseBody === "string" &&
+                  !responseBody.trimStart().startsWith("<")
+                ? responseBody.slice(0, 250)
+                : null;
         throw new Error(
-          errorData.message || t("userDashboard.attendance.failedToRegister"),
+          serverMessage || t("userDashboard.attendance.failedToRegister"),
         );
       }
 
-      return response.json();
+      return responseBody;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
@@ -554,10 +635,14 @@ export default function UserDashboard() {
       });
       toast({ title: t("userDashboard.attendance.attendanceSuccess") });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t("userDashboard.attendance.failedToRegister");
       toast({
         title: t("userDashboard.attendance.attendanceError"),
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -583,8 +668,7 @@ export default function UserDashboard() {
       attendanceRecords
         ?.filter((record) => {
           if (!record.date || record.user_id !== userId) return false;
-          const recordDate = new Date(record.date).toISOString().split("T")[0];
-          return recordDate === today;
+          return normalizeDateKey(record.date) === today;
         })
         .sort((a, b) => {
           const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -612,11 +696,13 @@ export default function UserDashboard() {
       statuses: string[],
     ): Date | null => {
       const byCol = todayRecords.find((r) => r[column]);
-      if (byCol && byCol[column]) return new Date(byCol[column] as string);
+      if (byCol && byCol[column]) {
+        return parseValidDate(byCol[column]);
+      }
       const byStatus = statuses
         .flatMap((s) => todayRecords.filter((r) => r.status === s))
         .pop();
-      return byStatus?.created_at ? new Date(byStatus.created_at) : null;
+      return parseValidDate(byStatus?.created_at);
     };
 
     const checkInTime = stampOf("check_in_time", ["حاضر"]);
@@ -765,12 +851,37 @@ export default function UserDashboard() {
   });
 
   // تحديث: طلب الموقع الجغرافي قبل إرسال الحضور
-  const handleAttendanceAction = (status: string, action?: string) => {
+  const submitAttendanceAction = (status: string, action?: string) => {
     // التحقق من وجود الموقع الحالي
     if (!currentLocation) {
       toast({
         title: t("userDashboard.location.error"),
         description: t("userDashboard.location.allowAccess"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const userLatitude = Number(currentLocation.lat);
+    const userLongitude = Number(currentLocation.lng);
+    const userAccuracy =
+      currentLocation.accuracy == null
+        ? undefined
+        : Number(currentLocation.accuracy);
+
+    if (
+      !Number.isFinite(userLatitude) ||
+      userLatitude < -90 ||
+      userLatitude > 90 ||
+      !Number.isFinite(userLongitude) ||
+      userLongitude < -180 ||
+      userLongitude > 180 ||
+      (userAccuracy !== undefined && !Number.isFinite(userAccuracy))
+    ) {
+      toast({
+        title: t("userDashboard.location.locationError"),
+        description:
+          "تعذر التحقق من بيانات موقعك. يرجى تحديث الموقع ثم المحاولة مرة أخرى.",
         variant: "destructive",
       });
       return;
@@ -800,7 +911,7 @@ export default function UserDashboard() {
     }
 
     // التحقق من وجود مواقع نشطة
-    if (!activeLocations || activeLocations.length === 0) {
+    if (!Array.isArray(activeLocations) || activeLocations.length === 0) {
       toast({
         title: t("common.error"),
         description: t("userDashboard.location.notNearFactory"),
@@ -809,26 +920,45 @@ export default function UserDashboard() {
       return;
     }
 
+    const validLocations = activeLocations
+      .map(normalizeFactoryLocation)
+      .filter(
+        (
+          location,
+        ): location is NonNullable<ReturnType<typeof normalizeFactoryLocation>> =>
+          location !== null,
+      );
+
+    if (validLocations.length === 0) {
+      toast({
+        title: t("common.error"),
+        description:
+          "بيانات مواقع المصنع غير صالحة. يرجى التواصل مع الإدارة لتحديث الإحداثيات والنطاق المسموح.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // التحقق من وجود المستخدم ضمن أي من المواقع النشطة
     let isWithinRange = false;
     let closestDistance = Infinity;
-    let closestLocation = null;
     let validDistance = 0;
 
-    for (const factoryLocation of activeLocations) {
+    for (const factoryLocation of validLocations) {
       const distance = calculateDistance(
-        currentLocation.lat,
-        currentLocation.lng,
-        parseFloat(factoryLocation.latitude),
-        parseFloat(factoryLocation.longitude),
+        userLatitude,
+        userLongitude,
+        factoryLocation.latitude,
+        factoryLocation.longitude,
       );
+
+      if (!Number.isFinite(distance)) continue;
 
       if (distance < closestDistance) {
         closestDistance = distance;
-        closestLocation = factoryLocation;
       }
 
-      if (distance <= factoryLocation.allowed_radius) {
+      if (distance <= factoryLocation.allowedRadius) {
         isWithinRange = true;
         validDistance = distance;
         break;
@@ -838,20 +968,13 @@ export default function UserDashboard() {
     // إذا كان المستخدم داخل النطاق، السماح بتسجيل الحضور بغض النظر عن دقة GPS
     // إذا كان خارج النطاق، عرض رسالة خطأ
     if (!isWithinRange) {
-      // تحذير إضافي إذا كانت الدقة منخفضة
-      const accuracyValue = currentLocation.accuracy;
-      const hasHighAccuracy =
-        accuracyValue !== undefined && accuracyValue <= 1000;
-
-      const accuracyNote = !hasHighAccuracy
-        ? ` (${t("userDashboard.location.gpsAccuracy")}: ${Math.round(accuracyValue || 0)} ${t("userDashboard.location.meters")} - ${t("userDashboard.location.tryRefresh")})`
-        : "";
-
       toast({
         title: t("userDashboard.location.notNearFactory"),
-        description: t("userDashboard.location.distanceInfo", {
-          distance: Math.round(closestDistance),
-        }),
+        description: Number.isFinite(closestDistance)
+          ? t("userDashboard.location.distanceInfo", {
+              distance: Math.round(closestDistance),
+            })
+          : "تعذر حساب المسافة من المصنع. يرجى تحديث الموقع ثم المحاولة مرة أخرى.",
         variant: "destructive",
       });
       return;
@@ -862,15 +985,31 @@ export default function UserDashboard() {
       status,
       action,
       location: {
-        lat: currentLocation.lat,
-        lng: currentLocation.lng,
-        accuracy: currentLocation.accuracy,
+        lat: userLatitude,
+        lng: userLongitude,
+        accuracy: userAccuracy,
         distance: Math.round(validDistance),
         timestamp: currentLocation.timestamp,
         // كشف Mock Location - في المتصفحات الحديثة يمكن كشف بعض أنواع التزوير
         isMocked: false, // سيتم التحقق إضافياً على الخادم
       },
     });
+  };
+
+  const handleAttendanceAction = (status: string, action?: string) => {
+    if (attendanceMutation.isPending) return;
+
+    try {
+      submitAttendanceAction(status, action);
+    } catch (error) {
+      console.error("Attendance action failed before submission:", error);
+      toast({
+        title: t("userDashboard.attendance.attendanceError"),
+        description:
+          "تعذر تجهيز طلب الحضور. يرجى تحديث الموقع والمحاولة مرة أخرى.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {

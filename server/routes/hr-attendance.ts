@@ -105,23 +105,39 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         };
 
         // =============== التحقق من وجود بيانات الموقع ===============
-        if (
-          !req.body.location ||
-          !req.body.location.lat ||
-          !req.body.location.lng
-        ) {
+        if (!req.body.location || typeof req.body.location !== "object") {
           return res.status(400).json({
             message: "يجب توفير الموقع الجغرافي لتسجيل الحضور",
             code: "LOCATION_REQUIRED",
           });
         }
 
-        const { lat, lng, accuracy, isMocked } = req.body.location;
+        const lat = Number(req.body.location.lat);
+        const lng = Number(req.body.location.lng);
+        const accuracy =
+          req.body.location.accuracy == null
+            ? undefined
+            : Number(req.body.location.accuracy);
+        const isMocked = req.body.location.isMocked;
+
+        if (
+          !Number.isFinite(lat) ||
+          lat < -90 ||
+          lat > 90 ||
+          !Number.isFinite(lng) ||
+          lng < -180 ||
+          lng > 180
+        ) {
+          return res.status(400).json({
+            message: "إحداثيات الموقع غير صالحة",
+            code: "INVALID_COORDINATES",
+          });
+        }
 
         // =============== التحقق من دقة الموقع ===============
         // نتعامل مع accuracy كرقم صالح أو نتجاهل التحقق إذا لم تتوفر
         const hasValidAccuracy =
-          accuracy !== undefined && accuracy !== null && !isNaN(accuracy);
+          accuracy !== undefined && Number.isFinite(accuracy);
 
         if (hasValidAccuracy) {
           // دقة عالية جداً (أقل من 5 متر) قد تشير لتزوير
@@ -166,14 +182,6 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             message:
               "تم اكتشاف محاولة تزوير الموقع! هذه المحاولة تم تسجيلها وسيتم إبلاغ الإدارة.",
             code: "MOCK_LOCATION_DETECTED",
-          });
-        }
-
-        // =============== التحقق من صحة إحداثيات الموقع ===============
-        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-          return res.status(400).json({
-            message: "إحداثيات الموقع غير صالحة",
-            code: "INVALID_COORDINATES",
           });
         }
 
@@ -226,12 +234,39 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         if (isDevMode) {
         }
 
-        for (const factoryLocation of activeLocations) {
+        const validLocations = activeLocations
+          .map((factoryLocation) => ({
+            original: factoryLocation,
+            latitude: Number(factoryLocation.latitude),
+            longitude: Number(factoryLocation.longitude),
+            allowedRadius: Number(factoryLocation.allowed_radius),
+          }))
+          .filter(
+            (factoryLocation) =>
+              Number.isFinite(factoryLocation.latitude) &&
+              factoryLocation.latitude >= -90 &&
+              factoryLocation.latitude <= 90 &&
+              Number.isFinite(factoryLocation.longitude) &&
+              factoryLocation.longitude >= -180 &&
+              factoryLocation.longitude <= 180 &&
+              Number.isFinite(factoryLocation.allowedRadius) &&
+              factoryLocation.allowedRadius > 0,
+          );
+
+        if (activeLocations.length > 0 && validLocations.length === 0) {
+          return res.status(400).json({
+            message:
+              "بيانات مواقع المصنع غير صالحة. يرجى التواصل مع الإدارة.",
+            code: "INVALID_FACTORY_LOCATIONS",
+          });
+        }
+
+        for (const factoryLocation of validLocations) {
           const distance = calculateDistance(
             lat,
             lng,
-            parseFloat(factoryLocation.latitude),
-            parseFloat(factoryLocation.longitude),
+            factoryLocation.latitude,
+            factoryLocation.longitude,
           );
 
           if (isDevMode) {
@@ -239,12 +274,12 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
 
           if (distance < closestDistance) {
             closestDistance = distance;
-            closestLocation = factoryLocation;
+            closestLocation = factoryLocation.original;
           }
 
-          if (distance <= factoryLocation.allowed_radius) {
+          if (distance <= factoryLocation.allowedRadius) {
             isWithinRange = true;
-            matchedLocation = factoryLocation;
+            matchedLocation = factoryLocation.original;
             break;
           }
         }
