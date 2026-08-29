@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Tag,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -26,6 +27,9 @@ import { Separator } from "../../components/ui/separator";
 import { Skeleton } from "../../components/ui/skeleton";
 import { fetchAllCustomerProducts } from "../../lib/queryClient";
 import { formatNumberAr } from "../../../../shared/number-utils";
+import { useAuth } from "../../hooks/use-auth";
+import { useToast } from "../../hooks/use-toast";
+import { userHasPermission } from "../../utils/roleUtils";
 
 const CLOSED_ORDER_STATUSES = [
   "completed",
@@ -106,8 +110,68 @@ function ProductRow({ product }: { product: any }) {
 export default function Customers() {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+
+  const canDeleteCustomers = userHasPermission(user, [
+    "delete_customers",
+    "manage_customers",
+    "manage_definitions",
+  ]);
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/customers/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(body.message || "تعذر حذف العميل");
+        (error as Error & { status?: number; related?: Record<string, number> }).status =
+          response.status;
+        (error as Error & { status?: number; related?: Record<string, number> }).related =
+          body.related;
+        throw error;
+      }
+      return body;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      setSelectedCustomerId("");
+      setLocation("/customers");
+      toast({ title: "تم حذف العميل بنجاح" });
+    },
+    onError: (error: Error & { status?: number; related?: Record<string, number> }) => {
+      const relatedLabels: Record<string, string> = {
+        orders: "طلبات",
+        customer_products: "منتجات عملاء",
+        finished_goods_vouchers_in: "سندات استلام",
+        finished_goods_vouchers_out: "سندات تسليم",
+        quality_issues: "بلاغات جودة",
+        customer_service_cases: "حالات خدمة عملاء",
+      };
+      const details = Object.entries(error.related || {})
+        .map(([key, value]) => `${value} ${relatedLabels[key] || key}`)
+        .join("، ");
+      toast({
+        title:
+          error.status === 409
+            ? "لا يمكن حذف العميل"
+            : error.status === 404
+              ? "العميل غير موجود"
+              : "فشل حذف العميل",
+        description:
+          error.status === 409
+            ? `توجد سجلات مرتبطة: ${details}. احفظ السجلات التاريخية أو افصلها أولاً.`
+            : error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const customersQuery = useQuery<any[]>({
     queryKey: ["/api/customers", { all: true }],
@@ -382,6 +446,27 @@ export default function Customers() {
                         <Pencil className="ml-2 h-4 w-4" />
                         تعديل البيانات
                       </Button>
+                      {canDeleteCustomers && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={deleteCustomerMutation.isPending}
+                          onClick={() => {
+                            const name = customerName(selectedCustomer);
+                            if (
+                              window.confirm(
+                                `هل أنت متأكد من حذف العميل «${name}»؟ سيتم الحذف فقط إذا لم توجد له سجلات مرتبطة.`,
+                              )
+                            ) {
+                              deleteCustomerMutation.mutate(String(selectedCustomer.id));
+                            }
+                          }}
+                          data-testid="button-delete-customer"
+                        >
+                          <Trash2 className="ml-2 h-4 w-4" />
+                          {deleteCustomerMutation.isPending ? "جاري الحذف..." : "حذف العميل"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="relative mt-6 grid gap-3 border-t border-white/10 pt-5 text-sm sm:grid-cols-2 lg:grid-cols-4">

@@ -950,14 +950,23 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
   app.delete(
     "/api/customers/:id",
     requireAuth,
-    requireAdmin,
+    requirePermission("delete_customers", "manage_customers", "manage_definitions"),
     async (req, res) => {
       try {
-        await storage.deleteCustomer(req.params.id);
+        const result = await storage.deleteCustomer(req.params.id);
+        if (result.notFound) {
+          return res.status(404).json({ message: "العميل غير موجود" });
+        }
+        if (!result.deleted) {
+          return res.status(409).json({
+            message: "لا يمكن حذف العميل لوجود سجلات مرتبطة به",
+            related: result.related || {},
+          });
+        }
         res.json({ message: "تم حذف العميل بنجاح" });
       } catch (error) {
         console.error("[API Error]", error);
-        res.status(500).json({ message: "خطأ في حذف العميل" });
+        res.status(500).json({ message: "خطأ في حذف العميل، لم يتم حذف أي بيانات" });
       }
     },
   );

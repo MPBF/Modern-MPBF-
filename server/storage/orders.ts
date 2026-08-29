@@ -1283,8 +1283,44 @@ export class OrdersStorage extends UsersStorage {
   }
 
 
-  async deleteCustomer(id: string | any): Promise<void> {
-    await db.delete(customers).where(eq(customers.id, String(id)));
+  async deleteCustomer(id: string | any): Promise<{
+    deleted: boolean;
+    notFound?: boolean;
+    related?: Record<string, number>;
+  }> {
+    const customerId = String(id).trim();
+    return db.transaction(async (tx) => {
+      const [customer] = await tx
+        .select({ id: customers.id })
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .for("update");
+      if (!customer) return { deleted: false, notFound: true };
+
+      // Check every customer-owned relation before deleting. This gives the
+      // UI a useful explanation instead of relying on a generic FK error.
+      const result = await tx.execute(sql`
+        SELECT
+          (SELECT COUNT(*) FROM orders WHERE customer_id = ${customerId})::int AS orders,
+          (SELECT COUNT(*) FROM customer_products WHERE customer_id = ${customerId})::int AS customer_products,
+          (SELECT COUNT(*) FROM finished_goods_vouchers_in WHERE customer_id = ${customerId})::int AS finished_goods_vouchers_in,
+          (SELECT COUNT(*) FROM finished_goods_vouchers_out WHERE customer_id = ${customerId})::int AS finished_goods_vouchers_out,
+          (SELECT COUNT(*) FROM quality_issues WHERE customer_id = ${customerId})::int AS quality_issues,
+          (SELECT COUNT(*) FROM customer_service_cases WHERE customer_id = ${customerId})::int AS customer_service_cases
+      `);
+      const counts = (result.rows[0] || {}) as Record<string, unknown>;
+      const related: Record<string, number> = {};
+      for (const [key, value] of Object.entries(counts)) {
+        const numericValue = Number(value) || 0;
+        if (numericValue > 0) related[key] = numericValue;
+      }
+      if (Object.keys(related).length > 0) {
+        return { deleted: false, related };
+      }
+
+      await tx.delete(customers).where(eq(customers.id, customerId));
+      return { deleted: true, related: {} };
+    });
   }
 
 
