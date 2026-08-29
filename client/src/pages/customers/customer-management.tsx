@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Building2,
   Check,
-  ChevronDown,
   Edit,
   FileText,
   Loader2,
@@ -18,19 +17,18 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 import PageLayout from "../../components/layout/PageLayout";
+import CustomerProductEditor, {
+  emptyProductForm,
+  productFormFromRecord,
+  type ProductForm,
+  type ProductPayload,
+} from "../../components/customers/CustomerProductEditor";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Separator } from "../../components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { useAuth } from "../../hooks/use-auth";
 import { useToast } from "../../hooks/use-toast";
@@ -49,29 +47,6 @@ type CustomerForm = {
   plate_drawer_code: string;
 };
 
-type ProductForm = {
-  category_id: string;
-  item_id: string;
-  size_caption: string;
-  width: string;
-  left_facing: string;
-  right_facing: string;
-  thickness: string;
-  density: string;
-  printing_cylinder: string;
-  cutting_length_cm: string;
-  raw_material: string;
-  master_batch_id: string;
-  is_printed: boolean;
-  cutting_unit: string;
-  punching: string;
-  unit_weight_kg: string;
-  unit_quantity: string;
-  package_weight_kg: string;
-  notes: string;
-  status: string;
-};
-
 const emptyCustomerForm: CustomerForm = {
   name: "",
   name_ar: "",
@@ -83,29 +58,6 @@ const emptyCustomerForm: CustomerForm = {
   commercial_name: "",
   unified_number: "",
   plate_drawer_code: "",
-};
-
-const emptyProductForm: ProductForm = {
-  category_id: "none",
-  item_id: "none",
-  size_caption: "",
-  width: "",
-  left_facing: "",
-  right_facing: "",
-  thickness: "",
-  density: "0.95",
-  printing_cylinder: "بدون طباعة",
-  cutting_length_cm: "",
-  raw_material: "",
-  master_batch_id: "",
-  is_printed: false,
-  cutting_unit: "كيلو",
-  punching: "",
-  unit_weight_kg: "",
-  unit_quantity: "",
-  package_weight_kg: "",
-  notes: "",
-  status: "active",
 };
 
 function toText(value: unknown) {
@@ -124,31 +76,6 @@ function customerFormFromRecord(customer: any): CustomerForm {
     commercial_name: toText(customer?.commercial_name),
     unified_number: toText(customer?.unified_number),
     plate_drawer_code: toText(customer?.plate_drawer_code),
-  };
-}
-
-function productFormFromRecord(product: any): ProductForm {
-  return {
-    category_id: product?.category_id || "none",
-    item_id: product?.item_id || "none",
-    size_caption: toText(product?.size_caption),
-    width: toText(product?.width),
-    left_facing: toText(product?.left_facing),
-    right_facing: toText(product?.right_facing),
-    thickness: toText(product?.thickness),
-    density: toText(product?.density || "0.95"),
-    printing_cylinder: toText(product?.printing_cylinder || "بدون طباعة"),
-    cutting_length_cm: toText(product?.cutting_length_cm),
-    raw_material: toText(product?.raw_material),
-    master_batch_id: toText(product?.master_batch_id),
-    is_printed: product?.is_printed === true,
-    cutting_unit: toText(product?.cutting_unit || "كيلو"),
-    punching: toText(product?.punching),
-    unit_weight_kg: toText(product?.unit_weight_kg),
-    unit_quantity: toText(product?.unit_quantity),
-    package_weight_kg: toText(product?.package_weight_kg),
-    notes: toText(product?.notes),
-    status: toText(product?.status || "active"),
   };
 }
 
@@ -194,32 +121,6 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         className="bg-white"
       />
-    </div>
-  );
-}
-
-function ProductSelect({
-  label,
-  value,
-  onChange,
-  children,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: React.ReactNode;
-  placeholder: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-semibold text-slate-700">{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="bg-white">
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>{children}</SelectContent>
-      </Select>
     </div>
   );
 }
@@ -337,7 +238,7 @@ export default function CustomerManagement() {
   });
 
   const saveProductMutation = useMutation({
-    mutationFn: ({ id, data }: { id?: number; data: ProductForm & { customer_id: string } }) =>
+    mutationFn: ({ id, data }: { id?: number; data: ProductPayload & { customer_id: string } }) =>
       requestJson(id ? `/api/customer-products/${id}` : "/api/customer-products", {
         method: id ? "PUT" : "POST",
         body: JSON.stringify(data),
@@ -371,9 +272,14 @@ export default function CustomerManagement() {
   const handleProductSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedCustomer) return;
+    const {
+      front_design_filename: _frontFilename,
+      back_design_filename: _backFilename,
+      ...payload
+    } = productForm;
     saveProductMutation.mutate({
       id: editingProductId || undefined,
-      data: { ...productForm, customer_id: String(selectedCustomer.id) },
+      data: { ...payload, customer_id: String(selectedCustomer.id) },
     });
   };
 
@@ -720,239 +626,22 @@ export default function CustomerManagement() {
                         </Button>
                       )}
                     </div>
-                    <form onSubmit={handleProductSubmit} className="space-y-5">
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        <Field
-                          label="وصف/مقاس المنتج"
-                          value={productForm.size_caption}
-                          required
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, size_caption: value }))
-                          }
-                        />
-                        <ProductSelect
-                          label="الفئة"
-                          value={productForm.category_id}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, category_id: value }))
-                          }
-                          placeholder="اختر الفئة"
-                        >
-                          <SelectItem value="none">بدون فئة</SelectItem>
-                          {(categoriesQuery.data || []).map((category) => (
-                            <SelectItem key={category.id} value={String(category.id)}>
-                              {category.name_ar || category.name}
-                            </SelectItem>
-                          ))}
-                        </ProductSelect>
-                        <ProductSelect
-                          label="الصنف"
-                          value={productForm.item_id}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, item_id: value }))
-                          }
-                          placeholder="اختر الصنف"
-                        >
-                          <SelectItem value="none">بدون صنف</SelectItem>
-                          {(itemsQuery.data || []).map((item) => (
-                            <SelectItem key={item.id} value={String(item.id)}>
-                              {item.name_ar || item.name}
-                            </SelectItem>
-                          ))}
-                        </ProductSelect>
-                        <Field
-                          label="العرض"
-                          type="number"
-                          value={productForm.width}
-                          onChange={(value) => setProductForm((prev) => ({ ...prev, width: value }))}
-                        />
-                        <Field
-                          label="ثنية يسار"
-                          type="number"
-                          value={productForm.left_facing}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, left_facing: value }))
-                          }
-                        />
-                        <Field
-                          label="ثنية يمين"
-                          type="number"
-                          value={productForm.right_facing}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, right_facing: value }))
-                          }
-                        />
-                        <Field
-                          label="السماكة"
-                          type="number"
-                          value={productForm.thickness}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, thickness: value }))
-                          }
-                        />
-                        <Field
-                          label="الكثافة"
-                          type="number"
-                          value={productForm.density}
-                          onChange={(value) => setProductForm((prev) => ({ ...prev, density: value }))}
-                        />
-                        <Field
-                          label="طول القطع (سم)"
-                          type="number"
-                          value={productForm.cutting_length_cm}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, cutting_length_cm: value }))
-                          }
-                        />
-                        <Field
-                          label="الخامة"
-                          value={productForm.raw_material}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, raw_material: value }))
-                          }
-                        />
-                        <Field
-                          label="الماستر باتش"
-                          value={productForm.master_batch_id}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, master_batch_id: value }))
-                          }
-                        />
-                        <ProductSelect
-                          label="أسطوانة الطباعة"
-                          value={productForm.printing_cylinder}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({
-                              ...prev,
-                              printing_cylinder: value,
-                              is_printed: value !== "بدون طباعة",
-                            }))
-                          }
-                          placeholder="اختر الأسطوانة"
-                        >
-                          <SelectItem value="بدون طباعة">بدون طباعة</SelectItem>
-                          {Array.from({ length: 17 }, (_, index) => (index + 4) * 2).map(
-                            (size) => (
-                              <SelectItem key={size} value={`${size}"`}>
-                                {size}"
-                              </SelectItem>
-                            ),
-                          )}
-                          <SelectItem value={'39"'}>39"</SelectItem>
-                        </ProductSelect>
-                        <ProductSelect
-                          label="وحدة التقطيع"
-                          value={productForm.cutting_unit}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, cutting_unit: value }))
-                          }
-                          placeholder="اختر الوحدة"
-                        >
-                          <SelectItem value="كيلو">كيلو</SelectItem>
-                          <SelectItem value="رول">رول</SelectItem>
-                          <SelectItem value="باكيت">باكيت</SelectItem>
-                        </ProductSelect>
-                        <Field
-                          label="نوع التخريم"
-                          value={productForm.punching}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, punching: value }))
-                          }
-                        />
-                        <Field
-                          label="وزن الوحدة (كجم)"
-                          type="number"
-                          value={productForm.unit_weight_kg}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, unit_weight_kg: value }))
-                          }
-                        />
-                        <Field
-                          label="عدد الوحدات"
-                          type="number"
-                          value={productForm.unit_quantity}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, unit_quantity: value }))
-                          }
-                        />
-                        <Field
-                          label="وزن العبوة (كجم)"
-                          type="number"
-                          value={productForm.package_weight_kg}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, package_weight_kg: value }))
-                          }
-                        />
-                        <ProductSelect
-                          label="الحالة"
-                          value={productForm.status}
-                          onChange={(value) =>
-                            setProductForm((prev) => ({ ...prev, status: value }))
-                          }
-                          placeholder="اختر الحالة"
-                        >
-                          <SelectItem value="active">فعال</SelectItem>
-                          <SelectItem value="inactive">غير فعال</SelectItem>
-                        </ProductSelect>
-                      </div>
-                      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={productForm.is_printed}
-                          onChange={(event) =>
-                            setProductForm((prev) => ({
-                              ...prev,
-                              is_printed: event.target.checked,
-                              printing_cylinder: event.target.checked
-                                ? prev.printing_cylinder === "بدون طباعة"
-                                  ? '8"'
-                                  : prev.printing_cylinder
-                                : "بدون طباعة",
-                            }))
-                          }
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                        />
-                        المنتج مطبوع
-                      </label>
-                      <div className="space-y-1.5">
-                        <Label className="text-sm font-semibold text-slate-700">ملاحظات</Label>
-                        <Textarea
-                          value={productForm.notes}
-                          onChange={(event) =>
-                            setProductForm((prev) => ({ ...prev, notes: event.target.value }))
-                          }
-                          className="min-h-20 bg-white"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        {editingProductId !== null && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingProductId(null);
-                              setProductForm(emptyProductForm);
-                            }}
-                          >
-                            إلغاء
-                          </Button>
-                        )}
-                        <Button
-                          type="submit"
-                          disabled={
-                            saveProductMutation.isPending ||
-                            (editingProductId !== null ? !canEditProduct : !canAddProduct)
-                          }
-                        >
-                          {saveProductMutation.isPending ? (
-                            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="ml-2 h-4 w-4" />
-                          )}
-                          {editingProductId ? "حفظ التعديلات" : "حفظ المنتج"}
-                        </Button>
-                      </div>
-                    </form>
+                    <CustomerProductEditor
+                      form={productForm}
+                      setForm={setProductForm}
+                      categories={categoriesQuery.data || []}
+                      items={itemsQuery.data || []}
+                      editing={editingProductId !== null}
+                      pending={saveProductMutation.isPending}
+                      canSave={
+                        editingProductId !== null ? canEditProduct : canAddProduct
+                      }
+                      onSubmit={handleProductSubmit}
+                      onCancel={() => {
+                        setEditingProductId(null);
+                        setProductForm(emptyProductForm);
+                      }}
+                    />
                   </div>
                 )}
               </CardContent>
