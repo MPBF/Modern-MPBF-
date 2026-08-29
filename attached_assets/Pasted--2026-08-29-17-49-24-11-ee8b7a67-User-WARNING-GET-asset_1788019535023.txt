@@ -1,0 +1,191 @@
+
+2026-08-29 17:49:24.11
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/scale-O3RrFD6d.js took 506ms
+
+
+2026-08-29 17:49:24.12
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/select-BEd3VGbF.js took 510ms
+
+2026-08-29 17:49:24.14
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/trophy-Da3TBqzB.js took 515ms
+
+2026-08-29 17:49:24.15
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/en-US-B6oe-THd.js took 511ms
+
+2026-08-29 17:49:24.16
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/ellipsis-BxGKYls1.js took 510ms
+
+2026-08-29 17:49:24.18
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/dollar-sign-B9tksAIP.js took 511ms
+
+2026-08-29 17:49:24.20
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/settings-2-BZB5Wnc1.js took 515ms
+
+2026-08-29 17:49:24.20
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/formatDistanceToNow-Ql2dbsAc.js took 511ms
+
+2026-08-29 17:49:24.22
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/plus-BSybRK5v.js took 510ms
+
+2026-08-29 17:49:24.24
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/truck-QDvP9u0O.js took 510ms
+
+2026-08-29 17:49:24.24
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/circle-alert-BhM4agzI.js took 521ms
+
+2026-08-29 17:49:34.51
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/clock-BeO_sVEV.js took 517ms
+
+2026-08-29 17:49:34.55
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/dialog-CNoNcoLU.js took 514ms
+
+2026-08-29 17:49:34.60
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/shopping-cart-yzianAXU.js took 521ms
+
+2026-08-29 17:49:34.63
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/grip-vertical-Bpj5iPQU.js took 518ms
+
+2026-08-29 17:49:34.64
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/zap-C3BVfcMO.js took 517ms
+
+2026-08-29 17:49:34.67
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/select-BEd3VGbF.js took 519ms
+
+2026-08-29 17:49:34.68
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/index-Tjn4AUaE.js took 516ms
+
+2026-08-29 17:49:34.71
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/textarea-B1JAk9Ff.js took 521ms
+
+2026-08-29 17:49:34.72
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/circle-alert-BhM4agzI.js took 512ms
+
+2026-08-29 17:49:34.73
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/scale-O3RrFD6d.js took 501ms
+
+2026-08-29 17:49:34.75
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/formatNumber-u6ODQR0E.js took 521ms
+
+2026-08-29 17:49:34.76
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/trash-2-SEzp0x91.js took 512ms
+
+2026-08-29 17:49:34.77
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/formatDistanceToNow-Ql2dbsAc.js took 506ms
+
+2026-08-29 17:49:34.79
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/endOfMonth-CGdBziNU.js took 520ms
+
+2026-08-29 17:49:34.80
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/phone-Dbpc6CDg.js took 509ms
+
+2026-08-29 17:49:34.82
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/truck-QDvP9u0O.js took 509ms
+
+2026-08-29 17:49:34.83
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/ellipsis-BxGKYls1.js took 523ms
+
+2026-08-29 17:49:34.84
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/plus-BSybRK5v.js took 506ms
+
+2026-08-29 17:49:34.86
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/PageLayout-BFMnzMlH.js took 515ms
+
+2026-08-29 17:55:00.85
+ee8b7a67
+User
+}
+
+2026-08-29 17:55:00.85
+ee8b7a67
+User
+[2026-08-29T14:55:00.854Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+
+2026-08-29 17:55:00.85
+ee8b7a67
+User
+"stack": "Error: (#100) Invalid parameter\n at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:19890:19)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async file:///home/runner/workspace/dist/index.js:34462:17"
+
+2026-08-29 17:55:00.85
+ee8b7a67
+User
+"name": "Error",
+
+2026-08-29 17:55:00.85
+ee8b7a67
+User
+"message": "(#100) Invalid parameter",
+
+2026-08-29 18:13:01.04
+ee8b7a67
+User
+⚠️ [WARNING] GET /api/rolls/active-for-cutting took 592ms
+
+2026-08-29 18:13:19.99
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/clock-BeO_sVEV.js took 514ms
+
+2026-08-29 18:13:19.99
+ee8b7a67
+User
+⚠️ [WARNING] GET /assets/index-Tjn4AUaE.js took 508ms
