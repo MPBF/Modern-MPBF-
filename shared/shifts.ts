@@ -107,6 +107,10 @@ export interface ShiftWindow {
   end: Date;
 }
 
+export interface ActivePreviousNightShift extends ShiftWindow {
+  dateStr: string;
+}
+
 /**
  * نافذة الوردية كلحظات مطلقة لتاريخ الجدولة المعطى (تاريخ بداية الوردية).
  * للوردية الليلية تبدأ مساء `dateStr` وتنتهي صباح اليوم التالي.
@@ -130,6 +134,27 @@ export function getShiftWindow(shift: ShiftType, dateStr: string): ShiftWindow {
     end = factoryWallToInstant(y, m, d, def.endHour, 0);
   }
   return { start, end };
+}
+
+/**
+ * Returns the previous calendar day's night shift only while it is still
+ * active after midnight. At exactly 07:00 Riyadh the carry-over ends and a
+ * fresh day-shift attendance session may begin.
+ */
+export function getActivePreviousNightShift(
+  now: Date = new Date(),
+): ActivePreviousNightShift | null {
+  const previousDate = factoryNowParts(
+    new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  ).dateStr;
+  const window = getShiftWindow("night", previousDate);
+  const nowMs = now.getTime();
+
+  if (nowMs < window.start.getTime() || nowMs >= window.end.getTime()) {
+    return null;
+  }
+
+  return { dateStr: previousDate, ...window };
 }
 
 export interface AttendanceMetricsInput {

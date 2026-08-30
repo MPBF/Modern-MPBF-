@@ -319,6 +319,7 @@ import { getDataValidator } from "../services/data-validator";
 import {
   isShiftType,
   factoryNowParts,
+  getActivePreviousNightShift,
   BASE_WORK_HOURS,
   type ShiftType,
 } from "@shared/shifts";
@@ -341,8 +342,6 @@ import {
 import { MachinesStorage } from "./machines";
 
 export class HrStorage extends MachinesStorage {
-
-
   async getAttendanceByDate(date: string): Promise<any[]> {
     try {
       const allUsers = await db
@@ -406,8 +405,6 @@ export class HrStorage extends MachinesStorage {
       throw new Error("فشل في جلب بيانات الحضور");
     }
   }
-
-
   async createAttendance(data: InsertAttendance): Promise<Attendance> {
     return withDatabaseErrorHandling(
       async () => {
@@ -418,8 +415,6 @@ export class HrStorage extends MachinesStorage {
       "إنشاء سجل حضور",
     );
   }
-
-
   async updateAttendance(
     id: number,
     updates: Partial<Attendance>,
@@ -437,8 +432,6 @@ export class HrStorage extends MachinesStorage {
       `تحديث سجل الحضور ${id}`,
     );
   }
-
-
   async deleteAttendance(id: number): Promise<void> {
     return withDatabaseErrorHandling(
       async () => {
@@ -448,8 +441,6 @@ export class HrStorage extends MachinesStorage {
       `حذف سجل الحضور ${id}`,
     );
   }
-
-
   async getAttendanceById(id: number): Promise<Attendance | null> {
     return withDatabaseErrorHandling(
       async () => {
@@ -463,8 +454,6 @@ export class HrStorage extends MachinesStorage {
       `جلب سجل الحضور ${id}`,
     );
   }
-
-
   async getAttendanceSummary(
     userId: number,
     start: Date,
@@ -515,8 +504,6 @@ export class HrStorage extends MachinesStorage {
       totalDays: records.length,
     };
   }
-
-
   async getAttendanceReport(
     start: Date,
     end: Date,
@@ -564,8 +551,6 @@ export class HrStorage extends MachinesStorage {
 
     return records;
   }
-
-
   async getDailyAttendanceStats(date: string): Promise<any> {
     const totalUsers = await db
       .select({ count: count() })
@@ -603,8 +588,6 @@ export class HrStorage extends MachinesStorage {
 
     return { total, present, absent: absent < 0 ? 0 : absent, onLeave, late };
   }
-
-
   async upsertManualAttendance(entries: any[]): Promise<any[]> {
     const results = [];
     for (const entry of entries) {
@@ -713,9 +696,24 @@ export class HrStorage extends MachinesStorage {
       .orderBy(desc(attendance.created_at));
 
     if (records.length === 0) {
-      // لم توجد سجلات لهذا اليوم — تحقق من وجود وردية ليلية مفتوحة من اليوم السابق
-      const openRecord = await this.findOpenCheckIn(userId);
-      if (openRecord && String(openRecord.date) !== date) {
+      // Only the active 19:00–07:00 night shift may cross the date boundary.
+      const now = new Date();
+      const previousNightWindow = getActivePreviousNightShift(now);
+      const openRecord =
+        date === factoryNowParts(now).dateStr && previousNightWindow
+          ? await this.findOpenCheckIn(userId)
+          : null;
+      const openCheckInMs = openRecord?.check_in_time
+        ? new Date(openRecord.check_in_time).getTime()
+        : Number.NaN;
+
+      if (
+        openRecord &&
+        previousNightWindow &&
+        String(openRecord.date).slice(0, 10) === previousNightWindow.dateStr &&
+        openCheckInMs >= previousNightWindow.start.getTime() &&
+        openCheckInMs < previousNightWindow.end.getTime()
+      ) {
         // الموظف دخل قبل منتصف الليل ولم يخرج بعد — جلب كل سجلات ذلك اليوم
         const shiftRecords = await db
           .select()
@@ -749,7 +747,7 @@ export class HrStorage extends MachinesStorage {
             null,
           work_hours: shiftLatest.work_hours,
           records: shiftRecords,
-          crossesMidnight: true,        // علم: الوردية تعبر منتصف الليل
+          crossesMidnight: true, // علم: الوردية تعبر منتصف الليل
           openShiftDate: openRecord.date, // تاريخ تسجيل الدخول الأصلي
         };
       }

@@ -8,6 +8,10 @@ import { violations, roles } from "@shared/schema";
 import { hasPermission } from "@shared/permissions";
 import { z } from "zod";
 import { parseIntSafe } from "@shared/validation-utils";
+import {
+  factoryNowParts,
+  getActivePreviousNightShift,
+} from "@shared/shifts";
 
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { getNotificationManager } from "../services/notification-manager";
@@ -48,7 +52,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           return res.status(400).json({ message: "معرف المستخدم غير صحيح" });
         }
         const date =
-          (req.query.date as string) || new Date().toISOString().split("T")[0];
+          (req.query.date as string) || factoryNowParts(new Date()).dateStr;
 
         const status = await storage.getDailyAttendanceStatus(userId, date);
         res.json(status);
@@ -333,6 +337,9 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const attendanceData = {
           ...req.body,
           ...stampOverrides,
+          // Attendance action dates are server-authoritative and use the
+          // factory's Riyadh calendar, not the browser/UTC calendar.
+          date: factoryNowParts(nowTs).dateStr,
           location_accuracy: accuracy,
           location_lat: lat,
           location_lng: lng,
@@ -347,9 +354,22 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         // إذا وُجد في يوم سابق، نستخدم تاريخه لربط الخروج بنفس وردية الدخول.
         if (status === "مغادر") {
           const openRecord = await storage.findOpenCheckIn(req.body.user_id);
+          const previousNightWindow = getActivePreviousNightShift(nowTs);
+          const openCheckInMs = openRecord?.check_in_time
+            ? new Date(openRecord.check_in_time).getTime()
+            : Number.NaN;
+          const isActivePreviousNightShift =
+            previousNightWindow != null &&
+            openRecord != null &&
+            String(openRecord.date).slice(0, 10) ===
+              previousNightWindow.dateStr &&
+            Number.isFinite(openCheckInMs) &&
+            openCheckInMs >= previousNightWindow.start.getTime() &&
+            openCheckInMs < previousNightWindow.end.getTime();
           if (
             openRecord &&
-            String(openRecord.date) !== String(attendanceData.date)
+            isActivePreviousNightShift &&
+            String(openRecord.date).slice(0, 10) !== attendanceData.date
           ) {
             attendanceData.date = openRecord.date;
           }
@@ -602,7 +622,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         }
 
         const now = new Date();
-        const today = now.toISOString().split("T")[0];
+        const today = factoryNowParts(now).dateStr;
         if (att.date && String(att.date).slice(0, 10) !== today) {
           return res
             .status(400)

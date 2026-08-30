@@ -537,21 +537,7 @@ export default function UserDashboard() {
         ),
   });
 
-  // Fetch daily attendance status - Optimized polling
-  const { data: dailyAttendanceStatus } = useQuery<{
-    hasCheckedIn: boolean;
-    hasStartedLunch: boolean;
-    hasEndedLunch: boolean;
-    hasCheckedOut: boolean;
-    currentStatus: string;
-  }>({
-    queryKey: ["/api/attendance/daily-status", user?.id],
-    enabled: !!user?.id,
-    refetchInterval: 120000, // Reduced from 30s to 2 minutes
-    staleTime: 90000, // Cache for 1.5 minutes
-  });
-
-  // Reactive "today" string that flips at local midnight without a page
+  // Reactive factory date that flips at Riyadh midnight without a page
   // refresh, and invalidates per-day caches so timers/totals reset.
   const today = useToday(() => {
     if (!user?.id) return;
@@ -562,6 +548,20 @@ export default function UserDashboard() {
       queryKey: ["/api/attendance/daily-status", user.id],
     });
     void queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
+  });
+
+  // Fetch daily attendance status - Optimized polling
+  const { data: dailyAttendanceStatus } = useQuery<{
+    hasCheckedIn: boolean;
+    hasStartedLunch: boolean;
+    hasEndedLunch: boolean;
+    hasCheckedOut: boolean;
+    currentStatus: string;
+  }>({
+    queryKey: ["/api/attendance/daily-status", user?.id, { date: today }],
+    enabled: !!user?.id,
+    refetchInterval: 120000, // Reduced from 30s to 2 minutes
+    staleTime: 90000, // Cache for 1.5 minutes
   });
 
   // Current attendance status - get the latest record for today
@@ -599,7 +599,7 @@ export default function UserDashboard() {
           user_id: user?.id,
           status: data.status,
           action: data.action,
-          date: new Date().toISOString().split("T")[0],
+          date: today,
           notes: data.notes,
           location: data.location,
         }),

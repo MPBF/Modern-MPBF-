@@ -358,7 +358,26 @@ export class MiscStorage extends SystemStorage {
           )
           .orderBy(desc(attendance.check_in_time))
           .limit(1);
-        return record ?? null;
+        if (!record?.check_in_time) return null;
+
+        // Self-attendance stores every action in a separate row. Therefore the
+        // check-in row itself always has check_out_time=NULL, even after a
+        // later "مغادر" row closes that session. Treat it as open only when no
+        // checkout exists after this check-in on the same attendance date.
+        const [laterCheckout] = await db
+          .select({ id: attendance.id })
+          .from(attendance)
+          .where(
+            and(
+              eq(attendance.user_id, userId),
+              eq(attendance.date, record.date),
+              isNotNull(attendance.check_out_time),
+              gte(attendance.check_out_time, record.check_in_time),
+            ),
+          )
+          .limit(1);
+
+        return laterCheckout ? null : record;
       },
       "findOpenCheckIn",
       `جلب تسجيل الدخول المفتوح للمستخدم ${userId}`,
