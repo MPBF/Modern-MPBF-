@@ -10,7 +10,7 @@ import {
   Package,
   X,
   Film,
-  PrinterIcon,
+  Printer as PrinterIcon,
   Scissors,
   CheckCircle,
   Clock,
@@ -20,10 +20,10 @@ import {
   ChevronDown,
   ChevronLeft,
   User,
+  Layers,
 } from "lucide-react";
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "wouter";
 
 import PageLayout from "../../components/layout/PageLayout";
 import RollDetailsCard from "../../components/production/RollDetailsCard";
@@ -48,7 +48,7 @@ import { Label } from "../../components/ui/label";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Calendar } from "../../components/ui/calendar";
-import { Card } from "../../components/ui/card";
+import { Card, CardContent } from "../../components/ui/card";
 import {
   Popover,
   PopoverContent,
@@ -63,7 +63,6 @@ import {
   TableRow,
 } from "../../components/ui/table";
 import { useToast } from "../../hooks/use-toast";
-import { queryClient } from "../../lib/queryClient";
 import { cn } from "../../lib/utils";
 
 interface RollSearchResult {
@@ -112,10 +111,16 @@ interface SearchFilters {
   orderId?: number;
 }
 
+const STAGE_VARIANTS: Record<string, string> = {
+  film: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+  printing: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300",
+  cutting: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  done: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+};
+
 export default function RollSearch() {
   const { t } = useTranslation();
   const ln = useLocalizedName();
-  const [, navigate] = useLocation();
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -125,9 +130,7 @@ export default function RollSearch() {
   const [filters, setFilters] = useState<SearchFilters>({});
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [collapsedOrders, setCollapsedOrders] = useState<Set<string>>(
-    new Set(),
-  );
+  const [collapsedOrders, setCollapsedOrders] = useState<Set<string>>(new Set());
   const [collapsedPOs, setCollapsedPOs] = useState<Set<string>>(new Set());
 
   const toggleOrder = (orderNumber: string) => {
@@ -170,22 +173,10 @@ export default function RollSearch() {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
       if (searchQuery) saveToHistory(searchQuery);
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "f") {
-        e.preventDefault();
-        document.getElementById("search-input")?.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   const buildQueryParams = () => {
     const params = new URLSearchParams();
@@ -312,11 +303,7 @@ export default function RollSearch() {
 
     worksheet.columns = [
       { header: t("system.search.rollNumber"), key: "rollNumber", width: 15 },
-      {
-        header: t("system.search.productionOrder"),
-        key: "productionOrder",
-        width: 20,
-      },
+      { header: t("system.search.productionOrder"), key: "productionOrder", width: 20 },
       { header: t("system.search.orderNumber"), key: "orderNumber", width: 15 },
       { header: t("orders.customer"), key: "customer", width: 25 },
       { header: t("production.product"), key: "product", width: 20 },
@@ -365,30 +352,15 @@ export default function RollSearch() {
   const getStageIcon = (stage: string) => {
     switch (stage) {
       case "film":
-        return <Film className="h-4 w-4" />;
+        return <Film className="h-3.5 w-3.5" />;
       case "printing":
-        return <PrinterIcon className="h-4 w-4" />;
+        return <PrinterIcon className="h-3.5 w-3.5" />;
       case "cutting":
-        return <Scissors className="h-4 w-4" />;
+        return <Scissors className="h-3.5 w-3.5" />;
       case "done":
-        return <CheckCircle className="h-4 w-4" />;
+        return <CheckCircle className="h-3.5 w-3.5" />;
       default:
-        return <Package className="h-4 w-4" />;
-    }
-  };
-
-  const getStageColor = (stage: string) => {
-    switch (stage) {
-      case "film":
-        return "default";
-      case "printing":
-        return "secondary";
-      case "cutting":
-        return "warning";
-      case "done":
-        return "success";
-      default:
-        return "default";
+        return <Package className="h-3.5 w-3.5" />;
     }
   };
 
@@ -401,80 +373,75 @@ export default function RollSearch() {
 
   return (
     <PageLayout
-      title={t("system.search.title")}
-      description={t("system.search.description")}
+      title="البحث وتتبع الرولات"
+      description="استعلام فوري وتتبع لحركة الرولات ومسار الإنتاج"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card className="p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5" dir="rtl">
+        {/* قسم البحث والنتائج */}
+        <div className="lg:col-span-2 space-y-4">
+          <Card className="rounded-2xl border shadow-xs p-4 bg-white dark:bg-gray-900">
             <Tabs defaultValue="text" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="text" data-testid="tab-text-search">
-                  <Search className="h-4 w-4 ml-2" />
-                  {t("system.search.textSearch")}
+              <TabsList className="grid w-full grid-cols-2 h-11 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                <TabsTrigger value="text" className="rounded-lg font-bold text-xs">
+                  <Search className="h-3.5 w-3.5 ml-1.5" />
+                  البحث النصي
                 </TabsTrigger>
-                <TabsTrigger value="barcode" data-testid="tab-barcode-search">
-                  <ScanLine className="h-4 w-4 ml-2" />
-                  {t("system.search.barcodeSearch")}
+                <TabsTrigger value="barcode" className="rounded-lg font-bold text-xs">
+                  <ScanLine className="h-3.5 w-3.5 ml-1.5" />
+                  مسح الباركود
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="text" className="space-y-4">
+              <TabsContent value="text" className="space-y-3.5">
                 <div className="relative">
-                  <Search className="absolute right-3 top-3 h-5 w-5 text-muted-foreground" />
+                  <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="search-input"
                     type="text"
-                    placeholder={t("system.search.placeholder")}
+                    placeholder="ابحث برقم الرول، العميل، أمر الإنتاج، أو المنتج..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pr-10 text-lg h-12"
-                    data-testid="input-search"
+                    className="pr-10 pl-9 h-11 text-xs font-bold rounded-xl"
                   />
                   {searchQuery && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setSearchQuery("")}
-                      className="absolute left-2 top-2"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </div>
 
                 {searchHistory.length > 0 && !searchQuery && (
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">
-                      {t("system.search.recentSearches")}
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                      {searchHistory.map((query, idx) => (
-                        <Badge
-                          key={idx}
-                          variant="secondary"
-                          className="cursor-pointer hover:bg-secondary/80"
-                          onClick={() => setSearchQuery(query)}
-                        >
-                          <Clock className="h-3 w-3 ml-1" />
-                          {query}
-                        </Badge>
-                      ))}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-gray-400 ml-1">عمليات البحث الأخيرة:</span>
+                    {searchHistory.slice(0, 5).map((query, idx) => (
+                      <Badge
+                        key={idx}
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-gray-200 text-xs font-medium py-0.5 rounded-lg"
+                        onClick={() => setSearchQuery(query)}
+                      >
+                        <Clock className="h-3 w-3 ml-1 text-gray-400" />
+                        {query}
+                      </Badge>
+                    ))}
                   </div>
                 )}
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between pt-1">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowFilters(!showFilters)}
-                    data-testid="button-toggle-filters"
+                    className="h-8 text-xs font-bold rounded-xl gap-1.5"
                   >
-                    <Filter className="h-4 w-4 ml-2" />
-                    {t("system.search.advancedFilters")}
+                    <Filter className="h-3.5 w-3.5" />
+                    الفلاتر المتقدمة
                     {Object.keys(filters).length > 0 && (
-                      <Badge className="mr-2" variant="secondary">
+                      <Badge className="mr-1 h-5 px-1.5 text-[10px]" variant="secondary">
                         {Object.keys(filters).length}
                       </Badge>
                     )}
@@ -485,323 +452,223 @@ export default function RollSearch() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setFilters({})}
-                      data-testid="button-clear-filters"
+                      className="h-8 text-xs font-bold text-rose-600"
                     >
-                      {t("system.search.clearFilters")}
+                      مسح الفلاتر
                     </Button>
                   )}
                 </div>
 
                 {showFilters && (
-                  <Card className="p-4 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t("system.search.stage")}</Label>
-                        <Select
-                          value={filters.stage || "all"}
-                          onValueChange={(value) =>
-                            setFilters({
-                              ...filters,
-                              stage: value === "all" ? undefined : value,
-                            })
-                          }
-                        >
-                          <SelectTrigger data-testid="select-stage-filter">
-                            <SelectValue
-                              placeholder={t("system.search.allStages")}
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">
-                              {t("system.search.allStages")}
-                            </SelectItem>
-                            <SelectItem value="film">
-                              {t("system.search.stages.film")}
-                            </SelectItem>
-                            <SelectItem value="printing">
-                              {t("system.search.stages.printing")}
-                            </SelectItem>
-                            <SelectItem value="cutting">
-                              {t("system.search.stages.cutting")}
-                            </SelectItem>
-                            <SelectItem value="done">
-                              {t("system.search.stages.done")}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>{t("system.search.fromDate")}</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-right",
-                                !filters.startDate && "text-muted-foreground",
-                              )}
-                              data-testid="button-start-date"
-                            >
-                              <CalendarIcon className="ml-2 h-4 w-4" />
-                              {filters.startDate
-                                ? format(filters.startDate, "PPP", {
-                                    locale: ar,
-                                  })
-                                : t("system.search.selectDate")}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={filters.startDate}
-                              onSelect={(date) =>
-                                setFilters({
-                                  ...filters,
-                                  startDate: date || undefined,
-                                })
-                              }
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>{t("system.search.toDate")}</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-right",
-                                !filters.endDate && "text-muted-foreground",
-                              )}
-                              data-testid="button-end-date"
-                            >
-                              <CalendarIcon className="ml-2 h-4 w-4" />
-                              {filters.endDate
-                                ? format(filters.endDate, "PPP", { locale: ar })
-                                : t("system.search.selectDate")}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={filters.endDate}
-                              onSelect={(date) =>
-                                setFilters({
-                                  ...filters,
-                                  endDate: date || undefined,
-                                })
-                              }
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>{t("system.search.minWeight")}</Label>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          value={filters.minWeight || ""}
-                          onChange={(e) =>
-                            setFilters({
-                              ...filters,
-                              minWeight: e.target.value
-                                ? parseFloat(e.target.value)
-                                : undefined,
-                            })
-                          }
-                          data-testid="input-min-weight"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>{t("system.search.maxWeight")}</Label>
-                        <Input
-                          type="number"
-                          placeholder="1000"
-                          value={filters.maxWeight || ""}
-                          onChange={(e) =>
-                            setFilters({
-                              ...filters,
-                              maxWeight: e.target.value
-                                ? parseFloat(e.target.value)
-                                : undefined,
-                            })
-                          }
-                          data-testid="input-max-weight"
-                        />
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-800/40 p-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-500">مرحلة الإنتاج</Label>
+                      <Select
+                        value={filters.stage || "all"}
+                        onValueChange={(val) =>
+                          setFilters({ ...filters, stage: val === "all" ? undefined : val })
+                        }
+                      >
+                        <SelectTrigger className="h-9 text-xs font-bold rounded-xl">
+                          <SelectValue placeholder="كل المراحل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">كل المراحل</SelectItem>
+                          <SelectItem value="film">فيلم</SelectItem>
+                          <SelectItem value="printing">طباعة</SelectItem>
+                          <SelectItem value="cutting">تقطيع</SelectItem>
+                          <SelectItem value="done">مكتمل</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </Card>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-500">من تاريخ</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full h-9 text-xs font-bold rounded-xl justify-start">
+                            <CalendarIcon className="ml-2 h-3.5 w-3.5 text-gray-400" />
+                            {filters.startDate ? format(filters.startDate, "PPP", { locale: ar }) : "اختر التاريخ"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={filters.startDate}
+                            onSelect={(d) => setFilters({ ...filters, startDate: d || undefined })}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-500">إلى تاريخ</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full h-9 text-xs font-bold rounded-xl justify-start">
+                            <CalendarIcon className="ml-2 h-3.5 w-3.5 text-gray-400" />
+                            {filters.endDate ? format(filters.endDate, "PPP", { locale: ar }) : "اختر التاريخ"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={filters.endDate}
+                            onSelect={(d) => setFilters({ ...filters, endDate: d || undefined })}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-500">الوزن الأقصى (كجم)</Label>
+                      <Input
+                        type="number"
+                        placeholder="1000"
+                        value={filters.maxWeight || ""}
+                        onChange={(e) =>
+                          setFilters({
+                            ...filters,
+                            maxWeight: e.target.value ? parseFloat(e.target.value) : undefined,
+                          })
+                        }
+                        className="h-9 text-xs font-bold rounded-xl"
+                      />
+                    </div>
+                  </div>
                 )}
               </TabsContent>
 
-              <TabsContent value="barcode" className="space-y-4">
-                <div className="text-center space-y-4">
-                  <QrCode className="h-16 w-16 mx-auto text-muted-foreground" />
-                  <p className="text-muted-foreground">
-                    {t("system.search.scanBarcodeDesc")}
+              <TabsContent value="barcode" className="space-y-4 py-2">
+                <div className="text-center space-y-3 bg-gray-50 dark:bg-gray-800/40 p-5 rounded-2xl border border-dashed">
+                  <QrCode className="h-10 w-10 mx-auto text-blue-600" />
+                  <p className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    أدخل أو امسح الباركود الخاص بالرول
                   </p>
-                  <div className="flex gap-2 max-w-md mx-auto">
+                  <div className="flex gap-2 max-w-sm mx-auto">
                     <Input
                       type="text"
-                      placeholder={t("system.search.enterBarcodeNumber")}
+                      placeholder="امسح أو اكتب رقم الرول..."
                       value={barcodeInput}
                       onChange={(e) => setBarcodeInput(e.target.value)}
-                      onKeyPress={(e) =>
-                        e.key === "Enter" && handleBarcodeScan()
-                      }
-                      className="text-lg h-12"
-                      data-testid="input-barcode"
+                      onKeyPress={(e) => e.key === "Enter" && handleBarcodeScan()}
+                      className="h-10 text-xs font-black text-center rounded-xl"
+                      autoFocus
                     />
                     <Button
                       onClick={handleBarcodeScan}
-                      disabled={
-                        !barcodeInput.trim() ||
-                        searchByBarcodeMutation.isPending
-                      }
-                      data-testid="button-scan"
+                      disabled={!barcodeInput.trim() || searchByBarcodeMutation.isPending}
+                      className="h-10 px-4 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       {searchByBarcodeMutation.isPending ? (
                         <RefreshCw className="h-4 w-4 animate-spin" />
                       ) : (
                         <ScanLine className="h-4 w-4" />
                       )}
-                      {t("system.search.scan")}
                     </Button>
                   </div>
                 </div>
               </TabsContent>
             </Tabs>
+          </Card>
 
-            <div className="mt-6">
-              {isSearching ? (
-                <div className="space-y-3">
-                  {[...Array(3)].map((_, i) => (
-                    <Skeleton key={i} className="h-24" />
-                  ))}
+          {/* قائمة النتائج */}
+          <div>
+            {isSearching ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+                ))}
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-black text-gray-700 dark:text-gray-200">
+                    نتائج البحث: ({searchResults.length} رول)
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportToExcel}
+                    className="h-8 text-xs font-bold gap-1 rounded-xl text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    تصدير إكسل
+                  </Button>
                 </div>
-              ) : searchResults.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">
-                      {t("system.search.searchResults")} ({searchResults.length}{" "}
-                      رول)
-                    </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={exportToExcel}
-                      data-testid="button-export"
-                    >
-                      <Download className="h-4 w-4 ml-2" />
-                      {t("system.search.exportExcel")}
-                    </Button>
-                  </div>
-                  <ScrollArea className="h-[600px]">
-                    <div className="space-y-4">
-                      {groupedData.map((order) => (
+
+                <ScrollArea className="h-[550px]">
+                  <div className="space-y-3 pr-0.5">
+                    {groupedData.map((order) => (
+                      <div
+                        key={order.order_number}
+                        className="border-2 border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-2xs"
+                      >
+                        {/* ترويسة الطلب الرئيسي */}
                         <div
-                          key={order.order_number}
-                          className="border rounded-lg overflow-hidden"
+                          className="flex items-center justify-between p-3.5 bg-gray-50/80 dark:bg-gray-800/60 cursor-pointer hover:bg-gray-100 transition-colors border-b"
+                          onClick={() => toggleOrder(order.order_number)}
                         >
-                          <div
-                            className="flex items-center justify-between px-4 py-3 bg-slate-100 dark:bg-slate-800 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                            onClick={() => toggleOrder(order.order_number)}
-                          >
-                            <div className="flex items-center gap-3">
-                              {collapsedOrders.has(order.order_number) ? (
-                                <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              )}
-                              <Package className="h-5 w-5 text-primary" />
-                              <span className="font-bold text-base">
-                                {order.order_number}
-                              </span>
-                              <span className="text-muted-foreground">-</span>
-                              <span className="font-bold text-gray-900">
-                                {order.customer_name}
-                              </span>
-                            </div>
-                            <Badge variant="secondary">
-                              {order.productionOrders.reduce(
-                                (sum, po) => sum + po.rolls.length,
-                                0,
-                              )}{" "}
-                              رول
-                            </Badge>
+                          <div className="flex items-center gap-2">
+                            {collapsedOrders.has(order.order_number) ? (
+                              <ChevronLeft className="h-4 w-4 text-gray-400" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-gray-400" />
+                            )}
+                            <Package className="h-4 w-4 text-blue-600" />
+                            <span className="font-black text-xs text-gray-900 dark:text-white">
+                              طلب: #{order.order_number}
+                            </span>
+                            <span className="text-xs font-bold text-blue-700 dark:text-blue-400">
+                              - {order.customer_name}
+                            </span>
                           </div>
 
-                          {!collapsedOrders.has(order.order_number) && (
-                            <div className="divide-y">
-                              {order.productionOrders.map((po) => (
-                                <div key={po.production_order_number}>
-                                  <div
-                                    className="flex items-center justify-between px-6 py-2 bg-blue-50/50 dark:bg-blue-900/20 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-blue-900/30 transition-colors"
-                                    onClick={() =>
-                                      togglePO(po.production_order_number)
-                                    }
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      {collapsedPOs.has(
-                                        po.production_order_number,
-                                      ) ? (
-                                        <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                                      ) : (
-                                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                                      )}
-                                      <span className="font-semibold text-sm text-blue-700 dark:text-blue-400">
-                                        {po.production_order_number}
-                                      </span>
-                                      <span className="text-muted-foreground text-sm">
-                                        |
-                                      </span>
-                                      <span className="text-sm">
-                                        {po.item_name}
-                                      </span>
-                                      <span className="text-xs text-muted-foreground">
-                                        ({po.size_caption})
-                                      </span>
-                                    </div>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      {po.rolls.length} رول
-                                    </Badge>
-                                  </div>
+                          <Badge variant="secondary" className="font-bold text-[10px]">
+                            {order.productionOrders.reduce((sum, po) => sum + po.rolls.length, 0)} رول
+                          </Badge>
+                        </div>
 
-                                  {!collapsedPOs.has(
-                                    po.production_order_number,
-                                  ) && (
+                        {/* أوامر الإنتاج التابعة للطلب */}
+                        {!collapsedOrders.has(order.order_number) && (
+                          <div className="divide-y">
+                            {order.productionOrders.map((po) => (
+                              <div key={po.production_order_number} className="p-2 space-y-2">
+                                <div
+                                  className="flex items-center justify-between p-2 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 cursor-pointer"
+                                  onClick={() => togglePO(po.production_order_number)}
+                                >
+                                  <div className="flex items-center gap-2 text-xs">
+                                    {collapsedPOs.has(po.production_order_number) ? (
+                                      <ChevronLeft className="h-3.5 w-3.5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                                    )}
+                                    <span className="font-black text-blue-700 dark:text-blue-300">
+                                      {po.production_order_number}
+                                    </span>
+                                    <span className="font-bold text-gray-900 dark:text-white">
+                                      {po.item_name}
+                                    </span>
+                                    <span className="text-gray-400 text-[11px]">({po.size_caption})</span>
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px] font-bold">
+                                    {po.rolls.length} رول
+                                  </Badge>
+                                </div>
+
+                                {/* جدول رولات أمر الإنتاج */}
+                                {!collapsedPOs.has(po.production_order_number) && (
+                                  <div className="overflow-x-auto">
                                     <Table>
                                       <TableHeader>
-                                        <TableRow className="bg-gray-50/50 dark:bg-gray-800/50">
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            رقم الرول
-                                          </TableHead>
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            المرحلة
-                                          </TableHead>
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            المنتج
-                                          </TableHead>
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            الوزن
-                                          </TableHead>
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            فيلم بواسطة
-                                          </TableHead>
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            طبع بواسطة
-                                          </TableHead>
-                                          <TableHead className="text-right text-xs font-semibold">
-                                            قطع بواسطة
-                                          </TableHead>
+                                        <TableRow className="bg-gray-50/50 dark:bg-gray-800/40">
+                                          <TableHead className="font-black text-[11px]">رقم الرول</TableHead>
+                                          <TableHead className="font-black text-[11px] text-center">المرحلة</TableHead>
+                                          <TableHead className="font-black text-[11px] text-center">الوزن</TableHead>
+                                          <TableHead className="font-black text-[11px]">فيلم بواسطة</TableHead>
+                                          <TableHead className="font-black text-[11px]">طبع بواسطة</TableHead>
+                                          <TableHead className="font-black text-[11px]">قطع بواسطة</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
@@ -809,120 +676,70 @@ export default function RollSearch() {
                                           <TableRow
                                             key={roll.roll_id}
                                             className={cn(
-                                              "cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors",
-                                              selectedRollId === roll.roll_id &&
-                                                "bg-blue-100 dark:bg-blue-900/30",
+                                              "cursor-pointer hover:bg-blue-50/50 transition-colors",
+                                              selectedRollId === roll.roll_id && "bg-blue-100/70 dark:bg-blue-900/40 font-bold",
                                             )}
-                                            onClick={() =>
-                                              setSelectedRollId(roll.roll_id)
-                                            }
-                                            data-testid={`row-roll-${roll.roll_id}`}
+                                            onClick={() => setSelectedRollId(roll.roll_id)}
                                           >
-                                            <TableCell className="font-medium text-sm">
+                                            <TableCell className="font-black text-xs text-blue-700 dark:text-blue-400">
                                               {roll.roll_number}
                                             </TableCell>
-                                            <TableCell>
-                                              <Badge
-                                                variant={
-                                                  getStageColor(
-                                                    roll.stage,
-                                                  ) as any
-                                                }
-                                                className="text-xs"
-                                              >
+                                            <TableCell className="text-center">
+                                              <Badge className={`${STAGE_VARIANTS[roll.stage] || ""} border-0 text-[10px] font-bold`}>
                                                 {getStageIcon(roll.stage)}
-                                                <span className="mr-1">
-                                                  {getStageLabel(roll.stage)}
-                                                </span>
+                                                <span className="mr-1">{getStageLabel(roll.stage)}</span>
                                               </Badge>
                                             </TableCell>
-                                            <TableCell className="text-sm">
-                                              {ln(
-                                                roll.item_name_ar,
-                                                roll.item_name,
-                                              ) || "-"}
-                                            </TableCell>
-                                            <TableCell className="text-sm font-medium">
+                                            <TableCell className="text-center font-bold text-xs text-emerald-600 dark:text-emerald-400">
                                               {roll.weight_kg} كجم
                                             </TableCell>
-                                            <TableCell className="text-sm">
-                                              <div className="flex items-center gap-1 text-muted-foreground">
-                                                {roll.created_by_name ? (
-                                                  <>
-                                                    <User className="h-3 w-3" />
-                                                    <span>
-                                                      {roll.created_by_name}
-                                                    </span>
-                                                  </>
-                                                ) : (
-                                                  "-"
-                                                )}
-                                              </div>
+                                            <TableCell className="text-xs text-gray-600 dark:text-gray-300">
+                                              {roll.created_by_name || "—"}
                                             </TableCell>
-                                            <TableCell className="text-sm">
-                                              <div className="flex items-center gap-1 text-muted-foreground">
-                                                {roll.printed_by_name ? (
-                                                  <>
-                                                    <User className="h-3 w-3" />
-                                                    <span>
-                                                      {roll.printed_by_name}
-                                                    </span>
-                                                  </>
-                                                ) : (
-                                                  "-"
-                                                )}
-                                              </div>
+                                            <TableCell className="text-xs text-gray-600 dark:text-gray-300">
+                                              {roll.printed_by_name || "—"}
                                             </TableCell>
-                                            <TableCell className="text-sm">
-                                              <div className="flex items-center gap-1 text-muted-foreground">
-                                                {roll.cut_by_name ? (
-                                                  <>
-                                                    <User className="h-3 w-3" />
-                                                    <span>
-                                                      {roll.cut_by_name}
-                                                    </span>
-                                                  </>
-                                                ) : (
-                                                  "-"
-                                                )}
-                                              </div>
+                                            <TableCell className="text-xs text-gray-600 dark:text-gray-300">
+                                              {roll.cut_by_name || "—"}
                                             </TableCell>
                                           </TableRow>
                                         ))}
                                       </TableBody>
                                     </Table>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              ) : debouncedQuery || Object.keys(filters).length > 0 ? (
-                <div className="text-center py-12">
-                  <Package className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium">
-                    {t("system.search.noResults")}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {t("system.search.noResultsDesc")}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </Card>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            ) : debouncedQuery ? (
+              <div className="text-center py-16 bg-white dark:bg-gray-900 rounded-2xl border">
+                <Package className="h-10 w-10 mx-auto text-gray-400 mb-2 opacity-30" />
+                <p className="text-xs font-bold text-gray-500">لا توجد رولات مطابقة للبحث</p>
+              </div>
+            ) : null}
+          </div>
         </div>
 
+        {/* قسم تفاصيل الرول المحدد */}
         <div className="lg:col-span-1">
-          {selectedRollId && (
-            <Card className="p-4 sticky top-4">
-              <h3 className="font-semibold mb-4">
-                {t("system.search.rollDetails")}
+          {selectedRollId ? (
+            <div className="sticky top-4 space-y-3">
+              <h3 className="font-black text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
+                <Layers className="h-4 w-4 text-blue-600" />
+                تفاصيل الرول المحدد:
               </h3>
               <RollDetailsCard rollId={selectedRollId} />
+            </div>
+          ) : (
+            <Card className="rounded-2xl border border-dashed p-8 text-center text-gray-400">
+              <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-xs font-bold">اضغط على أي رول من القائمة لعرض كامل تفاصيله ومساره هنا</p>
             </Card>
           )}
         </div>
