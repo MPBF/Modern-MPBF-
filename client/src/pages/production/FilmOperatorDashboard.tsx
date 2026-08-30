@@ -2,17 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Package,
   PackageCheck,
-  Clock,
-  AlertTriangle,
   CheckCircle2,
   Plus,
   Flag,
   Loader2,
   Info,
   Printer,
-  User,
   Beaker,
-  Target,
+  Ruler,
+  Layers,
+  Gauge,
+  Palette,
+  Disc,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,16 +29,13 @@ import {
   OrdersListHeader,
   groupByOrderNumber,
 } from "../../components/production/OrderGroupCard";
-import { OperatorStatCard } from "../../components/production/OperatorStatCard";
 import { printRollLabel } from "../../components/production/RollLabelPrint";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from "../../components/ui/card";
 import { Progress } from "../../components/ui/progress";
 import {
@@ -49,8 +47,6 @@ import {
 import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useLocalizedName } from "../../hooks/use-localized-name";
 
-// "الرول الأخير" (آخر رول) يظهر فقط عندما تكون الكمية المتبقية من مرحلة
-// الفيلم 15% أو أقل من الكمية المطلوبة لأمر الإنتاج.
 const FINAL_ROLL_MAX_REMAINING_PERCENT = 15;
 
 interface ActiveProductionOrderDetails {
@@ -127,10 +123,10 @@ export default function FilmOperatorDashboard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFinalRoll, setIsFinalRoll] = useState(false);
   const [batchOrderId, setBatchOrderId] = useState<number | null>(null);
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
     null,
   );
+  const [printingRollId, setPrintingRollId] = useState<number | null>(null);
   const ordersPolling = useSmartPolling(45_000);
   const rollsPolling = useSmartPolling(60_000);
 
@@ -161,32 +157,13 @@ export default function FilmOperatorDashboard({
     setIsFinalRoll(false);
   };
 
-  const toggleOrderExpansion = (orderId: number) => {
-    setExpandedOrders((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(orderId)) {
-        newSet.delete(orderId);
-      } else {
-        newSet.add(orderId);
-      }
-      return newSet;
-    });
-  };
-
   const handlePrintLabel = async (roll: Roll) => {
     try {
+      setPrintingRollId(roll.id);
       const response = await fetch(`/api/rolls/${roll.id}/label`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const labelData = await response.json();
-
-      if (!labelData || !labelData.roll) {
-        throw new Error("Invalid label data received");
-      }
-
+      if (!labelData || !labelData.roll) throw new Error("Invalid label data");
       printRollLabel({
         roll: labelData.roll,
         productionOrder: labelData.productionOrder,
@@ -197,33 +174,9 @@ export default function FilmOperatorDashboard({
       alert(
         `${t("operators.common.printLabelError")}: ${error instanceof Error ? error.message : t("operators.common.unknownError")}`,
       );
+    } finally {
+      setPrintingRollId(null);
     }
-  };
-
-  const stats = {
-    totalOrders: productionOrders.length,
-    totalRequired: productionOrders.reduce(
-      (sum: number, order: ActiveProductionOrderDetails) =>
-        sum + Number(order.final_quantity_kg || order.quantity_kg || 0),
-      0,
-    ),
-    totalProduced: productionOrders.reduce(
-      (sum: number, order: ActiveProductionOrderDetails) =>
-        sum + Number(order.total_weight_produced || 0),
-      0,
-    ),
-    ordersNearCompletion: productionOrders.filter(
-      (order: ActiveProductionOrderDetails) => {
-        const requiredQty =
-          Number(order.final_quantity_kg) > 0
-            ? Number(order.final_quantity_kg)
-            : Number(order.quantity_kg || 0);
-        if (requiredQty <= 0) return false;
-        const progress =
-          (Number(order.total_weight_produced || 0) / requiredQty) * 100;
-        return progress >= 80 && !order.is_final_roll_created;
-      },
-    ).length,
   };
 
   const orderGroups = useMemo(
@@ -236,18 +189,15 @@ export default function FilmOperatorDashboard({
 
   if (isLoading) {
     const loadingContent = (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-80">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-600">{t("operators.film.loadingOrders")}</p>
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600 mx-auto mb-3" />
+          <p className="text-gray-600 text-sm font-medium">{t("operators.film.loadingOrders")}</p>
         </div>
       </div>
     );
 
-    if (hideLayout) {
-      return loadingContent;
-    }
-
+    if (hideLayout) return loadingContent;
     return (
       <PageLayout
         title={t("operators.film.title")}
@@ -258,95 +208,46 @@ export default function FilmOperatorDashboard({
     );
   }
 
-  const mainContent = (
-    <div className="space-y-6">
-      <Tabs defaultValue="production" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+  return (
+    <div className="space-y-4 pb-12">
+      <Tabs defaultValue="production" className="space-y-4">
+        {/* شريط التبويب العلوي */}
+        <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
           <TabsTrigger
             value="production"
-            className="flex items-center gap-2"
-            data-testid="tab-production"
+            className="flex items-center justify-center gap-2 font-bold text-sm h-10 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-900 shadow-sm"
           >
-            <Package className="h-4 w-4" />
+            <Package className="h-4 w-4 text-blue-600" />
             {t("operators.film.productionOrdersTab")}
           </TabsTrigger>
           <TabsTrigger
             value="mixing"
-            className="flex items-center gap-2"
-            data-testid="tab-mixing"
+            className="flex items-center justify-center gap-2 font-bold text-sm h-10 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-900 shadow-sm"
           >
-            <Beaker className="h-4 w-4" />
+            <Beaker className="h-4 w-4 text-amber-600" />
             {t("operators.film.materialMixingTab")}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="production" className="space-y-6">
-          <div className="hidden md:grid md:grid-cols-4 gap-4 mb-6">
-            <OperatorStatCard
-              icon={Package}
-              color="blue"
-              value={stats.totalOrders}
-              label={t("operators.common.activeOrders")}
-              sublabel={t("operators.common.productionOrder")}
-              testId="card-active-orders"
-              valueTestId="stat-active-orders"
-            />
-
-            <OperatorStatCard
-              icon={Target}
-              color="amber"
-              value={formatNumberAr(stats.totalRequired)}
-              label={t("operators.common.requiredQuantity")}
-              sublabel={t("operators.common.kilogram")}
-              testId="card-total-required"
-              valueTestId="stat-total-required"
-            />
-
-            <OperatorStatCard
-              icon={CheckCircle2}
-              color="green"
-              value={formatNumberAr(stats.totalProduced)}
-              label={t("operators.common.producedQuantity")}
-              sublabel={t("operators.common.kilogram")}
-              testId="card-total-produced"
-              valueTestId="stat-total-produced"
-            />
-
-            <OperatorStatCard
-              icon={Flag}
-              color="orange"
-              value={stats.ordersNearCompletion}
-              label={t("operators.common.nearCompletion")}
-              sublabel={t("operators.common.productionOrder")}
-              testId="card-near-completion"
-              valueTestId="stat-near-completion"
-            />
-          </div>
-
+        <TabsContent value="production" className="space-y-4">
           {productionOrders.length === 0 ? (
-            <Card className="p-8" data-testid="card-no-orders">
-              <div className="text-center">
-                <Info className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  {t("operators.film.noActiveOrders")}
-                </h3>
-                <p
-                  className="text-gray-600 dark:text-gray-400"
-                  data-testid="text-no-orders"
-                >
-                  {t("operators.film.noActiveOrdersDesc")}
-                </p>
-              </div>
+            <Card className="p-8 text-center rounded-2xl border-dashed">
+              <Info className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+              <h3 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-1">
+                {t("operators.film.noActiveOrders")}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("operators.film.noActiveOrdersDesc")}
+              </p>
             </Card>
           ) : !selectedGroup ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <OrdersListHeader testId="film" />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-3">
                 {orderGroups.map((group) => {
                   const first = group.items[0];
                   const totalRequired = group.items.reduce(
-                    (sum, o) =>
-                      sum + Number(o.final_quantity_kg || o.quantity_kg || 0),
+                    (sum, o) => sum + Number(o.final_quantity_kg || o.quantity_kg || 0),
                     0,
                   );
                   const totalProduced = group.items.reduce(
@@ -364,28 +265,24 @@ export default function FilmOperatorDashboard({
                         first.customer_name
                       }
                       salesRepName={
-                        ln(
-                          first.sales_rep_name_ar,
-                          first.sales_rep_name_en,
-                        ) || first.sales_rep_name
+                        ln(first.sales_rep_name_ar, first.sales_rep_name_en) ||
+                        first.sales_rep_name
                       }
                       orderDate={first.order_date}
                       productionOrderCount={group.items.length}
                       progressPercent={groupProgress}
                       metrics={[
                         {
-                          label: t("operators.common.requiredQuantity"),
-                          value: `${formatNumberAr(totalRequired)} ${t("operators.common.kg")}`,
-                          icon: <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
+                          label: "المطلوب",
+                          value: `${formatNumberAr(totalRequired)} كجم`,
                         },
                         {
-                          label: t("operators.common.producedQuantity"),
-                          value: `${formatNumberAr(totalProduced)} ${t("operators.common.kg")}`,
-                          icon: <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />,
+                          label: "المنتج",
+                          value: `${formatNumberAr(totalProduced)} كجم`,
                         },
                       ]}
                       accent="blue"
-                      icon={<Package className="h-3 w-3 ml-1" />}
+                      icon={<Package className="h-4 w-4 ml-1" />}
                       onSelect={() => setSelectedOrderNumber(group.orderNumber)}
                       testId={`film-${group.orderNumber}`}
                     />
@@ -394,395 +291,230 @@ export default function FilmOperatorDashboard({
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <BackToOrdersBar
                 orderNumber={selectedGroup.orderNumber}
                 onBack={() => setSelectedOrderNumber(null)}
                 testId="film"
               />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {selectedGroup.items.map((order: ActiveProductionOrderDetails) => {
-                // الكمية المطلوبة: نستخدم الكمية النهائية إن وُجدت وإلا الكمية
-                // الأساسية (نفس منطق الخادم) لتجنّب قسمة خاطئة على 1.
-                const requiredQty =
-                  Number(order.final_quantity_kg) > 0
-                    ? Number(order.final_quantity_kg)
-                    : Number(order.quantity_kg || 0);
-                const producedQty = Number(order.total_weight_produced || 0);
-                const progress =
-                  requiredQty > 0 ? (producedQty / requiredQty) * 100 : 0;
-                const remainingPercent =
-                  requiredQty > 0 ? Math.max(0, 100 - progress) : 100;
-                const isNearCompletion = progress >= 80;
-                // يظهر زر "آخر رول" فقط إذا كانت الكمية المتبقية 15% أو أقل.
-                const canCreateFinalRoll =
-                  requiredQty > 0 &&
-                  remainingPercent <= FINAL_ROLL_MAX_REMAINING_PERCENT;
-                const isComplete = order.is_final_roll_created;
 
-                return (
-                  <Card
-                    key={order.id}
-                    className={`${isComplete ? "opacity-60" : ""} transition-all hover:shadow-lg`}
-                    data-testid={`card-production-order-${order.id}`}
-                  >
-                    <CardHeader>
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="min-w-0 flex-1">
-                          <CardTitle
-                            className="text-lg font-bold text-red-600 dark:text-red-400 leading-snug"
-                            data-testid={`text-customer-${order.id}`}
-                          >
-                            {ln(
-                              order.customer_name_ar,
-                              order.customer_name_en,
-                            ) || order.customer_name}
-                          </CardTitle>
-                          <CardDescription
-                            className="font-semibold text-gray-800 dark:text-gray-200 text-sm mt-0.5"
-                            data-testid={`text-product-${order.id}`}
-                          >
-                            {ln(order.product_name_ar, order.product_name_en) ||
-                              order.product_name}
-                          </CardDescription>
-                          <p
-                            className="text-xs text-gray-400 dark:text-gray-500 mt-1"
-                            data-testid={`text-order-number-${order.id}`}
-                          >
-                            {order.production_order_number} ·{" "}
-                            {t("operators.common.order")}: {order.order_number}
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-1 items-end flex-shrink-0">
-                          {isComplete && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-green-100 text-green-800"
-                              data-testid={`badge-complete-${order.id}`}
-                            >
-                              <CheckCircle2 className="h-3 w-3 ml-1" />
-                              {t("operators.common.completed")}
-                            </Badge>
-                          )}
-                          {isNearCompletion && !isComplete && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-orange-100 text-orange-800"
-                              data-testid={`badge-near-completion-${order.id}`}
-                            >
-                              <AlertTriangle className="h-3 w-3 ml-1" />
-                              {t("operators.common.nearCompletionBadge")}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
+              <div className="space-y-4">
+                {selectedGroup.items.map((order: ActiveProductionOrderDetails) => {
+                  const requiredQty =
+                    Number(order.final_quantity_kg) > 0
+                      ? Number(order.final_quantity_kg)
+                      : Number(order.quantity_kg || 0);
+                  const producedQty = Number(order.total_weight_produced || 0);
+                  const remainingQty = Math.max(0, requiredQty - producedQty);
+                  const progress = requiredQty > 0 ? (producedQty / requiredQty) * 100 : 0;
+                  const remainingPercent = requiredQty > 0 ? Math.max(0, 100 - progress) : 100;
+                  const canCreateFinalRoll =
+                    requiredQty > 0 && remainingPercent <= FINAL_ROLL_MAX_REMAINING_PERCENT;
+                  const isComplete = order.is_final_roll_created;
+                  const orderRolls = allRolls
+                    .filter((r) => r.production_order_id === order.id)
+                    .sort((a, b) => a.roll_seq - b.roll_seq);
 
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                        {order.category_name && (
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">
-                              {t("operators.common.category")}
-                            </p>
-                            <p
-                              className="font-medium"
-                              data-testid={`text-category-${order.id}`}
-                            >
-                              {order.category_name}
-                            </p>
-                          </div>
-                        )}
-                        {order.size_caption && (
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">
-                              {t("operators.common.size")}
-                            </p>
-                            <p
-                              className="font-bold text-orange-600 dark:text-orange-400"
-                              data-testid={`text-size-${order.id}`}
-                            >
-                              {order.size_caption}
-                            </p>
-                          </div>
-                        )}
-                        {order.raw_material && (
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">
-                              {t("operators.common.rawMaterialType")}
-                            </p>
-                            <p
-                              className="font-bold text-red-600 dark:text-red-400"
-                              data-testid={`text-raw-material-${order.id}`}
-                            >
-                              {order.raw_material}
-                            </p>
-                          </div>
-                        )}
-                        {order.thickness && (
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">
-                              {t("operators.common.thickness")}
-                            </p>
-                            <p
-                              className="font-bold text-orange-600 dark:text-orange-400"
-                              data-testid={`text-thickness-${order.id}`}
-                            >
-                              {parseFloat(String(order.thickness))} µm
-                            </p>
-                          </div>
-                        )}
-                        {order.master_batch_id && (
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">
-                              {isArabic
-                                ? "لون الماستر باتش"
-                                : "Masterbatch"}
-                            </p>
-                            <p
-                              className="font-medium flex items-center gap-2"
-                              data-testid={`text-masterbatch-${order.id}`}
-                            >
-                              {order.master_batch_color_hex && (() => {
-                                const hex = order.master_batch_color_hex
-                                  .trim()
-                                  .toLowerCase();
-                                const isBlack =
-                                  hex === "#000" ||
-                                  hex === "#000000" ||
-                                  hex === "black" ||
-                                  hex === "rgb(0,0,0)" ||
-                                  hex === "rgb(0, 0, 0)";
-                                return (
-                                  <span
-                                    className="inline-block w-6 h-6 rounded-full flex-shrink-0"
-                                    style={{
-                                      backgroundColor:
-                                        order.master_batch_color_hex,
-                                      border: `2px solid ${
-                                        isBlack ? "#ffffff" : "#000000"
-                                      }`,
-                                    }}
-                                  />
-                                );
-                              })()}
-                              {(isArabic
-                                ? order.master_batch_name_ar
-                                : order.master_batch_name_en) ||
-                                order.master_batch_name ||
-                                order.master_batch_id}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                  // تجهيز لون الماستر باتش الافتراضي في حال عدم وجوده
+                  const masterBatchColor =
+                    order.master_batch_color_hex?.trim() || "#3b82f6";
 
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                            <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                            {t("operators.common.requiredQuantity")}
-                          </span>
-                          <span
-                            className="font-medium"
-                            data-testid={`text-required-qty-${order.id}`}
-                          >
-                            {formatNumberAr(Number(order.final_quantity_kg))}{" "}
-                            {t("operators.common.kg")}
-                            {order.overrun_percentage &&
-                              Number(order.overrun_percentage) > 0 && (
-                                <span className="text-xs text-blue-600 dark:text-blue-400 mr-1 ml-1">
-                                  ({isArabic ? "شامل" : "incl."}{" "}
-                                  {formatNumberAr(
-                                    Number(order.overrun_percentage),
-                                  )}
-                                  %)
-                                </span>
-                              )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            {t("operators.common.producedQuantity")}
-                          </span>
-                          <span
-                            className="font-medium"
-                            data-testid={`text-produced-qty-${order.id}`}
-                          >
-                            {formatNumberAr(
-                              Number(order.total_weight_produced),
-                            )}{" "}
-                            {t("operators.common.kg")}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                            <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                            {t("operators.common.remainingQuantity")}
-                          </span>
-                          <span
-                            className="font-medium text-orange-600"
-                            data-testid={`text-remaining-qty-${order.id}`}
-                          >
-                            {formatNumberAr(Number(order.remaining_quantity))}{" "}
-                            {t("operators.common.kg")}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            {t("operators.common.progress")}
-                          </span>
-                          <span
-                            className="font-medium"
-                            data-testid={`text-progress-${order.id}`}
-                          >
-                            {Math.round(progress)}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={progress}
-                          className="h-2"
-                          data-testid={`progress-bar-${order.id}`}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-gray-400" />
-                          <span className="text-gray-600 dark:text-gray-400">
-                            {t("operators.common.rollsCount")}:
-                          </span>
-                          <span
-                            className="font-medium"
-                            data-testid={`text-rolls-count-${order.id}`}
-                          >
-                            {order.rolls_count}
-                          </span>
-                        </div>
-                        {order.production_start_time && (
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-gray-400" />
-                            <span className="text-gray-600 dark:text-gray-400">
-                              {t("operators.common.startedSince")}:
-                            </span>
-                            <span className="font-medium">
-                              {(() => {
-                                const startTime = new Date(
-                                  order.production_start_time,
-                                ).getTime();
-                                const now = Date.now();
-                                const diffMinutes = Math.floor(
-                                  (now - startTime) / (1000 * 60),
-                                );
-                                if (diffMinutes < 60)
-                                  return `${diffMinutes} ${t("operators.common.minute")}`;
-                                const hours = Math.floor(diffMinutes / 60);
-                                const minutes = diffMinutes % 60;
-                                return `${hours}h ${minutes}m`;
-                              })()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {order.rolls_count > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <button
-                              onClick={() => toggleOrderExpansion(order.id)}
-                              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                              data-testid={`button-toggle-rolls-${order.id}`}
-                            >
-                              {expandedOrders.has(order.id) ? "▼" : "◀"}{" "}
-                              {t("operators.common.viewRolls")} (
-                              {order.rolls_count})
-                            </button>
-                          </div>
-
-                          {expandedOrders.has(order.id) && (
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                              {allRolls
-                                .filter(
-                                  (roll) =>
-                                    roll.production_order_id === order.id,
-                                )
-                                .sort((a, b) => a.roll_seq - b.roll_seq)
-                                .map((roll) => (
-                                  <div
-                                    key={roll.id}
-                                    className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 hover:shadow-md transition-shadow"
-                                    data-testid={`roll-card-${roll.id}`}
-                                  >
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div className="flex-1">
-                                        <div
-                                          className="font-bold text-sm text-blue-900 dark:text-blue-100"
-                                          data-testid={`roll-number-${roll.id}`}
-                                        >
-                                          {roll.roll_number}
-                                        </div>
-                                        <div className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                                          {t("operators.common.rollSeq")}
-                                          {roll.roll_seq}
-                                        </div>
-                                      </div>
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100"
-                                      >
-                                        {roll.status}
-                                      </Badge>
-                                    </div>
-
-                                    <div className="space-y-1 text-xs">
-                                      <div className="flex items-center gap-1 text-blue-800 dark:text-blue-200">
-                                        <Package className="h-3 w-3" />
-                                        <span className="font-medium">
-                                          {formatNumberAr(
-                                            Number(roll.weight_kg),
-                                          )}{" "}
-                                          {t("operators.common.kg")}
-                                        </span>
-                                      </div>
-
-                                      {roll.created_by_name && (
-                                        <div className="flex items-center gap-1 text-blue-700 dark:text-blue-300">
-                                          <User className="h-3 w-3" />
-                                          <span>{roll.created_by_name}</span>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <Button
-                                      onClick={() => handlePrintLabel(roll)}
-                                      size="sm"
-                                      variant="outline"
-                                      className="w-full mt-2 h-7 text-xs bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                                      data-testid={`button-print-label-${roll.id}`}
-                                    >
-                                      <Printer className="h-3 w-3 ml-1" />
-                                      {t("operators.common.printLabel")}
-                                    </Button>
-                                  </div>
-                                ))}
+                  return (
+                    <Card
+                      key={order.id}
+                      className={`overflow-hidden rounded-2xl border-2 transition-all ${
+                        isComplete
+                          ? "border-green-200 bg-green-50/20 dark:border-green-900"
+                          : "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm"
+                      }`}
+                    >
+                      {/* رأس الكرت: رقم الطلب، العميل، واسم المنتج بشكل كبير وواضح */}
+                      <CardHeader className="p-4 pb-3 bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">
+                                {order.production_order_number}
+                              </span>
+                              <span className="text-xs font-semibold text-gray-500">
+                                طلب: #{order.order_number}
+                              </span>
                             </div>
+
+                            {/* اسم المنتج بخط عريض وواضح جداً */}
+                            <h2 className="text-xl font-black text-gray-950 dark:text-white leading-tight tracking-tight mt-1">
+                              {ln(order.product_name_ar, order.product_name_en) || order.product_name}
+                            </h2>
+
+                            {/* اسم العميل */}
+                            <p className="text-sm font-bold text-blue-700 dark:text-blue-400 mt-1">
+                              {ln(order.customer_name_ar, order.customer_name_en) || order.customer_name}
+                            </p>
+                          </div>
+
+                          {isComplete ? (
+                            <Badge className="bg-emerald-600 text-white gap-1 text-xs py-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              مكتمل
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs font-bold text-blue-700 dark:text-blue-300 border-blue-300">
+                              {order.rolls_count} رول
+                            </Badge>
                           )}
                         </div>
-                      )}
+                      </CardHeader>
 
-                      <div className="flex gap-2 pt-2">
-                        {!isComplete && (
-                          <>
+                      <CardContent className="p-4 space-y-4">
+                        {/* شبكة المواصفات الفنية المباشرة (Tech Specs 2x2) */}
+                        <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-gray-800/60 p-3 rounded-xl border border-slate-100 dark:border-gray-800 text-xs">
+                          {/* المقاس */}
+                          <div className="flex items-start gap-2">
+                            <Ruler className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <span className="text-gray-400 block text-[10px]">المقاس</span>
+                              <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
+                                {order.size_caption || "—"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* نوع الخام */}
+                          <div className="flex items-start gap-2">
+                            <Layers className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <span className="text-gray-400 block text-[10px]">نوع الخام</span>
+                              <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
+                                {order.raw_material || "—"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* السماكة */}
+                          <div className="flex items-start gap-2">
+                            <Gauge className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <span className="text-gray-400 block text-[10px]">السماكة</span>
+                              <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
+                                {order.thickness ? `${parseFloat(String(order.thickness))} µm` : "—"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* لون الماستر باتش */}
+                          <div className="flex items-center gap-2.5">
+                            <Palette className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-gray-400 block text-[10px]">الماستر باتش</span>
+                              <div className="flex items-center gap-2 mt-1">
+                                {order.master_batch_color_hex ? (
+                                  <span
+                                    className="inline-block w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 shadow-sm flex-shrink-0"
+                                    style={{ backgroundColor: order.master_batch_color_hex }}
+                                  />
+                                ) : (
+                                  <span className="inline-block w-6 h-6 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                                )}
+                                <span className="font-bold text-gray-900 dark:text-gray-100 text-sm truncate">
+                                  {(isArabic
+                                    ? order.master_batch_name_ar
+                                    : order.master_batch_name_en) ||
+                                    order.master_batch_name ||
+                                    "بدون لون"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* شريط الإنجاز والكميات */}
+                        <div className="space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30 p-2.5 rounded-xl">
+                          <div className="flex justify-between items-center text-xs font-semibold">
+                            <span className="text-gray-500">الإنجاز ({Math.round(progress)}%)</span>
+                            <span className="text-gray-700 dark:text-gray-300">
+                              المطلوب: {formatNumberAr(requiredQty)} كجم
+                            </span>
+                          </div>
+
+                          <Progress value={progress} className="h-2.5 rounded-full" />
+
+                          <div className="flex justify-between items-center text-xs pt-1">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                              المنتج: {formatNumberAr(producedQty)} كجم
+                            </span>
+                            <span className="text-orange-600 dark:text-orange-400 font-bold">
+                              المتبقي: {formatNumberAr(remainingQty)} كجم
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* الرولات المنتجة على شكل رولات ملوّنة مع إمكانية الضغط للطباعة */}
+                        {orderRolls.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-200">
+                              <span className="flex items-center gap-1">
+                                <Disc className="h-4 w-4 text-blue-600 animate-spin-slow" />
+                                الرولات المنتجة ({orderRolls.length})
+                              </span>
+                              <span className="text-[10px] text-gray-400">
+                                اضغط على الرول لطباعة الملصق
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 pt-1 max-h-48 overflow-y-auto p-1">
+                              {orderRolls.map((roll) => {
+                                const isPrinting = printingRollId === roll.id;
+                                return (
+                                  <button
+                                    key={roll.id}
+                                    type="button"
+                                    onClick={() => handlePrintLabel(roll)}
+                                    disabled={isPrinting}
+                                    className="group relative flex items-center gap-2 p-2 pr-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xs hover:border-blue-500 hover:shadow-md active:scale-95 transition-all text-right"
+                                    title="اضغط لطباعة ملصق الرول"
+                                  >
+                                    {/* شكل أسطوانة الرول الملونة بلون الماسترباتش */}
+                                    <div
+                                      className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-xs border-2 border-white/80 dark:border-gray-900"
+                                      style={{ backgroundColor: masterBatchColor }}
+                                    >
+                                      {isPrinting ? (
+                                        <Loader2 className="h-4 w-4 text-white animate-spin" />
+                                      ) : (
+                                        <Disc className="h-5 w-5 text-white/90" />
+                                      )}
+                                      <span className="absolute -bottom-1 -right-1 bg-gray-900 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-gray-800">
+                                        {roll.roll_seq}
+                                      </span>
+                                    </div>
+
+                                    {/* بيانات الرول: الرقم والوزن */}
+                                    <div className="flex flex-col min-w-0 pr-0.5">
+                                      <span className="text-xs font-black text-gray-900 dark:text-gray-100 truncate">
+                                        {roll.roll_number}
+                                      </span>
+                                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                                        {formatNumberAr(Number(roll.weight_kg))} كجم
+                                      </span>
+                                    </div>
+
+                                    {/* أيقونة الطباعة تظهر بالطرف */}
+                                    <Printer className="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-600 transition-colors mr-1 flex-shrink-0" />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* الأزرار الرئيسية لإنشاء الرول */}
+                        {!isComplete ? (
+                          <div className="flex gap-2 pt-1">
                             <Button
                               onClick={() => handleCreateRoll(order, false)}
-                              className="flex-1"
-                              variant="default"
-                              data-testid={`button-create-roll-${order.id}`}
+                              className="flex-1 h-12 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md active:scale-98 transition-all"
                             >
-                              <Plus className="h-4 w-4 ml-2" />
+                              <Plus className="h-5 w-5 ml-1.5" />
                               {t("operators.common.createNewRoll")}
                             </Button>
 
@@ -790,61 +522,60 @@ export default function FilmOperatorDashboard({
                               <Button
                                 onClick={() => handleCreateRoll(order, true)}
                                 variant="destructive"
-                                data-testid={`button-final-roll-${order.id}`}
+                                className="h-12 px-4 text-xs font-bold rounded-xl shadow-md active:scale-98"
                               >
-                                <Flag className="h-4 w-4 ml-2" />
+                                <Flag className="h-4 w-4 ml-1" />
                                 {t("operators.common.finalRoll")}
                               </Button>
                             )}
-                          </>
-                        )}
 
-                        {isComplete && (
-                          <div className="flex-1 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                            {order.rolls_count > 0 && (
+                              <Button
+                                variant="outline"
+                                onClick={() => setBatchOrderId(order.id)}
+                                className="h-12 px-3 rounded-xl border-gray-300 dark:border-gray-700"
+                                title="طباعة ملصق الدفعة"
+                              >
+                                <PackageCheck className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
                             <div className="flex items-center gap-2">
-                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                              <div className="text-sm">
-                                <p className="font-medium text-green-900 dark:text-green-100">
-                                  {t("operators.film.filmStageCompleted")}
-                                </p>
-                                {order.production_time_minutes && (
-                                  <p className="text-xs text-green-700 dark:text-green-300">
-                                    {t("operators.film.totalProductionTime")}:{" "}
-                                    {order.production_time_minutes}{" "}
-                                    {t("operators.common.minute")}
-                                  </p>
-                                )}
-                              </div>
+                              <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                                تم إكمال مرحلة الفيلم بالكامل
+                              </span>
                             </div>
+                            {order.rolls_count > 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setBatchOrderId(order.id)}
+                                className="h-8 text-xs gap-1 border-emerald-300 text-emerald-800"
+                              >
+                                <PackageCheck className="h-3.5 w-3.5 ml-1" />
+                                ملصق الدفعة
+                              </Button>
+                            )}
                           </div>
                         )}
-
-                        {order.rolls_count > 0 && (
-                          <Button
-                            variant="outline"
-                            onClick={() => setBatchOrderId(order.id)}
-                            className="whitespace-nowrap"
-                            data-testid={`button-batch-label-${order.id}`}
-                          >
-                            <PackageCheck className="h-4 w-4 ml-2" />
-                            {t("batch.printLabelTitle")}
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="mixing" className="space-y-6">
+        <TabsContent value="mixing" className="space-y-4">
           <FilmMaterialMixingTab />
         </TabsContent>
       </Tabs>
 
+      {/* نوافذ الحوار المنبثقة */}
       {selectedProductionOrder && (
         <RollCreationModalEnhanced
           isOpen={isModalOpen}
@@ -854,32 +585,13 @@ export default function FilmOperatorDashboard({
           isFinalRoll={isFinalRoll}
         />
       )}
+
+      {batchOrderId && (
+        <BatchLabelDialog
+          productionOrderId={batchOrderId}
+          onClose={() => setBatchOrderId(null)}
+        />
+      )}
     </div>
-  );
-
-  const batchDialog = (
-    <BatchLabelDialog
-      productionOrderId={batchOrderId}
-      onClose={() => setBatchOrderId(null)}
-    />
-  );
-
-  if (hideLayout) {
-    return (
-      <>
-        {mainContent}
-        {batchDialog}
-      </>
-    );
-  }
-
-  return (
-    <PageLayout
-      title={t("operators.film.title")}
-      description={t("operators.film.description")}
-    >
-      {mainContent}
-      {batchDialog}
-    </PageLayout>
   );
 }
