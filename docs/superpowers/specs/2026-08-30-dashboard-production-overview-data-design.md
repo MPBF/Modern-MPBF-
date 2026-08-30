@@ -11,8 +11,14 @@
 
 ```ts
 {
-  waitingOrders: { count: number; totalKg: number };
-  inProductionOrders: { count: number; totalKg: number };
+  waitingOrders: {
+    count: number;
+    totalKg: number;
+  }
+  inProductionOrders: {
+    count: number;
+    totalKg: number;
+  }
   monthlyProduction: number;
   monthlyWaste: number;
   presentEmployees: number;
@@ -22,7 +28,7 @@
     film: Array<{ id: number; name: string; production: number }>;
     printing: Array<{ id: number; name: string; production: number }>;
     cutting: Array<{ id: number; name: string; production: number }>;
-  };
+  }
 }
 ```
 

@@ -668,15 +668,156 @@ export class SystemStorage extends NotificationsStorage {
 
 
   async getDashboardStats(): Promise<any> {
-    const [orderCount] = await db.select({ count: count() }).from(orders);
-    const [productionCount] = await db
-      .select({ count: count() })
-      .from(production_orders);
-    const [rollCount] = await db.select({ count: count() }).from(rolls);
+    const [
+      orderStatsResult,
+      monthlyProductionResult,
+      monthlyWasteResult,
+      attendanceResult,
+      maintenanceResult,
+      topFilmWorkersResult,
+      topPrintingWorkersResult,
+      topCuttingWorkersResult,
+    ] = await Promise.all([
+      db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'pending') AS waiting_count,
+          COALESCE(SUM(quantity_kg) FILTER (WHERE status = 'pending'), 0) AS waiting_kg,
+          COUNT(*) FILTER (WHERE status = 'active') AS production_count,
+          COALESCE(SUM(quantity_kg) FILTER (WHERE status = 'active'), 0) AS production_kg
+        FROM production_orders
+      `),
+      db.execute(sql`
+        SELECT COALESCE(SUM(weight_kg), 0) AS total
+        FROM rolls
+        WHERE created_at >= date_trunc('month', CURRENT_DATE)
+          AND created_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+      `),
+      db.execute(sql`
+        SELECT COALESCE(SUM(quantity_wasted), 0) AS total
+        FROM waste
+        WHERE created_at >= date_trunc('month', CURRENT_DATE)
+          AND created_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+      `),
+      db.execute(sql`
+        SELECT
+          COUNT(DISTINCT users.id) AS total_employees,
+          COUNT(DISTINCT attendance.user_id)
+            FILTER (WHERE attendance.check_in_time IS NOT NULL) AS present_employees
+        FROM users
+        LEFT JOIN attendance
+          ON attendance.user_id = users.id
+          AND attendance.date = CURRENT_DATE
+        WHERE users.status = 'active'
+          AND users.include_in_attendance = TRUE
+      `),
+      db.execute(sql`
+        SELECT COUNT(*) AS total
+        FROM maintenance_requests
+        WHERE status IN ('open', 'in_progress')
+      `),
+      db.execute(sql`
+        SELECT
+          users.id,
+          COALESCE(
+            NULLIF(BTRIM(users.display_name_ar), ''),
+            NULLIF(BTRIM(users.display_name), ''),
+            NULLIF(BTRIM(users.full_name), ''),
+            NULLIF(BTRIM(users.username), ''),
+            CONCAT('#', users.id::text)
+          ) AS name,
+          COALESCE(SUM(rolls.weight_kg), 0) AS production
+        FROM rolls
+        INNER JOIN users ON users.id = rolls.created_by
+        WHERE rolls.created_at >= date_trunc('month', CURRENT_DATE)
+          AND rolls.created_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+          AND users.status = 'active'
+        GROUP BY users.id
+        ORDER BY production DESC, users.id ASC
+        LIMIT 3
+      `),
+      db.execute(sql`
+        SELECT
+          users.id,
+          COALESCE(
+            NULLIF(BTRIM(users.display_name_ar), ''),
+            NULLIF(BTRIM(users.display_name), ''),
+            NULLIF(BTRIM(users.full_name), ''),
+            NULLIF(BTRIM(users.username), ''),
+            CONCAT('#', users.id::text)
+          ) AS name,
+          COALESCE(SUM(rolls.weight_kg), 0) AS production
+        FROM rolls
+        INNER JOIN users ON users.id = rolls.printed_by
+        WHERE rolls.printed_at >= date_trunc('month', CURRENT_DATE)
+          AND rolls.printed_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+          AND users.status = 'active'
+        GROUP BY users.id
+        ORDER BY production DESC, users.id ASC
+        LIMIT 3
+      `),
+      db.execute(sql`
+        SELECT
+          users.id,
+          COALESCE(
+            NULLIF(BTRIM(users.display_name_ar), ''),
+            NULLIF(BTRIM(users.display_name), ''),
+            NULLIF(BTRIM(users.full_name), ''),
+            NULLIF(BTRIM(users.username), ''),
+            CONCAT('#', users.id::text)
+          ) AS name,
+          COALESCE(SUM(rolls.weight_kg), 0) AS production
+        FROM rolls
+        INNER JOIN users ON users.id = rolls.cut_by
+        WHERE rolls.cut_completed_at >= date_trunc('month', CURRENT_DATE)
+          AND rolls.cut_completed_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+          AND users.status = 'active'
+        GROUP BY users.id
+        ORDER BY production DESC, users.id ASC
+        LIMIT 3
+      `),
+    ]);
+
+    const toNumber = (value: unknown): number => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const firstRow = (result: { rows: unknown[] }): Record<string, unknown> =>
+      (result.rows[0] as Record<string, unknown> | undefined) ?? {};
+    const mapWorkers = (result: { rows: unknown[] }) =>
+      result.rows.map((row) => {
+        const worker = row as Record<string, unknown>;
+        return {
+          id: toNumber(worker.id),
+          name: String(worker.name),
+          production: toNumber(worker.production),
+        };
+      });
+
+    const orderStats = firstRow(orderStatsResult);
+    const monthlyProduction = firstRow(monthlyProductionResult);
+    const monthlyWaste = firstRow(monthlyWasteResult);
+    const attendanceStats = firstRow(attendanceResult);
+    const maintenanceStats = firstRow(maintenanceResult);
+
     return {
-      totalOrders: orderCount?.count || 0,
-      totalProductionOrders: productionCount?.count || 0,
-      totalRolls: rollCount?.count || 0,
+      waitingOrders: {
+        count: toNumber(orderStats.waiting_count),
+        totalKg: toNumber(orderStats.waiting_kg),
+      },
+      inProductionOrders: {
+        count: toNumber(orderStats.production_count),
+        totalKg: toNumber(orderStats.production_kg),
+      },
+      monthlyProduction: toNumber(monthlyProduction.total),
+      monthlyWaste: toNumber(monthlyWaste.total),
+      presentEmployees: toNumber(attendanceStats.present_employees),
+      totalEmployees: toNumber(attendanceStats.total_employees),
+      maintenanceAlerts: toNumber(maintenanceStats.total),
+      topWorkers: {
+        film: mapWorkers(topFilmWorkersResult),
+        printing: mapWorkers(topPrintingWorkersResult),
+        cutting: mapWorkers(topCuttingWorkersResult),
+      },
     };
   }
 
