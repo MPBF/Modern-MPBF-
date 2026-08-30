@@ -42,6 +42,8 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { useLocalizedName } from "../../hooks/use-localized-name";
+import { useAuth } from "../../hooks/use-auth";
+import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest, queryClient } from "../../lib/queryClient";
@@ -128,6 +130,7 @@ export default function PrintingOperatorDashboard({
 }: PrintingOperatorDashboardProps) {
   const { t } = useTranslation();
   const ln = useLocalizedName();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [processingRollIds, setProcessingRollIds] = useState<Set<number>>(
     new Set(),
@@ -135,21 +138,7 @@ export default function PrintingOperatorDashboard({
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
     null,
   );
-  const PRINTING_MACHINE_STORAGE_KEY = "mpbf:printing-operator:selected-machine";
-  const [selectedMachineId, setSelectedMachineIdState] = useState<string>(() => {
-    try {
-      return localStorage.getItem(PRINTING_MACHINE_STORAGE_KEY) || "";
-    } catch {
-      return "";
-    }
-  });
-  const setSelectedMachineId = (id: string) => {
-    setSelectedMachineIdState(id);
-    try {
-      if (id) localStorage.setItem(PRINTING_MACHINE_STORAGE_KEY, id);
-      else localStorage.removeItem(PRINTING_MACHINE_STORAGE_KEY);
-    } catch {}
-  };
+  const [isEditingMachine, setIsEditingMachine] = useState(false);
   const pollingInterval = useSmartPolling(45_000);
 
   const { data: productionOrders = [], isLoading } = useQuery<
@@ -159,13 +148,27 @@ export default function PrintingOperatorDashboard({
     refetchInterval: pollingInterval,
   });
 
-  const { data: allMachines = [] } = useQuery<Machine[]>({
+  const {
+    data: allMachines = [],
+    isLoading: machinesLoading,
+    isSuccess: machinesReady,
+  } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
   });
 
   const printingMachines = allMachines.filter(
     (m) => m.section_id === "SEC04" && m.status === "active",
   );
+  const {
+    selectedMachineId,
+    setSelectedMachineId,
+    isReady: machinePreferenceReady,
+  } = useOperatorMachinePreference({
+    stage: "printing",
+    userId: user?.id,
+    availableMachineIds: printingMachines.map((machine) => machine.id),
+    machinesReady,
+  });
 
   const moveToPrintingMutation = useMutation({
     mutationFn: async ({
@@ -203,7 +206,7 @@ export default function PrintingOperatorDashboard({
   });
 
   const handleMoveToPrinting = async (rollId: number) => {
-    if (!selectedMachineId) {
+    if (!machinePreferenceReady || !selectedMachineId) {
       toast({
         title: t("operators.common.error"),
         description: t("operators.printing.selectMachineFirst"),
@@ -289,12 +292,17 @@ export default function PrintingOperatorDashboard({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Select
               value={selectedMachineId}
               onValueChange={setSelectedMachineId}
+              disabled={
+                machinesLoading ||
+                !machinePreferenceReady ||
+                (!!selectedMachineId && !isEditingMachine)
+              }
             >
-              <SelectTrigger className="w-full max-w-xs bg-white dark:bg-gray-900">
+              <SelectTrigger className="w-full bg-white dark:bg-gray-900 sm:max-w-xs">
                 <SelectValue
                   placeholder={t("operators.printing.selectMachinePlaceholder")}
                 />
@@ -307,6 +315,20 @@ export default function PrintingOperatorDashboard({
                 ))}
               </SelectContent>
             </Select>
+            {selectedMachine && (
+              <Button
+                type="button"
+                variant="outline"
+                className="whitespace-nowrap"
+                onClick={() => setIsEditingMachine((editing) => !editing)}
+                disabled={!machinePreferenceReady}
+                data-testid="button-edit-printing-machine"
+              >
+                {isEditingMachine
+                  ? t("operators.common.doneEditing")
+                  : t("operators.common.editMachine")}
+              </Button>
+            )}
             {selectedMachine && (
               <Badge
                 variant="default"

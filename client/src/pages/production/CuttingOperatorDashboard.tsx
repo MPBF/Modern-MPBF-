@@ -52,6 +52,8 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { useLocalizedName } from "../../hooks/use-localized-name";
+import { useAuth } from "../../hooks/use-auth";
+import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest, queryClient } from "../../lib/queryClient";
@@ -110,6 +112,7 @@ export default function CuttingOperatorDashboard({
 }: CuttingOperatorDashboardProps) {
   const { t } = useTranslation();
   const ln = useLocalizedName();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [processingRollIds, setProcessingRollIds] = useState<Set<number>>(
     new Set(),
@@ -121,21 +124,7 @@ export default function CuttingOperatorDashboard({
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
     null,
   );
-  const CUTTING_MACHINE_STORAGE_KEY = "mpbf:cutting-operator:selected-machine";
-  const [selectedMachineId, setSelectedMachineIdState] = useState<string>(() => {
-    try {
-      return localStorage.getItem(CUTTING_MACHINE_STORAGE_KEY) || "";
-    } catch {
-      return "";
-    }
-  });
-  const setSelectedMachineId = (id: string) => {
-    setSelectedMachineIdState(id);
-    try {
-      if (id) localStorage.setItem(CUTTING_MACHINE_STORAGE_KEY, id);
-      else localStorage.removeItem(CUTTING_MACHINE_STORAGE_KEY);
-    } catch {}
-  };
+  const [isEditingMachine, setIsEditingMachine] = useState(false);
   const pollingInterval = useSmartPolling(45_000);
 
   const { data: productionOrders = [], isLoading } = useQuery<
@@ -145,13 +134,27 @@ export default function CuttingOperatorDashboard({
     refetchInterval: pollingInterval,
   });
 
-  const { data: allMachines = [] } = useQuery<Machine[]>({
+  const {
+    data: allMachines = [],
+    isLoading: machinesLoading,
+    isSuccess: machinesReady,
+  } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
   });
 
   const cuttingMachines = allMachines.filter(
     (m) => m.section_id === "SEC05" && m.status === "active",
   );
+  const {
+    selectedMachineId,
+    setSelectedMachineId,
+    isReady: machinePreferenceReady,
+  } = useOperatorMachinePreference({
+    stage: "cutting",
+    userId: user?.id,
+    availableMachineIds: cuttingMachines.map((machine) => machine.id),
+    machinesReady,
+  });
 
   const completeCuttingMutation = useMutation({
     mutationFn: async ({
@@ -194,7 +197,7 @@ export default function CuttingOperatorDashboard({
   });
 
   const handleOpenCuttingDialog = (roll: RollDetails) => {
-    if (!selectedMachineId) {
+    if (!machinePreferenceReady || !selectedMachineId) {
       toast({
         title: t("operators.common.error"),
         description: t("operators.cutting.selectMachineFirst"),
@@ -209,6 +212,18 @@ export default function CuttingOperatorDashboard({
 
   const handleCompleteCutting = () => {
     if (!selectedRoll) return;
+    if (
+      !machinePreferenceReady ||
+      !selectedMachineId ||
+      !cuttingMachines.some((machine) => machine.id === selectedMachineId)
+    ) {
+      toast({
+        title: t("operators.common.error"),
+        description: t("operators.cutting.selectMachineFirst"),
+        variant: "destructive",
+      });
+      return;
+    }
 
     const netWeightNum = parseFloat(netWeight);
     const grossWeight = parseFloat(selectedRoll.weight_kg.toString());
@@ -298,12 +313,17 @@ export default function CuttingOperatorDashboard({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Select
               value={selectedMachineId}
               onValueChange={setSelectedMachineId}
+              disabled={
+                machinesLoading ||
+                !machinePreferenceReady ||
+                (!!selectedMachineId && !isEditingMachine)
+              }
             >
-              <SelectTrigger className="w-full max-w-xs bg-white dark:bg-gray-900">
+              <SelectTrigger className="w-full bg-white dark:bg-gray-900 sm:max-w-xs">
                 <SelectValue
                   placeholder={t("operators.cutting.selectMachinePlaceholder")}
                 />
@@ -316,6 +336,20 @@ export default function CuttingOperatorDashboard({
                 ))}
               </SelectContent>
             </Select>
+            {selectedMachine && (
+              <Button
+                type="button"
+                variant="outline"
+                className="whitespace-nowrap"
+                onClick={() => setIsEditingMachine((editing) => !editing)}
+                disabled={!machinePreferenceReady}
+                data-testid="button-edit-cutting-machine"
+              >
+                {isEditingMachine
+                  ? t("operators.common.doneEditing")
+                  : t("operators.common.editMachine")}
+              </Button>
+            )}
             {selectedMachine && (
               <Badge
                 variant="default"
@@ -723,7 +757,12 @@ export default function CuttingOperatorDashboard({
           </Button>
           <Button
             onClick={handleCompleteCutting}
-            disabled={completeCuttingMutation.isPending || !netWeight}
+            disabled={
+              completeCuttingMutation.isPending ||
+              !netWeight ||
+              !machinePreferenceReady ||
+              !selectedMachine
+            }
             className="bg-green-600 hover:bg-green-700"
             data-testid="button-confirm-cutting"
           >

@@ -3548,7 +3548,8 @@
       "noActiveOrders": "لا توجد أوامر إنتاج نشطة",
       "noActiveOrdersDesc": "لا توجد أوامر إنتاج نشطة في قسم الفيلم حالياً",
       "filmStageCompleted": "تم إكمال مرحلة الفيلم",
-      "totalProductionTime": "وقت الإنتاج الكلي"
+      "totalProductionTime": "وقت الإنتاج الكلي",
+      "mustSelectMachine": "يجب اختيار ماكينة فيلم نشطة"
     },
     "printing": {
       "title": "لوحة عامل الطباعة",
@@ -3647,6 +3648,8 @@
       "salesRep": "المندوب",
       "success": "✓ تم بنجاح",
       "error": "خطأ",
+      "editMachine": "تعديل الماكينة",
+      "doneEditing": "تم",
       "printLabelError": "خطأ في طباعة الليبل",
       "unknownError": "خطأ غير معروف"
     }

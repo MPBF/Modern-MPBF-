@@ -3032,7 +3032,8 @@
       "noActiveOrders": "No active production orders",
       "noActiveOrdersDesc": "No active production orders in film section currently",
       "filmStageCompleted": "Film stage completed",
-      "totalProductionTime": "Total production time"
+      "totalProductionTime": "Total production time",
+      "mustSelectMachine": "Select an active film machine"
     },
     "printing": {
       "title": "Printing Operator Dashboard",
@@ -3131,6 +3132,8 @@
       "salesRep": "Sales Rep",
       "success": "✓ Success",
       "error": "Error",
+      "editMachine": "Edit machine",
+      "doneEditing": "Done",
       "printLabelError": "Error printing label",
       "unknownError": "Unknown error"
     }

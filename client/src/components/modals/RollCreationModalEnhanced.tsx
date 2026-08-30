@@ -11,6 +11,8 @@ import {
   formatNumberAr,
 } from "../../../../shared/number-utils";
 import { useToast } from "../../hooks/use-toast";
+import { useAuth } from "../../hooks/use-auth";
+import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 import { apiRequest, queryClient } from "../../lib/queryClient";
 import { toastMessages } from "../../lib/toastMessages";
 import { Button } from "../ui/button";
@@ -74,7 +76,9 @@ export default function RollCreationModalEnhanced({
 }: RollCreationModalEnhancedProps) {
   const { t, i18n } = useTranslation();
   const dir = i18n.language === "ar" ? "rtl" : "ltr";
+  const { user } = useAuth();
   const { toast } = useToast();
+  const [isEditingMachine, setIsEditingMachine] = useState(false);
   const [lastProductionTime, setLastProductionTime] = useState<number | null>(
     null,
   );
@@ -96,9 +100,11 @@ export default function RollCreationModalEnhanced({
   }, [isFinalRoll, form]);
 
   // Fetch machines
-  const { data: machines = [], isLoading: machinesLoading } = useQuery<
-    Machine[]
-  >({
+  const {
+    data: machines = [],
+    isLoading: machinesLoading,
+    isSuccess: machinesReady,
+  } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
     enabled: isOpen,
     staleTime: 5 * 60 * 1000,
@@ -110,6 +116,46 @@ export default function RollCreationModalEnhanced({
       (m) => m.section_id === "SEC03" && m.status === "active",
     );
   }, [machines]);
+
+  const {
+    selectedMachineId: preferredMachineId,
+    setSelectedMachineId: savePreferredMachineId,
+    isReady: machinePreferenceReady,
+  } = useOperatorMachinePreference({
+    stage: "film",
+    userId: user?.id,
+    availableMachineIds: filmMachines.map((machine) => machine.id),
+    machinesReady,
+  });
+
+  // The form has its own machine field, so clear it synchronously with an
+  // authenticated-user change before loading that user's saved preference.
+  useEffect(() => {
+    form.setValue("film_machine_id", "", {
+      shouldValidate: false,
+    });
+    setIsEditingMachine(false);
+  }, [form, user?.id]);
+
+  // Initialize each roll form with the user's last valid film machine.
+  useEffect(() => {
+    if (!machinePreferenceReady) return;
+
+    const currentMachineId = form.getValues("film_machine_id");
+    if (preferredMachineId && currentMachineId !== preferredMachineId) {
+      form.setValue("film_machine_id", preferredMachineId, {
+        shouldValidate: true,
+      });
+    } else if (
+      currentMachineId &&
+      !filmMachines.some((machine) => machine.id === currentMachineId)
+    ) {
+      form.setValue("film_machine_id", "", {
+        shouldValidate: true,
+      });
+      setIsEditingMachine(false);
+    }
+  }, [filmMachines, form, machinePreferenceReady, preferredMachineId]);
 
   // Inline printing: the selected film machine is physically combined with an
   // inline printer (inline_printer_id set) AND the order's product is printed.
@@ -226,6 +272,18 @@ export default function RollCreationModalEnhanced({
   });
 
   const handleSubmit = (data: RollFormData) => {
+    if (
+      !machinePreferenceReady ||
+      !filmMachines.some((machine) => machine.id === data.film_machine_id)
+    ) {
+      toast({
+        title: t("modals.rollCreationEnhanced.createErrorTitle"),
+        description: t("operators.film.mustSelectMachine"),
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Warn if creating final roll with significant remaining quantity
     if (data.is_final_roll && remainingQuantity > 50) {
       if (
@@ -288,7 +346,9 @@ export default function RollCreationModalEnhanced({
             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
               <p className="text-base font-semibold text-blue-900 dark:text-blue-100">
                 {t("modals.rollCreationEnhanced.suggestedRollNumber")}:{" "}
-                <strong className="font-extrabold">{suggestedRollNumber}</strong>
+                <strong className="font-extrabold">
+                  {suggestedRollNumber}
+                </strong>
               </p>
             </div>
 
@@ -348,8 +408,15 @@ export default function RollCreationModalEnhanced({
                   </FormLabel>
                   <Select
                     value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={machinesLoading}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      savePreferredMachineId(value);
+                    }}
+                    disabled={
+                      machinesLoading ||
+                      !machinePreferenceReady ||
+                      (!!field.value && !isEditingMachine)
+                    }
                   >
                     <FormControl>
                       <SelectTrigger
@@ -371,6 +438,20 @@ export default function RollCreationModalEnhanced({
                       ))}
                     </SelectContent>
                   </Select>
+                  {field.value && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-2 whitespace-nowrap"
+                      onClick={() => setIsEditingMachine((editing) => !editing)}
+                      disabled={!machinePreferenceReady}
+                      data-testid="button-edit-film-machine"
+                    >
+                      {isEditingMachine
+                        ? t("operators.common.doneEditing")
+                        : t("operators.common.editMachine")}
+                    </Button>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
