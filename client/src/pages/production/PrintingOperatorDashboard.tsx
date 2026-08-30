@@ -3,14 +3,13 @@ import {
   Package,
   Printer,
   CheckCircle2,
-  ArrowRight,
   Loader2,
   Info,
-  Clock,
-  AlertCircle,
   Layers,
-  Weight,
-  Target,
+  Ruler,
+  Grid,
+  Disc,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,20 +17,16 @@ import { useTranslation } from "react-i18next";
 import { formatNumberAr } from "../../../../shared/number-utils";
 import PageLayout from "../../components/layout/PageLayout";
 import {
-  OrderGroupCard,
   BackToOrdersBar,
   OrdersListHeader,
   groupByOrderNumber,
 } from "../../components/production/OrderGroupCard";
-import { OperatorStatCard } from "../../components/production/OperatorStatCard";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from "../../components/ui/card";
 import { Progress } from "../../components/ui/progress";
 import {
@@ -106,15 +101,15 @@ function PrintColorsRow({
 }) {
   if (!colors || colors.length === 0) return null;
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-        {label} ({formatNumberAr(colors.length)})
+    <div className="flex items-center justify-between gap-2 py-1 border-b border-gray-100 dark:border-gray-800 last:border-0">
+      <span className="text-xs font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap">
+        {label} ({formatNumberAr(colors.length)}):
       </span>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5 justify-end">
         {colors.map((color, i) => (
           <span
             key={`${color}-${i}`}
-            className="h-6 w-6 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm"
+            className="h-6 w-6 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs inline-block"
             style={{ backgroundColor: color || "transparent" }}
             title={color}
             data-testid={`color-box-${side}-${i}`}
@@ -229,18 +224,6 @@ export default function PrintingOperatorDashboard({
     }
   };
 
-  const stats = {
-    totalOrders: productionOrders.length,
-    totalRolls: productionOrders.reduce(
-      (sum, order) => sum + order.total_rolls,
-      0,
-    ),
-    totalWeight: productionOrders.reduce(
-      (sum, order) => sum + order.total_weight,
-      0,
-    ),
-  };
-
   const orderGroups = useMemo(
     () => groupByOrderNumber(productionOrders, (o) => o.order_number),
     [productionOrders],
@@ -251,19 +234,17 @@ export default function PrintingOperatorDashboard({
 
   if (isLoading) {
     const loadingContent = (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-80">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">
+          <Loader2 className="h-10 w-10 animate-spin text-purple-600 mx-auto mb-3" />
+          <p className="text-gray-600 text-sm font-medium">
             {t("operators.printing.loadingRolls")}
           </p>
         </div>
       </div>
     );
 
-    if (hideLayout) {
-      return loadingContent;
-    }
+    if (hideLayout) return loadingContent;
 
     return (
       <PageLayout
@@ -280,125 +261,78 @@ export default function PrintingOperatorDashboard({
   );
 
   const mainContent = (
-    <div className="space-y-6">
-      <Card className="border-2 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Printer className="h-5 w-5 text-purple-600" />
-            {t("operators.printing.selectMachine")}
-          </CardTitle>
-          <CardDescription>
-            {t("operators.printing.selectMachineDesc")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Select
-              value={selectedMachineId}
-              onValueChange={setSelectedMachineId}
-              disabled={
-                machinesLoading ||
-                !machinePreferenceReady ||
-                (!!selectedMachineId && !isEditingMachine)
-              }
-            >
-              <SelectTrigger className="w-full bg-white dark:bg-gray-900 sm:max-w-xs">
-                <SelectValue
-                  placeholder={t("operators.printing.selectMachinePlaceholder")}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {printingMachines.map((machine) => (
-                  <SelectItem key={machine.id} value={machine.id}>
-                    {ln(machine.name_ar, machine.name)} ({machine.id})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedMachine && (
-              <Button
-                type="button"
-                variant="outline"
-                className="whitespace-nowrap"
-                onClick={() => setIsEditingMachine((editing) => !editing)}
-                disabled={!machinePreferenceReady}
-                data-testid="button-edit-printing-machine"
-              >
-                {isEditingMachine
-                  ? t("operators.common.doneEditing")
-                  : t("operators.common.editMachine")}
-              </Button>
-            )}
-            {selectedMachine && (
-              <Badge
-                variant="default"
-                className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 whitespace-nowrap"
-              >
-                <CheckCircle2 className="h-3 w-3 ml-1" />
-                {ln(selectedMachine.name_ar, selectedMachine.name)}
-              </Badge>
-            )}
+    <div className="space-y-4 pb-12">
+      {/* شريط اختيار الماكينة المدمج الخفيف للجوال */}
+      <div className="bg-purple-50/90 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900 rounded-2xl p-3 shadow-xs">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <Printer className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <span className="text-xs font-black text-purple-900 dark:text-purple-200">
+              ماكينة الطباعة المحددة
+            </span>
           </div>
-          {!selectedMachineId && (
-            <div className="flex items-center gap-2 mt-3 text-amber-600 dark:text-amber-400 text-sm">
-              <AlertCircle className="h-4 w-4" />
-              <span>{t("operators.printing.mustSelectMachine")}</span>
-            </div>
+          {selectedMachine && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs font-bold text-purple-700 dark:text-purple-300"
+              onClick={() => setIsEditingMachine((editing) => !editing)}
+              disabled={!machinePreferenceReady}
+            >
+              {isEditingMachine ? "تم" : "تغيير"}
+            </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <div className="hidden md:grid md:grid-cols-3 gap-4 mb-6">
-        <OperatorStatCard
-          icon={Package}
-          color="blue"
-          value={stats.totalOrders}
-          label={t("operators.common.activeOrders")}
-          sublabel={t("operators.common.productionOrder")}
-          testId="card-active-orders"
-          valueTestId="stat-active-orders"
-        />
+        <div className="flex items-center gap-2">
+          <Select
+            value={selectedMachineId}
+            onValueChange={setSelectedMachineId}
+            disabled={
+              machinesLoading ||
+              !machinePreferenceReady ||
+              (!!selectedMachineId && !isEditingMachine)
+            }
+          >
+            <SelectTrigger className="w-full bg-white dark:bg-gray-900 text-xs font-bold h-10 rounded-xl border-purple-200">
+              <SelectValue
+                placeholder={t("operators.printing.selectMachinePlaceholder")}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {printingMachines.map((machine) => (
+                <SelectItem key={machine.id} value={machine.id}>
+                  {ln(machine.name_ar, machine.name)} ({machine.id})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <OperatorStatCard
-          icon={Layers}
-          color="purple"
-          value={stats.totalRolls}
-          label={t("operators.common.totalRolls")}
-          sublabel={t("operators.common.roll")}
-          testId="card-total-rolls"
-          valueTestId="stat-total-rolls"
-        />
-
-        <OperatorStatCard
-          icon={Weight}
-          color="teal"
-          value={formatNumberAr(stats.totalWeight)}
-          label={t("operators.common.totalWeight")}
-          sublabel={t("operators.common.kilogram")}
-          testId="card-total-weight"
-          valueTestId="stat-total-weight"
-        />
+          {selectedMachine && !isEditingMachine && (
+            <Badge className="bg-purple-600 text-white whitespace-nowrap h-10 px-3 text-xs font-bold rounded-xl gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              جاهز
+            </Badge>
+          )}
+        </div>
       </div>
 
+      {/* قائمة الطلبات الرئيسية أو تفاصيل الطلب المحدد */}
       {productionOrders.length === 0 ? (
-        <Card className="p-8" data-testid="card-no-rolls">
-          <div className="text-center">
-            <Info className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              {t("operators.printing.noRolls")}
-            </h3>
-            <p
-              className="text-gray-600 dark:text-gray-400"
-              data-testid="text-no-rolls"
-            >
-              {t("operators.printing.noRollsReady")}
-            </p>
-          </div>
+        <Card className="p-8 text-center rounded-2xl border-dashed">
+          <Info className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-1">
+            {t("operators.printing.noRolls")}
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t("operators.printing.noRollsReady")}
+          </p>
         </Card>
       ) : !selectedGroup ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <OrdersListHeader testId="printing" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-3">
             {orderGroups.map((group) => {
               const first = group.items[0];
               const totalRolls = group.items.reduce(
@@ -415,276 +349,269 @@ export default function PrintingOperatorDashboard({
               );
               const groupProgress =
                 totalRolls > 0 ? (completedRolls / totalRolls) * 100 : 0;
+
+              // استخراج أسماء المنتجات الموجودة في الطلب
+              const uniqueProducts = Array.from(
+                new Set(
+                  group.items.map(
+                    (item) =>
+                      ln(item.product_name_ar, item.product_name_en) ||
+                      item.product_name,
+                  ),
+                ),
+              ).filter(Boolean);
+
               return (
-                <OrderGroupCard
+                <div
                   key={group.orderNumber}
-                  orderNumber={group.orderNumber}
-                  customerName={
-                    ln(first.customer_name_ar, first.customer_name_en) ||
-                    first.customer_name
-                  }
-                  salesRepName={
-                    ln(first.sales_rep_name_ar, first.sales_rep_name_en) ||
-                    first.sales_rep_name
-                  }
-                  orderDate={first.order_date}
-                  productionOrderCount={group.items.length}
-                  progressPercent={groupProgress}
-                  metrics={[
-                    {
-                      label: t("operators.common.totalRolls"),
-                      value: `${formatNumberAr(totalRolls)} ${t("operators.common.roll")}`,
-                      icon: <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400" />,
-                    },
-                    {
-                      label: t("operators.common.totalWeight"),
-                      value: `${formatNumberAr(totalWeight)} ${t("operators.common.kg")}`,
-                      icon: <Weight className="h-4 w-4 text-teal-600 dark:text-teal-400" />,
-                    },
-                  ]}
-                  accent="purple"
-                  icon={<Printer className="h-3 w-3 ml-1" />}
-                  onSelect={() => setSelectedOrderNumber(group.orderNumber)}
-                  testId={`printing-${group.orderNumber}`}
-                />
+                  className="bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:border-purple-500 transition-all cursor-pointer space-y-3"
+                  onClick={() => setSelectedOrderNumber(group.orderNumber)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200">
+                          طلب: #{group.orderNumber}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({group.items.length} أوامر إنتاج)
+                        </span>
+                      </div>
+                      <h3 className="text-base font-extrabold text-purple-800 dark:text-purple-400 leading-tight">
+                        {ln(first.customer_name_ar, first.customer_name_en) ||
+                          first.customer_name}
+                      </h3>
+                    </div>
+
+                    <span className="text-xs font-bold text-purple-700 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-xl">
+                      فتح الطلب ◀
+                    </span>
+                  </div>
+
+                  {/* المنتجات التابعة للطلب */}
+                  <div className="space-y-1.5 bg-slate-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-gray-800">
+                    <span className="text-[11px] font-bold text-gray-400 block">
+                      المنتجات المطلوبة للطباعة:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {uniqueProducts.map((prodName, idx) => (
+                        <span
+                          key={idx}
+                          className="text-xs font-black text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 shadow-2xs"
+                        >
+                          {prodName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* شريط الإنجاز للرولات */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-gray-500">
+                        الرولات المطبوعة ({completedRolls}/{totalRolls})
+                      </span>
+                      <span className="text-gray-700 dark:text-gray-300 font-bold">
+                        {formatNumberAr(totalWeight)} كجم
+                      </span>
+                    </div>
+                    <Progress value={groupProgress} className="h-2 rounded-full" />
+                  </div>
+                </div>
               );
             })}
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <BackToOrdersBar
             orderNumber={selectedGroup.orderNumber}
             onBack={() => setSelectedOrderNumber(null)}
             testId="printing"
           />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {selectedGroup.items.map((order) => {
-            const completedRolls = order.rolls.filter(
-              (r) => r.printed_at,
-            ).length;
-            const progress =
-              order.total_rolls > 0
-                ? (completedRolls / order.total_rolls) * 100
-                : 0;
 
-            return (
-              <Card
-                key={order.production_order_id}
-                className="transition-all hover:shadow-lg"
-                data-testid={`card-production-order-${order.production_order_id}`}
-              >
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle
-                        className="text-lg"
-                        data-testid={`text-order-number-${order.production_order_id}`}
-                      >
-                        {order.production_order_number}
-                      </CardTitle>
-                      <CardDescription
-                        data-testid={`text-order-ref-${order.production_order_id}`}
-                      >
-                        {t("operators.common.order")}: {order.order_number}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="bg-purple-100 text-purple-800"
-                    >
-                      <Printer className="h-3 w-3 ml-1" />
-                      {order.total_rolls} {t("operators.common.roll")}
-                    </Badge>
-                  </div>
-                </CardHeader>
+          <div className="space-y-4">
+            {selectedGroup.items.map((order) => {
+              const completedRolls = order.rolls.filter(
+                (r) => r.printed_at,
+              ).length;
+              const progress =
+                order.total_rolls > 0
+                  ? (completedRolls / order.total_rolls) * 100
+                  : 0;
 
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">
-                        {t("operators.common.customer")}
-                      </p>
-                      <p
-                        className="font-bold text-gray-900 dark:text-white"
-                        data-testid={`text-customer-${order.production_order_id}`}
-                      >
-                        {ln(order.customer_name_ar, order.customer_name_en) ||
-                          order.customer_name}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">
-                        {t("operators.common.product")}
-                      </p>
-                      <p
-                        className="font-medium"
-                        data-testid={`text-product-${order.production_order_id}`}
-                      >
-                        {ln(order.product_name_ar, order.product_name_en) ||
-                          order.product_name}
-                      </p>
-                    </div>
-                    {order.size_caption && (
-                      <div>
-                        <p className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                          <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                          {t("production.size")}
-                        </p>
-                        <p
-                          className="font-medium"
-                          data-testid={`text-size-${order.production_order_id}`}
-                        >
-                          {order.size_caption}
+              return (
+                <Card
+                  key={order.production_order_id}
+                  className="overflow-hidden rounded-2xl border-2 border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm"
+                >
+                  {/* رأس الكرت: رقم الطلب، العميل، واسم المنتج بشكل عريض جداً */}
+                  <CardHeader className="p-4 pb-3 bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200">
+                            {order.production_order_number}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-500">
+                            طلب: #{order.order_number}
+                          </span>
+                        </div>
+
+                        {/* اسم المنتج بارز وكبير */}
+                        <h2 className="text-xl font-black text-gray-950 dark:text-white leading-tight tracking-tight mt-1">
+                          {ln(order.product_name_ar, order.product_name_en) ||
+                            order.product_name}
+                        </h2>
+
+                        {/* اسم العميل */}
+                        <p className="text-sm font-bold text-purple-700 dark:text-purple-400 mt-1">
+                          {ln(order.customer_name_ar, order.customer_name_en) ||
+                            order.customer_name}
                         </p>
                       </div>
-                    )}
-                  </div>
 
-                  {((order.front_print_colors &&
-                    order.front_print_colors.length > 0) ||
-                    (order.back_print_colors &&
-                      order.back_print_colors.length > 0)) && (
-                    <div
-                      className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg space-y-2"
-                      data-testid={`print-colors-${order.production_order_id}`}
-                    >
-                      <PrintColorsRow
-                        label={t("operators.printing.frontColors")}
-                        colors={order.front_print_colors || []}
-                        side="front"
-                      />
-                      <PrintColorsRow
-                        label={t("operators.printing.backColors")}
-                        colors={order.back_print_colors || []}
-                        side="back"
-                      />
-                    </div>
-                  )}
-
-                  {(order.printing_cylinder || order.plate_drawer_code) && (
-                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg text-sm grid grid-cols-2 gap-3">
-                      {order.printing_cylinder && (
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">
-                            {t("operators.printing.cylinderSize")}
-                          </p>
-                          <p
-                            className="font-medium"
-                            data-testid={`text-printing-cylinder-${order.production_order_id}`}
-                          >
-                            {order.printing_cylinder}
-                          </p>
-                        </div>
-                      )}
-                      {order.plate_drawer_code && (
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">
-                            {t("operators.printing.plateDrawerCode")}
-                          </p>
-                          <p
-                            className="font-bold text-purple-900 dark:text-purple-200"
-                            data-testid={`text-plate-drawer-code-${order.production_order_id}`}
-                          >
-                            {order.plate_drawer_code}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                        <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        {t("operators.common.progress")}
-                      </span>
-                      <span
-                        className="font-medium"
-                        data-testid={`text-progress-${order.production_order_id}`}
+                      <Badge
+                        variant="secondary"
+                        className="bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100 font-bold text-xs"
                       >
-                        {completedRolls} / {order.total_rolls}{" "}
-                        {t("operators.common.roll")}
-                      </span>
+                        {order.total_rolls} رول
+                      </Badge>
                     </div>
-                    <Progress
-                      value={progress}
-                      className="h-2"
-                      data-testid={`progress-bar-${order.production_order_id}`}
-                    />
-                  </div>
+                  </CardHeader>
 
-                  <div className="flex items-center gap-2 text-sm">
-                    <Weight className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {t("operators.common.totalWeight")}:
-                    </span>
-                    <span className="font-medium">
-                      {formatNumberAr(order.total_weight)}{" "}
-                      {t("operators.common.kg")}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {t("operators.common.availableRolls")}:
-                    </p>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {order.rolls.map((roll) => (
-                        <div
-                          key={roll.roll_id}
-                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-                          data-testid={`roll-item-${roll.roll_id}`}
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="font-medium text-sm"
-                                data-testid={`text-roll-number-${roll.roll_id}`}
-                              >
-                                {roll.roll_number}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                              {t("operators.common.weight")}:{" "}
-                              {formatNumberAr(Number(roll.weight_kg))}{" "}
-                              {t("operators.common.kg")}
-                            </div>
-                          </div>
-
-                          <Button
-                            onClick={() => handleMoveToPrinting(roll.roll_id)}
-                            disabled={
-                              processingRollIds.has(roll.roll_id) ||
-                              !selectedMachineId
-                            }
-                            size="sm"
-                            data-testid={`button-move-to-printing-${roll.roll_id}`}
-                            title={
-                              !selectedMachineId
-                                ? t("operators.printing.selectMachineFirst")
-                                : ""
-                            }
-                          >
-                            {processingRollIds.has(roll.roll_id) ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Printer className="h-4 w-4 ml-1" />
-                                <span className="hidden sm:inline">
-                                  {t("operators.printing.print")}
-                                </span>
-                              </>
-                            )}
-                          </Button>
+                  <CardContent className="p-4 space-y-4">
+                    {/* شبكة مواصفات الطباعة الفنية المباشرة (Tech Specs) */}
+                    <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-gray-800/60 p-3 rounded-xl border border-slate-100 dark:border-gray-800 text-xs">
+                      {/* المقاس */}
+                      <div className="flex items-start gap-2">
+                        <Ruler className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-gray-400 block text-[10px]">المقاس</span>
+                          <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
+                            {order.size_caption || "—"}
+                          </span>
                         </div>
-                      ))}
+                      </div>
+
+                      {/* مقاس السلندر */}
+                      <div className="flex items-start gap-2">
+                        <Disc className="h-4 w-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-gray-400 block text-[10px]">السلندر</span>
+                          <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
+                            {order.printing_cylinder || "—"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* درج الكليشات */}
+                      <div className="flex items-start gap-2">
+                        <Grid className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-gray-400 block text-[10px]">درج الكليشة</span>
+                          <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
+                            {order.plate_drawer_code || "—"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* إجمالي الوزن */}
+                      <div className="flex items-start gap-2">
+                        <Layers className="h-4 w-4 text-teal-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-gray-400 block text-[10px]">إجمالي الوزن</span>
+                          <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
+                            {formatNumberAr(order.total_weight)} كجم
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+
+                    {/* ألوان الطباعة للوجهين */}
+                    {((order.front_print_colors && order.front_print_colors.length > 0) ||
+                      (order.back_print_colors && order.back_print_colors.length > 0)) && (
+                      <div className="bg-purple-50/50 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/40 space-y-1">
+                        <span className="text-[11px] font-black text-purple-900 dark:text-purple-300 block mb-1">
+                          ألوان الطباعة:
+                        </span>
+                        <PrintColorsRow
+                          label="الوجه الأمامي"
+                          colors={order.front_print_colors || []}
+                          side="front"
+                        />
+                        <PrintColorsRow
+                          label="الوجه الخلفي"
+                          colors={order.back_print_colors || []}
+                          side="back"
+                        />
+                      </div>
+                    )}
+
+                    {/* شريط الإنجاز */}
+                    <div className="space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30 p-2.5 rounded-xl">
+                      <div className="flex justify-between items-center text-xs font-semibold">
+                        <span className="text-gray-500">
+                          الرولات المكتملة ({completedRolls}/{order.total_rolls})
+                        </span>
+                        <span className="text-purple-700 dark:text-purple-300 font-bold">
+                          {Math.round(progress)}%
+                        </span>
+                      </div>
+                      <Progress value={progress} className="h-2.5 rounded-full" />
+                    </div>
+
+                    {/* قائمة الرولات المتاحة للطباعة */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-200 block">
+                        الرولات الجاهزة للطباعة ({order.rolls.length}):
+                      </span>
+
+                      <div className="space-y-2 max-h-56 overflow-y-auto p-0.5">
+                        {order.rolls.map((roll) => {
+                          const isProcessing = processingRollIds.has(roll.roll_id);
+                          return (
+                            <div
+                              key={roll.roll_id}
+                              className="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 shadow-2xs"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 flex items-center justify-center font-black text-xs">
+                                  {roll.roll_seq}
+                                </div>
+                                <div>
+                                  <div className="font-black text-xs text-gray-900 dark:text-gray-100">
+                                    {roll.roll_number}
+                                  </div>
+                                  <div className="text-[11px] font-bold text-teal-600 dark:text-teal-400">
+                                    {formatNumberAr(Number(roll.weight_kg))} كجم
+                                  </div>
+                                </div>
+                              </div>
+
+                              <Button
+                                onClick={() => handleMoveToPrinting(roll.roll_id)}
+                                disabled={isProcessing || !selectedMachineId}
+                                className="h-10 px-4 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-xs active:scale-95 transition-all"
+                              >
+                                {isProcessing ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Printer className="h-4 w-4 ml-1.5" />
+                                    طباعة
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

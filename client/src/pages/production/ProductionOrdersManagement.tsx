@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
 import {
   Loader2,
   Printer,
@@ -11,12 +10,13 @@ import {
   XCircle,
   Factory,
   TrendingUp,
-  Filter,
   RefreshCw,
   Eye,
-  Calendar,
   Play,
   Tag,
+  Ruler,
+  Layers,
+  Sparkles,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -60,18 +60,16 @@ type StageKey = (typeof STAGE_KEYS)[number];
 
 const STAGE_BADGE_CLASSES: Record<StageKey, string> = {
   film: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-0",
-  printing:
-    "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-0",
-  cutting:
-    "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300 border-0",
-  done: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300 border-0",
+  printing: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-0",
+  cutting: "bg-amber-100 text-amber-700 dark:bg-orange-950 dark:text-orange-300 border-0",
+  done: "bg-emerald-100 text-emerald-700 dark:bg-green-950 dark:text-green-300 border-0",
 };
 
 const STAGE_CARD_BORDERS: Record<StageKey, string> = {
-  film: "border-r-blue-500",
-  printing: "border-r-purple-500",
-  cutting: "border-r-orange-500",
-  done: "border-r-green-500",
+  film: "border-r-blue-600",
+  printing: "border-r-purple-600",
+  cutting: "border-r-amber-600",
+  done: "border-r-emerald-600",
 };
 
 function formatKg(value: number): string {
@@ -94,11 +92,7 @@ export default function ProductionOrdersManagement() {
   const [location] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [showFilters, setShowFilters] = useState(false);
 
-  // Pre-fill the search field (and auto-open the stats card) when the page is
-  // opened with `?search=` or `?po=` query params (e.g. when navigating from
-  // the Customer Production Orders dashboard widget).
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -122,6 +116,7 @@ export default function ProductionOrdersManagement() {
   const {
     data: ordersData,
     isLoading: ordersLoading,
+    isFetching,
     refetch,
   } = useQuery({
     queryKey: ["/api/production-orders"],
@@ -143,13 +138,8 @@ export default function ProductionOrdersManagement() {
       ? ordersData
       : ordersData?.data || [];
     return orders.filter((order: any) => {
-      if (order.status === "archived") {
-        return false;
-      }
-
-      if (statusFilter !== "all" && order.status !== statusFilter) {
-        return false;
-      }
+      if (order.status === "archived") return false;
+      if (statusFilter !== "all" && order.status !== statusFilter) return false;
 
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
@@ -158,7 +148,9 @@ export default function ProductionOrdersManagement() {
           order.order_number?.toLowerCase().includes(searchLower) ||
           order.customer_name?.toLowerCase().includes(searchLower) ||
           order.customer_name_ar?.toLowerCase().includes(searchLower) ||
-          order.size_caption?.toLowerCase().includes(searchLower);
+          order.size_caption?.toLowerCase().includes(searchLower) ||
+          order.item_name?.toLowerCase().includes(searchLower) ||
+          order.item_name_ar?.toLowerCase().includes(searchLower);
 
         if (!matchesSearch) return false;
       }
@@ -176,25 +168,14 @@ export default function ProductionOrdersManagement() {
     const active = orders.filter(
       (o: any) => o.status === "active" || o.status === "in_production",
     ).length;
-    const completed = orders.filter(
-      (o: any) => o.status === "completed",
-    ).length;
-    const cancelled = orders.filter(
-      (o: any) => o.status === "cancelled",
-    ).length;
+    const completed = orders.filter((o: any) => o.status === "completed").length;
+    const cancelled = orders.filter((o: any) => o.status === "cancelled").length;
     const total = orders.length;
 
     const totalQuantity = orders.reduce(
       (sum: number, o: any) => sum + parseFloat(o.quantity_kg || 0),
       0,
     );
-    const completedQuantity = orders
-      .filter((o: any) => o.status === "completed")
-      .reduce(
-        (sum: number, o: any) =>
-          sum + parseFloat(o.final_quantity_kg || o.quantity_kg || 0),
-        0,
-      );
 
     return {
       pending,
@@ -203,7 +184,6 @@ export default function ProductionOrdersManagement() {
       cancelled,
       total,
       totalQuantity,
-      completedQuantity,
     };
   }, [ordersData]);
 
@@ -214,32 +194,32 @@ export default function ProductionOrdersManagement() {
     > = {
       pending: {
         icon: Clock,
-        color: "text-amber-600",
-        bg: "bg-amber-50 dark:bg-amber-950",
+        color: "text-amber-700 dark:text-amber-300",
+        bg: "bg-amber-100 dark:bg-amber-950/60",
         label: t("production.status.pending"),
       },
       active: {
         icon: Play,
-        color: "text-green-600",
-        bg: "bg-green-50 dark:bg-green-950",
+        color: "text-emerald-700 dark:text-emerald-300",
+        bg: "bg-emerald-100 dark:bg-emerald-950/60",
         label: t("production.status.active"),
       },
       in_production: {
         icon: Factory,
-        color: "text-blue-600",
-        bg: "bg-blue-50 dark:bg-blue-950",
+        color: "text-blue-700 dark:text-blue-300",
+        bg: "bg-blue-100 dark:bg-blue-950/60",
         label: t("production.status.inProduction"),
       },
       completed: {
         icon: CheckCircle2,
-        color: "text-gray-600",
-        bg: "bg-gray-50 dark:bg-gray-800",
+        color: "text-slate-700 dark:text-slate-300",
+        bg: "bg-slate-100 dark:bg-slate-800",
         label: t("production.status.completed"),
       },
       cancelled: {
         icon: XCircle,
-        color: "text-red-600",
-        bg: "bg-red-50 dark:bg-red-950",
+        color: "text-rose-700 dark:text-rose-300",
+        bg: "bg-rose-100 dark:bg-rose-950/60",
         label: t("production.status.cancelled"),
       },
     };
@@ -259,10 +239,10 @@ export default function ProductionOrdersManagement() {
 
   if (ordersLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600 mx-auto" />
+          <p className="text-sm font-bold text-gray-500">
             {t("production.loadingOrders")}
           </p>
         </div>
@@ -271,343 +251,334 @@ export default function ProductionOrdersManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <Tabs defaultValue="orders" className="space-y-6">
-        <TabsList className="grid grid-cols-2 w-full md:w-auto md:inline-grid">
-          <TabsTrigger value="orders" data-testid="tab-orders">
+    <div className="space-y-5" dir="rtl">
+      <Tabs defaultValue="orders" className="space-y-5">
+        <TabsList className="grid grid-cols-2 w-full md:w-auto h-12 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl">
+          <TabsTrigger value="orders" data-testid="tab-orders" className="rounded-xl font-bold text-xs h-10">
             {t("production.productionStages.ordersTab")}
           </TabsTrigger>
-          <TabsTrigger value="stages" data-testid="tab-production-stages">
+          <TabsTrigger value="stages" data-testid="tab-production-stages" className="rounded-xl font-bold text-xs h-10">
             {t("production.productionStages.tabTitle")}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="orders" className="space-y-6 mt-0">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-r-4 border-r-amber-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("production.status.pending")}
-                </p>
-                <p className="text-3xl font-bold text-amber-600">
-                  {stats.pending}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-amber-600" />
-              </div>
+        <TabsContent value="orders" className="space-y-5 mt-0">
+          {/* بطاقات الإحصائيات */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-xs border-r-4 border-r-amber-500">
+              <span className="text-[11px] font-bold text-gray-500 block mb-1">
+                {t("production.status.pending")}
+              </span>
+              <p className="text-2xl font-black text-amber-600">{stats.pending}</p>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-r-4 border-r-green-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("production.status.inExecution")}
-                </p>
-                <p className="text-3xl font-bold text-green-600">
-                  {stats.active}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-                <Factory className="h-6 w-6 text-green-600" />
-              </div>
+            <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-xs border-r-4 border-r-emerald-500">
+              <span className="text-[11px] font-bold text-gray-500 block mb-1">
+                {t("production.status.inExecution")}
+              </span>
+              <p className="text-2xl font-black text-emerald-600">{stats.active}</p>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-r-4 border-r-blue-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("production.status.completedFem")}
-                </p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {stats.completed}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center">
-                <CheckCircle2 className="h-6 w-6 text-blue-600" />
-              </div>
+            <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-xs border-r-4 border-r-blue-500">
+              <span className="text-[11px] font-bold text-gray-500 block mb-1">
+                {t("production.status.completedFem")}
+              </span>
+              <p className="text-2xl font-black text-blue-600">{stats.completed}</p>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-r-4 border-r-purple-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("production.totalQuantity")}
-                </p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {stats.totalQuantity.toLocaleString("en-US")}{" "}
-                  {t("production.kg")}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-950 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
-              </div>
+            <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-purple-100 dark:border-purple-900/50 shadow-xs border-r-4 border-r-purple-500">
+              <span className="text-[11px] font-bold text-gray-500 block mb-1">
+                {t("production.totalQuantity")}
+              </span>
+              <p className="text-xl font-black text-purple-600 truncate">
+                {stats.totalQuantity.toLocaleString("en-US")} {t("production.kg")}
+              </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
+          {/* شريط البحث والفلترة */}
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder={t("production.searchPlaceholder")}
+                placeholder="ابحث برقم أمر الإنتاج، الطلب، العميل، أو المقاس..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-10"
+                className="pr-9 h-10 text-xs font-bold rounded-xl"
               />
             </div>
+
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48">
+              <SelectTrigger className="w-full md:w-48 h-10 text-xs font-bold rounded-xl">
                 <SelectValue placeholder={t("production.statusLabel")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">
-                  {t("production.allStatuses")}
-                </SelectItem>
-                <SelectItem value="pending">
-                  {t("production.status.pending")}
-                </SelectItem>
-                <SelectItem value="active">
-                  {t("production.status.active")}
-                </SelectItem>
-                <SelectItem value="in_production">
-                  {t("production.status.inProduction")}
-                </SelectItem>
-                <SelectItem value="completed">
-                  {t("production.status.completed")}
-                </SelectItem>
-                <SelectItem value="cancelled">
-                  {t("production.status.cancelled")}
-                </SelectItem>
+                <SelectItem value="all">{t("production.allStatuses")}</SelectItem>
+                <SelectItem value="pending">{t("production.status.pending")}</SelectItem>
+                <SelectItem value="active">{t("production.status.active")}</SelectItem>
+                <SelectItem value="in_production">{t("production.status.inProduction")}</SelectItem>
+                <SelectItem value="completed">{t("production.status.completed")}</SelectItem>
+                <SelectItem value="cancelled">{t("production.status.cancelled")}</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4" />
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="h-10 w-10 rounded-xl flex-shrink-0"
+              title="تحديث"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
             </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Orders Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              {t("production.productionOrders")}
-              <Badge variant="secondary">{filteredOrders.length}</Badge>
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold">
-                    {t("production.table.productionOrderNumber")}
-                  </TableHead>
-                  <TableHead className="font-semibold">
-                    {t("production.table.orderNumber")}
-                  </TableHead>
-                  <TableHead className="font-semibold">
-                    {t("production.table.customer")}
-                  </TableHead>
-                  <TableHead className="font-semibold">
-                    {t("production.table.product")}
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
-                    {t("production.table.quantity")}
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
-                    {t("production.table.progress")}
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
-                    {t("production.table.status")}
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
-                    {t("production.productionStages.currentStage")}
-                  </TableHead>
-                  <TableHead className="font-semibold">
-                    {t("production.table.assignment")}
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
-                    {t("production.table.actions")}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <Package className="h-12 w-12 opacity-50" />
-                        <p>{t("production.noOrders")}</p>
+          {/* العرض في الجوال (Cards List) */}
+          <div className="block lg:hidden space-y-3">
+            {filteredOrders.length === 0 ? (
+              <Card className="p-8 text-center rounded-2xl border-dashed">
+                <Package className="h-10 w-10 text-gray-400 mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold text-gray-500">{t("production.noOrders")}</p>
+              </Card>
+            ) : (
+              filteredOrders.map((order: any) => {
+                const statusConfig = getStatusConfig(order.status);
+                const StatusIcon = statusConfig.icon;
+                const progress = getProgressPercentage(order);
+                const stage = (order.production_stage || "film") as StageKey;
+
+                return (
+                  <Card key={order.id} className="rounded-2xl border shadow-xs overflow-hidden p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-xs font-black px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                            {order.production_order_number}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-400">
+                            #{order.order_number}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-extrabold text-gray-900 dark:text-white leading-tight">
+                          {ln(order.customer_name_ar, order.customer_name)}
+                        </h3>
+                        <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mt-0.5">
+                          {ln(order.item_name_ar, order.item_name) || order.size_caption}
+                        </p>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order: any) => {
-                    const statusConfig = getStatusConfig(order.status);
-                    const StatusIcon = statusConfig.icon;
-                    const progress = getProgressPercentage(order);
 
-                    return (
-                      <TableRow
-                        key={order.id}
-                        className="hover:bg-muted/50 transition-colors"
+                      <div className="flex flex-col gap-1 items-end">
+                        <Badge className={`${statusConfig.bg} ${statusConfig.color} border-0 text-[10px] font-bold`}>
+                          <StatusIcon className="h-3 w-3 ml-1" />
+                          {statusConfig.label}
+                        </Badge>
+                        <Badge className={`${STAGE_BADGE_CLASSES[stage]} text-[10px] font-bold`}>
+                          {t(`production.stages.${stage}`)}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-800/40 p-2.5 rounded-xl text-xs">
+                      <div>
+                        <span className="text-gray-400 block text-[10px]">الكمية المطلوبة</span>
+                        <span className="font-bold text-gray-900 dark:text-gray-100">
+                          {order.quantity_kg} كجم
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block text-[10px]">النهائية</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                          {order.final_quantity_kg || order.quantity_kg} كجم
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-400">الإنجاز</span>
+                        <span className="font-bold">{progress}%</span>
+                      </div>
+                      <Progress value={progress} className="h-2 rounded-full" />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1.5 pt-1 border-t">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowStats(showStats === order.id ? null : order.id)}
+                        className="h-8 text-xs font-bold gap-1 rounded-xl"
                       >
-                        <TableCell className="font-mono font-medium">
-                          {order.production_order_number}
-                        </TableCell>
-                        <TableCell className="font-mono text-muted-foreground">
-                          {order.order_number}
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-bold text-gray-900">
-                            {ln(order.customer_name_ar, order.customer_name)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="text-sm">{order.size_caption}</div>
-                            {order.is_printed && (
-                              <Badge variant="outline" className="text-xs">
-                                {t("production.printed")}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="space-y-1">
-                            <div className="font-semibold">
-                              {order.quantity_kg} {t("production.kg")}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {t("production.final")}: {order.final_quantity_kg}{" "}
-                              {t("production.kg")}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="w-24 mx-auto space-y-1">
-                            <Progress value={progress} className="h-2" />
-                            <div className="text-xs text-muted-foreground">
-                              {progress}%
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge
-                            className={`${statusConfig.bg} ${statusConfig.color} border-0`}
-                          >
-                            <StatusIcon className="h-3 w-3 ml-1" />
-                            {statusConfig.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {(() => {
-                            const stage = (order.production_stage ||
-                              "film") as StageKey;
-                            return (
-                              <Badge className={STAGE_BADGE_CLASSES[stage]}>
-                                {t(`production.stages.${stage}`)}
-                              </Badge>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {order.assigned_machine_id && (
-                              <Badge variant="secondary" className="text-xs">
-                                <Factory className="h-3 w-3 ml-1" />
-                                {order.machine_name_ar || order.machine_name}
-                              </Badge>
-                            )}
-                            {order.assigned_operator_id && (
-                              <Badge variant="secondary" className="text-xs">
-                                👷{" "}
-                                {order.operator_name_ar || order.operator_name}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1 justify-center">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                setShowStats(
-                                  showStats === order.id ? null : order.id,
-                                )
-                              }
-                              title={t("production.viewDetails")}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setPrintingProductionOrder(order)}
-                              title={t("production.print")}
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                            {(order.production_stage === "done" ||
-                              order.status === "completed") && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setBatchLabelOrderId(order.id)}
-                                title={t("batch.printLabelTitle")}
-                                data-testid={`button-batch-label-${order.id}`}
-                              >
-                                <Tag className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
+                        <Eye className="h-3.5 w-3.5" />
+                        التفاصيل
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPrintingProductionOrder(order)}
+                        className="h-8 text-xs font-bold gap-1 rounded-xl text-blue-600 border-blue-200"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        طباعة A4
+                      </Button>
+                      {(order.production_stage === "done" || order.status === "completed") && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setBatchLabelOrderId(order.id)}
+                          className="h-8 text-xs font-bold gap-1 rounded-xl text-emerald-600 border-emerald-200"
+                        >
+                          <Tag className="h-3.5 w-3.5" />
+                          الملصق
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+
+          {/* العرض في الكمبيوتر (Table) */}
+          <div className="hidden lg:block">
+            <Card className="rounded-2xl border shadow-xs overflow-hidden">
+              <CardHeader className="p-4 border-b bg-gray-50/50 dark:bg-gray-800/40">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-black flex items-center gap-2">
+                    <Package className="h-4 w-4 text-blue-600" />
+                    {t("production.productionOrders")}
+                  </CardTitle>
+                  <Badge variant="secondary" className="font-bold">{filteredOrders.length} أمر</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                      <TableHead className="font-black text-xs">أمر الإنتاج</TableHead>
+                      <TableHead className="font-black text-xs">الطلب</TableHead>
+                      <TableHead className="font-black text-xs">العميل</TableHead>
+                      <TableHead className="font-black text-xs">المنتج / المقاس</TableHead>
+                      <TableHead className="font-black text-xs text-center">الكمية</TableHead>
+                      <TableHead className="font-black text-xs text-center">الإنجاز</TableHead>
+                      <TableHead className="font-black text-xs text-center">الحالة</TableHead>
+                      <TableHead className="font-black text-xs text-center">المرحلة</TableHead>
+                      <TableHead className="font-black text-xs text-center">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOrders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-12 text-gray-400 text-xs">
+                          {t("production.noOrders")}
                         </TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                    ) : (
+                      filteredOrders.map((order: any) => {
+                        const statusConfig = getStatusConfig(order.status);
+                        const StatusIcon = statusConfig.icon;
+                        const progress = getProgressPercentage(order);
+                        const stage = (order.production_stage || "film") as StageKey;
+
+                        return (
+                          <TableRow key={order.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
+                            <TableCell className="font-black text-xs text-blue-700 dark:text-blue-400">
+                              {order.production_order_number}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500 font-mono">
+                              {order.order_number}
+                            </TableCell>
+                            <TableCell className="font-extrabold text-xs text-gray-900 dark:text-white">
+                              {ln(order.customer_name_ar, order.customer_name)}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <span className="font-bold block">
+                                {ln(order.item_name_ar, order.item_name) || order.size_caption}
+                              </span>
+                              {order.size_caption && order.item_name && (
+                                <span className="text-[11px] text-gray-400">{order.size_caption}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center text-xs">
+                              <span className="font-black block">{order.quantity_kg} كجم</span>
+                              <span className="text-[10px] text-gray-400">
+                                نهائي: {order.final_quantity_kg || order.quantity_kg}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="w-20 mx-auto space-y-1">
+                                <Progress value={progress} className="h-1.5" />
+                                <span className="text-[10px] text-gray-400 block font-bold">{progress}%</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={`${statusConfig.bg} ${statusConfig.color} border-0 text-[10px] font-bold`}>
+                                <StatusIcon className="h-3 w-3 ml-1" />
+                                {statusConfig.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={`${STAGE_BADGE_CLASSES[stage]} text-[10px] font-bold`}>
+                                {t(`production.stages.${stage}`)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex gap-1 justify-center">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setShowStats(showStats === order.id ? null : order.id)}
+                                  className="h-8 w-8 p-0"
+                                  title={t("production.viewDetails")}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setPrintingProductionOrder(order)}
+                                  className="h-8 w-8 p-0 text-blue-600"
+                                  title={t("production.print")}
+                                >
+                                  <Printer className="h-4 w-4" />
+                                </Button>
+                                {(order.production_stage === "done" || order.status === "completed") && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setBatchLabelOrderId(order.id)}
+                                    className="h-8 w-8 p-0 text-emerald-600"
+                                    title={t("batch.printLabelTitle")}
+                                  >
+                                    <Tag className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
         </TabsContent>
 
-        <TabsContent value="stages" className="space-y-6 mt-0">
+        <TabsContent value="stages" className="space-y-5 mt-0">
           <ProductionStagesTab />
         </TabsContent>
       </Tabs>
 
-      {/* Stats Panel */}
+      {/* لوحة التفاصيل السريعة */}
       {showStats && (
         <div className="animate-in slide-in-from-top-2 duration-200">
           <ProductionOrderStatsCard productionOrderId={showStats} />
         </div>
       )}
 
-      {/* Print Template */}
+      {/* نافذة طباعة تقرير أمر الإنتاج A4 */}
       {printingProductionOrder && (
         <PrintProductionOrderWrapper
           productionOrder={printingProductionOrder}
@@ -615,7 +586,7 @@ export default function ProductionOrdersManagement() {
         />
       )}
 
-      {/* Batch Label Print Dialog */}
+      {/* نافذة ملصق الدفعة */}
       <BatchLabelDialog
         productionOrderId={batchLabelOrderId}
         onClose={() => setBatchLabelOrderId(null)}
@@ -801,7 +772,7 @@ function PrintProductionOrderWrapper({
               </div>
             </div>
           </div>
-          
+
           <div class="content">
             <div class="info-section">
               <div class="info-box">
@@ -942,9 +913,9 @@ function PrintProductionOrderWrapper({
   if (rollsLoading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-          <p>{t("production.loadingData")}</p>
+        <div className="bg-white rounded-2xl p-6 text-center shadow-lg">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-blue-600" />
+          <p className="text-xs font-bold text-gray-700">{t("production.loadingData")}</p>
         </div>
       </div>
     );
@@ -1011,51 +982,45 @@ function ProductionStagesTab() {
   }, [summary]);
 
   return (
-    <div className="space-y-6">
-      {/* Stage summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="space-y-5">
+      {/* بطاقات ملخص المراحل */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {STAGE_KEYS.map((stage) => {
           const Icon = STAGE_ICONS[stage];
           const data = summaryByStage[stage];
           return (
-            <Card
+            <div
               key={stage}
-              className={`border-r-4 ${STAGE_CARD_BORDERS[stage]}`}
+              className={`bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs border-r-4 ${STAGE_CARD_BORDERS[stage]}`}
               data-testid={`card-stage-${stage}`}
             >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">
-                      {t(`production.stages.${stage}`)}
-                    </p>
-                    <p className="text-3xl font-bold">
-                      {summaryLoading ? "…" : data.count}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("production.productionStages.remainingKg", {
-                        kg: formatKg(data.remaining_kg),
-                      })}
-                    </p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                    <Icon className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-gray-500">
+                  {t(`production.stages.${stage}`)}
+                </span>
+                <Icon className="h-4 w-4 text-gray-400" />
+              </div>
+              <p className="text-2xl font-black text-gray-900 dark:text-white">
+                {summaryLoading ? "…" : data.count}
+              </p>
+              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                {t("production.productionStages.remainingKg", {
+                  kg: formatKg(data.remaining_kg),
+                })}
+              </p>
+            </div>
           );
         })}
       </div>
 
-      {/* Sub-filter tabs */}
+      {/* فلاتر المرحلة */}
       <Tabs
         value={selectedStage}
         onValueChange={(v) => setSelectedStage(v as "all" | StageKey)}
         className="space-y-4"
       >
-        <TabsList className="grid grid-cols-5 w-full md:w-auto md:inline-grid">
-          <TabsTrigger value="all" data-testid="stage-filter-all">
+        <TabsList className="grid grid-cols-5 w-full md:w-auto h-10 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+          <TabsTrigger value="all" data-testid="stage-filter-all" className="text-xs font-bold rounded-lg">
             {t("production.productionStages.all")}
           </TabsTrigger>
           {STAGE_KEYS.map((s) => (
@@ -1063,6 +1028,7 @@ function ProductionStagesTab() {
               key={s}
               value={s}
               data-testid={`stage-filter-${s}`}
+              className="text-xs font-bold rounded-lg"
             >
               {t(`production.stages.${s}`)}
             </TabsTrigger>
@@ -1070,120 +1036,85 @@ function ProductionStagesTab() {
         </TabsList>
 
         <TabsContent value={selectedStage} className="mt-0">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                {t("production.productionOrders")}
-                <Badge variant="secondary">{ordersData?.length ?? 0}</Badge>
-              </CardTitle>
+          <Card className="rounded-2xl border shadow-xs overflow-hidden">
+            <CardHeader className="p-4 border-b bg-gray-50/50 dark:bg-gray-800/40">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-black flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-600" />
+                  {t("production.productionOrders")}
+                </CardTitle>
+                <Badge variant="secondary" className="font-bold">{ordersData?.length ?? 0} أمر</Badge>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead>
-                        {t("production.table.productionOrderNumber")}
-                      </TableHead>
-                      <TableHead>{t("production.table.orderNumber")}</TableHead>
-                      <TableHead>{t("production.table.customer")}</TableHead>
-                      <TableHead>{t("production.table.product")}</TableHead>
-                      <TableHead className="text-center">
-                        {t("production.productionStages.currentStage")}
-                      </TableHead>
-                      <TableHead className="text-center">
-                        {t("production.productionStages.requestedQuantity")}
-                      </TableHead>
-                      <TableHead className="text-center">
-                        {t("production.productionStages.producedQuantity")}
-                      </TableHead>
-                      <TableHead className="text-center">
-                        {t("production.productionStages.remainingInStage")}
-                      </TableHead>
-                      <TableHead className="text-center">
-                        {t("production.productionStages.overallProgress")}
-                      </TableHead>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                      <TableHead className="font-black text-xs">{t("production.table.productionOrderNumber")}</TableHead>
+                      <TableHead className="font-black text-xs">{t("production.table.orderNumber")}</TableHead>
+                      <TableHead className="font-black text-xs">{t("production.table.customer")}</TableHead>
+                      <TableHead className="font-black text-xs">{t("production.table.product")}</TableHead>
+                      <TableHead className="font-black text-xs text-center">{t("production.productionStages.currentStage")}</TableHead>
+                      <TableHead className="font-black text-xs text-center">{t("production.productionStages.requestedQuantity")}</TableHead>
+                      <TableHead className="font-black text-xs text-center">{t("production.productionStages.producedQuantity")}</TableHead>
+                      <TableHead className="font-black text-xs text-center">{t("production.productionStages.remainingInStage")}</TableHead>
+                      <TableHead className="font-black text-xs text-center">{t("production.productionStages.overallProgress")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {ordersLoading ? (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center py-12">
-                          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                         </TableCell>
                       </TableRow>
                     ) : !ordersData || ordersData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
-                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                            <Package className="h-12 w-12 opacity-50" />
-                            <p>
-                              {t(
-                                "production.productionStages.noOrdersInStage",
-                              )}
-                            </p>
-                          </div>
+                        <TableCell colSpan={9} className="text-center py-12 text-gray-400 text-xs">
+                          {t("production.productionStages.noOrdersInStage")}
                         </TableCell>
                       </TableRow>
                     ) : (
                       ordersData.map((order: any) => {
-                        const stage = (order.production_stage ||
-                          "film") as StageKey;
-                        const requested = parseFloat(
-                          order.final_quantity_kg ||
-                            order.quantity_kg ||
-                            "0",
-                        );
-                        const produced = parseFloat(
-                          order.produced_quantity_kg || "0",
-                        );
+                        const stage = (order.production_stage || "film") as StageKey;
+                        const requested = parseFloat(order.final_quantity_kg || order.quantity_kg || "0");
+                        const produced = parseFloat(order.produced_quantity_kg || "0");
                         const remaining = Math.max(0, requested - produced);
-                        const progress =
-                          requested > 0
-                            ? Math.min(
-                                100,
-                                Math.round((produced / requested) * 100),
-                              )
-                            : 0;
+                        const progress = requested > 0 ? Math.min(100, Math.round((produced / requested) * 100)) : 0;
+
                         return (
-                          <TableRow key={order.id}>
-                            <TableCell className="font-mono font-medium">
+                          <TableRow key={order.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
+                            <TableCell className="font-black text-xs text-blue-700 dark:text-blue-400">
                               {order.production_order_number}
                             </TableCell>
-                            <TableCell className="font-mono text-muted-foreground">
+                            <TableCell className="font-mono text-xs text-gray-500">
                               {order.order_number}
                             </TableCell>
-                            <TableCell>
-                              {ln(
-                                order.customer_name_ar,
-                                order.customer_name,
-                              )}
+                            <TableCell className="font-extrabold text-xs text-gray-900 dark:text-white">
+                              {ln(order.customer_name_ar, order.customer_name)}
                             </TableCell>
-                            <TableCell>{order.size_caption}</TableCell>
+                            <TableCell className="text-xs font-bold">
+                              {order.size_caption || ln(order.item_name_ar, order.item_name)}
+                            </TableCell>
                             <TableCell className="text-center">
-                              <Badge className={STAGE_BADGE_CLASSES[stage]}>
+                              <Badge className={`${STAGE_BADGE_CLASSES[stage]} text-[10px] font-bold`}>
                                 {t(`production.stages.${stage}`)}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center font-semibold">
-                              {formatKg(requested)} {t("production.kg")}
+                            <TableCell className="text-center font-bold text-xs">
+                              {formatKg(requested)} كجم
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                              {formatKg(produced)} كجم
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-xs text-amber-600 dark:text-amber-400">
+                              {formatKg(remaining)} كجم
                             </TableCell>
                             <TableCell className="text-center">
-                              {formatKg(produced)} {t("production.kg")}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {formatKg(remaining)} {t("production.kg")}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="w-24 mx-auto space-y-1">
-                                <Progress
-                                  value={progress}
-                                  className="h-2"
-                                />
-                                <div className="text-xs text-muted-foreground">
-                                  {progress}%
-                                </div>
+                              <div className="w-20 mx-auto space-y-1">
+                                <Progress value={progress} className="h-1.5" />
+                                <span className="text-[10px] text-gray-400 font-bold block">{progress}%</span>
                               </div>
                             </TableCell>
                           </TableRow>

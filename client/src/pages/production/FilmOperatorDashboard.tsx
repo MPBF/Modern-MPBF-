@@ -240,57 +240,97 @@ export default function FilmOperatorDashboard({
                 {t("operators.film.noActiveOrdersDesc")}
               </p>
             </Card>
-          ) : !selectedGroup ? (
-            <div className="space-y-3">
-              <OrdersListHeader testId="film" />
-              <div className="grid grid-cols-1 gap-3">
-                {orderGroups.map((group) => {
-                  const first = group.items[0];
-                  const totalRequired = group.items.reduce(
-                    (sum, o) => sum + Number(o.final_quantity_kg || o.quantity_kg || 0),
-                    0,
-                  );
-                  const totalProduced = group.items.reduce(
-                    (sum, o) => sum + Number(o.total_weight_produced || 0),
-                    0,
-                  );
-                  const groupProgress =
-                    totalRequired > 0 ? (totalProduced / totalRequired) * 100 : 0;
-                  return (
-                    <OrderGroupCard
-                      key={group.orderNumber}
-                      orderNumber={group.orderNumber}
-                      customerName={
-                        ln(first.customer_name_ar, first.customer_name_en) ||
-                        first.customer_name
-                      }
-                      salesRepName={
-                        ln(first.sales_rep_name_ar, first.sales_rep_name_en) ||
-                        first.sales_rep_name
-                      }
-                      orderDate={first.order_date}
-                      productionOrderCount={group.items.length}
-                      progressPercent={groupProgress}
-                      metrics={[
-                        {
-                          label: "المطلوب",
-                          value: `${formatNumberAr(totalRequired)} كجم`,
-                        },
-                        {
-                          label: "المنتج",
-                          value: `${formatNumberAr(totalProduced)} كجم`,
-                        },
-                      ]}
-                      accent="blue"
-                      icon={<Package className="h-4 w-4 ml-1" />}
-                      onSelect={() => setSelectedOrderNumber(group.orderNumber)}
-                      testId={`film-${group.orderNumber}`}
-                    />
-                  );
-                })}
+    ) : !selectedGroup ? (
+      <div className="space-y-3">
+        <OrdersListHeader testId="film" />
+        <div className="grid grid-cols-1 gap-3">
+          {orderGroups.map((group) => {
+            const first = group.items[0];
+            const totalRequired = group.items.reduce(
+              (sum, o) => sum + Number(o.final_quantity_kg || o.quantity_kg || 0),
+              0,
+            );
+            const totalProduced = group.items.reduce(
+              (sum, o) => sum + Number(o.total_weight_produced || 0),
+              0,
+            );
+            const groupProgress =
+              totalRequired > 0 ? (totalProduced / totalRequired) * 100 : 0;
+
+            // استخراج أسماء المنتجات الموجودة في هذا الطلب بدون تكرار
+            const uniqueProducts = Array.from(
+              new Set(
+                group.items.map(
+                  (item) =>
+                    ln(item.product_name_ar, item.product_name_en) ||
+                    item.product_name
+                )
+              )
+            ).filter(Boolean);
+
+            return (
+              <div
+                key={group.orderNumber}
+                className="bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:border-blue-500 transition-all cursor-pointer space-y-3"
+                onClick={() => setSelectedOrderNumber(group.orderNumber)}
+              >
+                {/* ترويسة الطلب: رقم الطلب + اسم العميل + زر الفتح */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-black px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">
+                        طلب: #{group.orderNumber}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        ({group.items.length} أوامر إنتاج)
+                      </span>
+                    </div>
+                    <h3 className="text-base font-extrabold text-blue-700 dark:text-blue-400 leading-tight">
+                      {ln(first.customer_name_ar, first.customer_name_en) ||
+                        first.customer_name}
+                    </h3>
+                  </div>
+
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-xl">
+                    فتح الطلب ◀
+                  </span>
+                </div>
+
+                {/* قائمة أسماء المنتجات التابعة لأوامر الإنتاج */}
+                <div className="space-y-1.5 bg-slate-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-gray-800">
+                  <span className="text-[11px] font-bold text-gray-400 block">
+                    المنتجات المطلوبة:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {uniqueProducts.map((prodName, idx) => (
+                      <span
+                        key={idx}
+                        className="text-xs font-black text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 shadow-2xs"
+                      >
+                        {prodName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* شريط الإنجاز والمقاييس */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between items-center text-xs font-semibold">
+                    <span className="text-gray-500">
+                      الإنجاز الكلي ({Math.round(groupProgress)}%)
+                    </span>
+                    <span className="text-gray-700 dark:text-gray-300 font-bold">
+                      {formatNumberAr(totalProduced)} / {formatNumberAr(totalRequired)} كجم
+                    </span>
+                  </div>
+                  <Progress value={groupProgress} className="h-2 rounded-full" />
+                </div>
               </div>
-            </div>
-          ) : (
+            );
+          })}
+        </div>
+      </div>
+    ) : (
             <div className="space-y-3">
               <BackToOrdersBar
                 orderNumber={selectedGroup.orderNumber}

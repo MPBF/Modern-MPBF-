@@ -1,11 +1,12 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { History, Pencil, Search, RotateCw, AlertTriangle } from "lucide-react";
+import { History, Pencil, Search, RotateCw, AlertTriangle, Layers, User, Package, Calendar } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { Card, CardContent } from "../../components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -106,12 +107,10 @@ interface Props {
 }
 
 const STAGE_VARIANTS: Record<string, string> = {
-  film: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  printing:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  cutting:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  film: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  printing: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
+  cutting: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  done: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
 };
 
 export default function RollManagementDashboard({ hideLayout }: Props) {
@@ -128,8 +127,6 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
   const [editRoll, setEditRoll] = useState<ManagedRoll | null>(null);
   const [historyRoll, setHistoryRoll] = useState<ManagedRoll | null>(null);
 
-  // Reset the visible window whenever the filters change so a narrower search
-  // doesn't keep an over-large limit from a previous query.
   useEffect(() => {
     setLimit(PAGE_SIZE);
   }, [stageFilter, search]);
@@ -156,8 +153,6 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
     },
   });
 
-  // The server returns exactly `limit` rows when more may exist, so offer a
-  // "load more" affordance until a page comes back short.
   const hasMore = rolls.length >= limit;
 
   const { data: machines = [] } = useQuery<MachineLite[]>({
@@ -250,12 +245,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
       case "cutting":
         return r.cut_completed_at || r.printed_at || r.created_at;
       case "done":
-        return (
-          r.completed_at ||
-          r.cut_completed_at ||
-          r.printed_at ||
-          r.created_at
-        );
+        return r.completed_at || r.cut_completed_at || r.printed_at || r.created_at;
       default:
         return r.created_at;
     }
@@ -277,27 +267,29 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
   };
 
   const content = (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+    <div className="space-y-4" dir="rtl">
+      {/* شريط البحث والفلترة السريع */}
+      <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs flex flex-col sm:flex-row gap-3 items-center">
         <form
-          className="relative flex-1"
+          className="relative flex-1 w-full"
           onSubmit={(e) => {
             e.preventDefault();
             setSearch(searchInput);
           }}
         >
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder={t("rollMgmt.search")}
-            className="pr-9"
+            placeholder="ابحث برقم الرول، العميل، أمر الإنتاج، أو المنتج..."
+            className="pr-9 h-10 text-xs font-bold rounded-xl"
             data-testid="input-roll-search"
           />
         </form>
+
         <Select value={stageFilter} onValueChange={setStageFilter}>
           <SelectTrigger
-            className="w-full sm:w-48"
+            className="w-full sm:w-48 h-10 text-xs font-bold rounded-xl"
             data-testid="select-stage-filter"
           >
             <SelectValue />
@@ -305,136 +297,216 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
           <SelectContent>
             <SelectItem value="all">{t("rollMgmt.allStages")}</SelectItem>
             <SelectItem value="film">{t("rollMgmt.stages.film")}</SelectItem>
-            <SelectItem value="printing">
-              {t("rollMgmt.stages.printing")}
-            </SelectItem>
-            <SelectItem value="cutting">
-              {t("rollMgmt.stages.cutting")}
-            </SelectItem>
+            <SelectItem value="printing">{t("rollMgmt.stages.printing")}</SelectItem>
+            <SelectItem value="cutting">{t("rollMgmt.stages.cutting")}</SelectItem>
             <SelectItem value="done">{t("rollMgmt.stages.done")}</SelectItem>
           </SelectContent>
         </Select>
+
         <Button
           variant="outline"
           size="icon"
           onClick={() => refetch()}
           disabled={isFetching}
+          className="h-10 w-10 rounded-xl flex-shrink-0"
           data-testid="button-refresh-rolls"
+          title="تحديث"
         >
           <RotateCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
-      <div className="rounded-md border overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-right">
-                {t("rollMgmt.rollNumber")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.product")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.customer")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.stage")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.machine")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.producedBy")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.weight")}
-              </TableHead>
-              <TableHead className="text-right">
-                {t("rollMgmt.createdAt")}
-              </TableHead>
-              <TableHead className="text-center">
-                {t("rollMgmt.actions")}
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={9}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : rolls.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={9}
-                  className="text-center text-muted-foreground py-10"
-                >
-                  {t("rollMgmt.noRolls")}
-                </TableCell>
-              </TableRow>
-            ) : (
-              rolls.map((r) => (
-                <TableRow key={r.id} data-testid={`row-roll-${r.id}`}>
-                  <TableCell className="font-mono font-medium">
-                    {r.roll_number || "—"}
-                  </TableCell>
-                  <TableCell>{productName(r)}</TableCell>
-                  <TableCell>{customerName(r)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={`${STAGE_VARIANTS[r.stage] || ""} border-0`}
-                      variant="secondary"
-                    >
-                      {t(`rollMgmt.stages.${r.stage}`, r.stage)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{stageMachineName(r)}</TableCell>
-                  <TableCell>{producerName(r)}</TableCell>
-                  <TableCell className="tabular-nums">
-                    {Number(r.weight_kg || 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+      {/* العرض في الجوال (Card Mode) */}
+      <div className="block lg:hidden space-y-3">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-4 rounded-2xl border shadow-xs">
+              <Skeleton className="h-20 w-full" />
+            </Card>
+          ))
+        ) : rolls.length === 0 ? (
+          <Card className="p-8 text-center rounded-2xl border-dashed">
+            <Package className="h-10 w-10 text-gray-400 mx-auto mb-2 opacity-40" />
+            <p className="text-xs font-bold text-gray-500">{t("rollMgmt.noRolls")}</p>
+          </Card>
+        ) : (
+          rolls.map((r) => (
+            <Card key={r.id} className="rounded-2xl border shadow-xs p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      {r.roll_number || "—"}
+                    </span>
+                    <span className="text-[11px] font-semibold text-gray-400">
+                      {r.production_order_number}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-extrabold text-gray-900 dark:text-white leading-tight">
+                    {productName(r)}
+                  </h4>
+                  <p className="text-xs font-bold text-blue-700 dark:text-blue-400 mt-0.5">
+                    {customerName(r)}
+                  </p>
+                </div>
+
+                <Badge className={`${STAGE_VARIANTS[r.stage] || ""} border-0 text-[10px] font-bold`}>
+                  {t(`rollMgmt.stages.${r.stage}`, r.stage)}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-800/40 p-2.5 rounded-xl text-xs">
+                <div>
+                  <span className="text-gray-400 block text-[10px]">الماكينة</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">
+                    {stageMachineName(r)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block text-[10px]">الوزن الصافي</span>
+                  <span className="font-black text-emerald-600 dark:text-emerald-400">
+                    {Number(r.weight_kg || 0).toFixed(2)} كجم
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block text-[10px]">المنفذ</span>
+                  <span className="font-bold text-gray-600 dark:text-gray-300 truncate block">
+                    {producerName(r)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block text-[10px]">التاريخ</span>
+                  <span className="font-medium text-gray-500 text-[10px] block">
                     {formatDate(stageDate(r))}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditRoll(r)}
-                        data-testid={`button-edit-roll-${r.id}`}
-                        title={t("rollMgmt.edit")}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setHistoryRoll(r)}
-                        data-testid={`button-history-roll-${r.id}`}
-                        title={t("rollMgmt.history")}
-                      >
-                        <History className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1 border-t">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditRoll(r)}
+                  className="h-8 text-xs font-bold gap-1 rounded-xl"
+                  data-testid={`button-edit-roll-${r.id}`}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  تعديل
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setHistoryRoll(r)}
+                  className="h-8 text-xs font-bold gap-1 rounded-xl text-purple-700 border-purple-200"
+                  data-testid={`button-history-roll-${r.id}`}
+                >
+                  <History className="h-3.5 w-3.5" />
+                  السجل
+                </Button>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* العرض في الكمبيوتر (Table Mode) */}
+      <div className="hidden lg:block">
+        <Card className="rounded-2xl border shadow-xs overflow-hidden">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                  <TableHead className="font-black text-xs">{t("rollMgmt.rollNumber")}</TableHead>
+                  <TableHead className="font-black text-xs">{t("rollMgmt.product")}</TableHead>
+                  <TableHead className="font-black text-xs">{t("rollMgmt.customer")}</TableHead>
+                  <TableHead className="font-black text-xs text-center">{t("rollMgmt.stage")}</TableHead>
+                  <TableHead className="font-black text-xs">{t("rollMgmt.machine")}</TableHead>
+                  <TableHead className="font-black text-xs">{t("rollMgmt.producedBy")}</TableHead>
+                  <TableHead className="font-black text-xs text-center">{t("rollMgmt.weight")}</TableHead>
+                  <TableHead className="font-black text-xs">{t("rollMgmt.createdAt")}</TableHead>
+                  <TableHead className="font-black text-xs text-center">{t("rollMgmt.actions")}</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={9}>
+                        <Skeleton className="h-6 w-full" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : rolls.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-gray-400 py-12 text-xs">
+                      {t("rollMgmt.noRolls")}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rolls.map((r) => (
+                    <TableRow key={r.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40" data-testid={`row-roll-${r.id}`}>
+                      <TableCell className="font-black text-xs text-blue-700 dark:text-blue-400">
+                        {r.roll_number || "—"}
+                      </TableCell>
+                      <TableCell className="font-bold text-xs text-gray-900 dark:text-white">
+                        {productName(r)}
+                      </TableCell>
+                      <TableCell className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        {customerName(r)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className={`${STAGE_VARIANTS[r.stage] || ""} border-0 text-[10px] font-bold`} variant="secondary">
+                          {t(`rollMgmt.stages.${r.stage}`, r.stage)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-bold">{stageMachineName(r)}</TableCell>
+                      <TableCell className="text-xs text-gray-500 font-medium">{producerName(r)}</TableCell>
+                      <TableCell className="text-center font-black text-xs text-emerald-600 dark:text-emerald-400">
+                        {Number(r.weight_kg || 0).toFixed(2)} كجم
+                      </TableCell>
+                      <TableCell className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
+                        {formatDate(stageDate(r))}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditRoll(r)}
+                            className="h-8 w-8 p-0"
+                            data-testid={`button-edit-roll-${r.id}`}
+                            title={t("rollMgmt.edit")}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setHistoryRoll(r)}
+                            className="h-8 w-8 p-0 text-purple-600"
+                            data-testid={`button-history-roll-${r.id}`}
+                            title={t("rollMgmt.history")}
+                          >
+                            <History className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
 
       {!isLoading && hasMore && (
-        <div className="flex justify-center">
+        <div className="flex justify-center pt-2">
           <Button
             variant="outline"
             onClick={() => setLimit((l) => l + PAGE_SIZE)}
             disabled={isFetching}
+            className="rounded-xl text-xs font-bold h-9 px-6"
             data-testid="button-load-more-rolls"
           >
             {t("rollMgmt.loadMore")}
@@ -442,6 +514,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
         </div>
       )}
 
+      {/* نافذة التعديل */}
       {editRoll && (
         <EditRollDialog
           roll={editRoll}
@@ -458,6 +531,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
         />
       )}
 
+      {/* نافذة سجل التعديلات التاريخي */}
       {historyRoll && (
         <HistoryDialog
           roll={historyRoll}
@@ -485,9 +559,7 @@ function EditRollDialog({
   onSaved,
 }: {
   roll: ManagedRoll;
-  machineOptionsFor: (
-    keywords: string[],
-  ) => { value: string; label: string }[];
+  machineOptionsFor: (keywords: string[]) => { value: string; label: string }[];
   productOptions: { value: string; label: string }[];
   onClose: () => void;
   onSaved: () => void;
@@ -524,9 +596,7 @@ function EditRollDialog({
         payload.production_order_id = Number(productionOrderId);
       if (note.trim()) payload.note = note.trim();
 
-      if (
-        Object.keys(payload).filter((k) => k !== "note").length === 0
-      ) {
+      if (Object.keys(payload).filter((k) => k !== "note").length === 0) {
         throw new Error(t("rollMgmt.noChanges"));
       }
 
@@ -558,17 +628,19 @@ function EditRollDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg" dir="rtl">
+      <DialogContent className="max-w-lg rounded-2xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-base font-black">
             {t("rollMgmt.editTitle")} — {roll.roll_number}
           </DialogTitle>
-          <DialogDescription>{t("rollMgmt.editDesc")}</DialogDescription>
+          <DialogDescription className="text-xs">
+            {t("rollMgmt.editDesc")}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
+        <div className="space-y-3.5 py-2">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-200">
               {t("rollMgmt.filmMachine")}
             </label>
             <SearchableSelect
@@ -580,8 +652,8 @@ function EditRollDialog({
           </div>
 
           {showPrinting && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-200">
                 {t("rollMgmt.printingMachine")}
               </label>
               <SearchableSelect
@@ -594,8 +666,8 @@ function EditRollDialog({
           )}
 
           {showCutting && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-200">
                 {t("rollMgmt.cuttingMachine")}
               </label>
               <SearchableSelect
@@ -607,8 +679,8 @@ function EditRollDialog({
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-200">
               {t("rollMgmt.productProductionOrder")}
             </label>
             <SearchableSelect
@@ -618,34 +690,39 @@ function EditRollDialog({
               placeholder={t("rollMgmt.selectProduct")}
             />
             {productChanged && (
-              <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 rounded p-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2.5 mt-1 border border-amber-200">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
                 <span>{t("rollMgmt.moveWarning")}</span>
               </div>
             )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t("rollMgmt.note")}</label>
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-200">
+              {t("rollMgmt.note")}
+            </label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={t("rollMgmt.notePlaceholder")}
               rows={2}
+              className="rounded-xl text-xs"
               data-testid="input-edit-note"
             />
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <Button variant="outline" onClick={onClose} className="rounded-xl text-xs font-bold">
             {t("rollMgmt.cancel")}
           </Button>
           <Button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
+            className="rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
             data-testid="button-save-roll-edit"
           >
+            {mutation.isPending && <RotateCw className="h-3.5 w-3.5 animate-spin ml-1" />}
             {t("rollMgmt.save")}
           </Button>
         </DialogFooter>
@@ -676,60 +753,57 @@ function HistoryDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl" dir="rtl">
+      <DialogContent className="max-w-2xl rounded-2xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-base font-black flex items-center gap-2">
+            <History className="h-4 w-4 text-purple-600" />
             {t("rollMgmt.historyTitle")} — {roll.roll_number}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="max-h-[60vh] overflow-y-auto pr-1">
           {isLoading ? (
             <div className="space-y-2 py-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
+                <Skeleton key={i} className="h-12 w-full rounded-xl" />
               ))}
             </div>
           ) : logs.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">
+            <p className="text-center text-gray-400 py-10 text-xs font-bold">
               {t("rollMgmt.historyEmpty")}
             </p>
           ) : (
-            <div className="space-y-3 py-2">
+            <div className="space-y-2.5 py-2">
               {logs.map((log) => (
                 <div
                   key={log.id}
-                  className="rounded-md border p-3 text-sm space-y-1"
+                  className="rounded-xl border p-3 text-xs space-y-1.5 bg-gray-50/50 dark:bg-gray-800/40"
                   data-testid={`log-entry-${log.id}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">
+                    <span className="font-black text-gray-900 dark:text-white">
                       {t(`rollMgmt.fields.${log.field}`, log.field)}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[10px] text-gray-400 font-semibold">
                       {formatDate(log.created_at)}
                     </span>
                   </div>
-                  <div className="text-muted-foreground">
+
+                  <div className="text-gray-500 font-medium">
                     {t("rollMgmt.from")}:{" "}
-                    <span className="text-foreground">
+                    <span className="text-rose-600 line-through">
                       {log.old_label || log.old_value || t("rollMgmt.none")}
                     </span>{" "}
-                    ←{" "}
-                    {t("rollMgmt.to")}:{" "}
-                    <span className="text-foreground font-medium">
+                    ← {t("rollMgmt.to")}:{" "}
+                    <span className="text-emerald-600 font-bold">
                       {log.new_label || log.new_value || t("rollMgmt.none")}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t("rollMgmt.changedBy")}:{" "}
-                    {log.changed_by_name || log.changed_by_username || "—"}
+
+                  <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t">
+                    <span>بواسطة: {log.changed_by_name || log.changed_by_username || "—"}</span>
+                    {log.note && <span className="italic text-gray-500">“{log.note}”</span>}
                   </div>
-                  {log.note && (
-                    <div className="text-xs italic text-muted-foreground">
-                      “{log.note}”
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -737,7 +811,7 @@ function HistoryDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} className="rounded-xl text-xs font-bold">
             {t("rollMgmt.cancel")}
           </Button>
         </DialogFooter>

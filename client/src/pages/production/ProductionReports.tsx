@@ -1,17 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import {
-  FileDown,
   Search,
   RotateCcw,
   TrendingUp,
   Package,
-  Activity,
-  Clock,
   AlertTriangle,
-  CheckCircle,
   FileSpreadsheet,
   FileText,
+  Filter,
+  Layers,
+  Factory,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -39,7 +39,6 @@ import { Button } from "../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
@@ -70,17 +69,18 @@ import {
 import { useToast } from "../../hooks/use-toast";
 
 const COLORS = [
-  "#10b981",
-  "#3b82f6",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
+  "#2563eb",
+  "#16a34a",
+  "#d97706",
+  "#dc2626",
+  "#7c3aed",
+  "#db2777",
 ];
 
 export default function ProductionReports() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     dateFrom: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     dateTo: format(new Date(), "yyyy-MM-dd"),
@@ -115,12 +115,10 @@ export default function ProductionReports() {
     enabled: !!activeFilters.dateFrom && !!activeFilters.dateTo,
   });
 
-  const { data: machinePerformance, isLoading: machineLoading } = useQuery<any>(
-    {
-      queryKey: ["/api/reports/machine-performance", activeFilters],
-      enabled: !!activeFilters.dateFrom && !!activeFilters.dateTo,
-    },
-  );
+  const { data: machinePerformance } = useQuery<any>({
+    queryKey: ["/api/reports/machine-performance", activeFilters],
+    enabled: !!activeFilters.dateFrom && !!activeFilters.dateTo,
+  });
 
   const { data: operatorPerformance, isLoading: operatorLoading } =
     useQuery<any>({
@@ -128,19 +126,7 @@ export default function ProductionReports() {
       enabled: !!activeFilters.dateFrom && !!activeFilters.dateTo,
     });
 
-  const { data: customers } = useQuery<any>({
-    queryKey: ["/api/customers", { all: true }],
-    queryFn: async () => {
-      const response = await fetch("/api/customers?all=true");
-      if (!response.ok) throw new Error("Failed to fetch customers");
-      return response.json();
-    },
-  });
-  const { data: products } = useQuery<any>({
-    queryKey: ["/api/customer-products"],
-  });
   const { data: machines } = useQuery<any>({ queryKey: ["/api/machines"] });
-  const { data: users } = useQuery<any>({ queryKey: ["/api/users"] });
   const { data: sections } = useQuery<any>({ queryKey: ["/api/sections"] });
 
   const handleSearch = () => {
@@ -198,7 +184,6 @@ export default function ProductionReports() {
         description: t("production.reports.exportSuccessDesc"),
       });
     } catch (error: any) {
-      console.error("Export error:", error);
       toast({
         title: t("production.reports.exportError"),
         description: error.message || t("production.reports.exportErrorDesc"),
@@ -211,330 +196,313 @@ export default function ProductionReports() {
 
   const getStatusColor = (value: number, metric: string) => {
     if (metric === "waste") {
-      if (value < 3) return "text-green-600 bg-green-50";
-      if (value < 5) return "text-yellow-600 bg-yellow-50";
-      return "text-red-600 bg-red-50";
+      if (value < 3) return "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200";
+      if (value < 5) return "text-amber-700 bg-amber-50 dark:bg-amber-950/40 border-amber-200";
+      return "text-rose-700 bg-rose-50 dark:bg-rose-950/40 border-rose-200";
     }
-    if (value >= 90) return "text-green-600 bg-green-50";
-    if (value >= 70) return "text-yellow-600 bg-yellow-50";
-    return "text-red-600 bg-red-50";
+    if (value >= 90) return "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200";
+    if (value >= 70) return "text-amber-700 bg-amber-50 dark:bg-amber-950/40 border-amber-200";
+    return "text-rose-700 bg-rose-50 dark:bg-rose-950/40 border-rose-200";
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6 max-w-7xl">
-      <div className="flex justify-between items-center">
+    <div className="space-y-5" dir="rtl">
+      {/* الترويسة وأزرار التصدير */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-gray-900 p-4 rounded-2xl border shadow-xs">
         <div>
-          <h1 className="text-3xl font-bold" data-testid="text-page-title">
+          <h1 className="text-xl font-black text-gray-950 dark:text-white" data-testid="text-page-title">
             {t("production.reports.title")}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-xs text-gray-500 font-semibold mt-0.5">
             {t("production.reports.description")}
           </p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex items-center gap-2">
           <Button
             onClick={() => exportReport("excel")}
             variant="outline"
             disabled={isExporting === "excel"}
+            className="h-9 px-3.5 text-xs font-bold rounded-xl gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
             data-testid="button-export-excel"
           >
             {isExporting === "excel" ? (
-              <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
+              <RotateCcw className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              <FileSpreadsheet className="h-3.5 w-3.5" />
             )}
             {t("production.reports.exportExcel")}
           </Button>
+
           <Button
             onClick={() => exportReport("pdf")}
             variant="outline"
             disabled={isExporting === "pdf"}
+            className="h-9 px-3.5 text-xs font-bold rounded-xl gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50"
             data-testid="button-export-pdf"
           >
             {isExporting === "pdf" ? (
-              <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
+              <RotateCcw className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <FileText className="mr-2 h-4 w-4" />
+              <FileText className="h-3.5 w-3.5" />
             )}
             {t("production.reports.exportPdf")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("production.reports.filters")}</CardTitle>
-          <CardDescription>
-            {t("production.reports.filtersDescription")}
-          </CardDescription>
+      {/* شريط الفلاتر السريع والقابل للطي */}
+      <Card className="rounded-2xl border shadow-xs overflow-hidden">
+        <CardHeader className="p-3.5 bg-gray-50/60 dark:bg-gray-800/40 border-b flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black flex items-center gap-2">
+            <Filter className="h-4 w-4 text-blue-600" />
+            {t("production.reports.filters")}
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className="h-7 text-xs font-bold"
+          >
+            {showFilters ? "إخفاء الفلاتر" : "عرض الفلاتر الإضافية"}
+          </Button>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="dateFrom">
+
+        <CardContent className="p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="dateFrom" className="text-xs font-bold text-gray-500">
                 {t("production.reports.dateFrom")}
               </Label>
               <Input
                 id="dateFrom"
                 type="date"
                 value={filters.dateFrom}
-                onChange={(e) =>
-                  setFilters({ ...filters, dateFrom: e.target.value })
-                }
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                className="h-9 text-xs font-bold rounded-xl"
                 data-testid="input-date-from"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="dateTo">{t("production.reports.dateTo")}</Label>
+            <div className="space-y-1">
+              <Label htmlFor="dateTo" className="text-xs font-bold text-gray-500">
+                {t("production.reports.dateTo")}
+              </Label>
               <Input
                 id="dateTo"
                 type="date"
                 value={filters.dateTo}
-                onChange={(e) =>
-                  setFilters({ ...filters, dateTo: e.target.value })
-                }
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                className="h-9 text-xs font-bold rounded-xl"
                 data-testid="input-date-to"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="section">{t("production.reports.section")}</Label>
-              <Select
-                value={filters.sectionId || "all"}
-                onValueChange={(value) =>
-                  setFilters({
-                    ...filters,
-                    sectionId: value === "all" ? "" : value,
-                  })
-                }
-              >
-                <SelectTrigger data-testid="select-section">
-                  <SelectValue
-                    placeholder={t("production.reports.selectSection")}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    {t("production.reports.allSections")}
-                  </SelectItem>
-                  {sections?.map((section: any) => (
-                    <SelectItem key={section.id} value={section.id}>
-                      {section.name_ar || section.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {showFilters && (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="section" className="text-xs font-bold text-gray-500">
+                    {t("production.reports.section")}
+                  </Label>
+                  <Select
+                    value={filters.sectionId || "all"}
+                    onValueChange={(value) =>
+                      setFilters({ ...filters, sectionId: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-xs font-bold rounded-xl" data-testid="select-section">
+                      <SelectValue placeholder={t("production.reports.selectSection")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("production.reports.allSections")}</SelectItem>
+                      {sections?.map((section: any) => (
+                        <SelectItem key={section.id} value={section.id}>
+                          {section.name_ar || section.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="machine">{t("production.reports.machine")}</Label>
-              <Select
-                value={filters.machineId || "all"}
-                onValueChange={(value) =>
-                  setFilters({
-                    ...filters,
-                    machineId: value === "all" ? "" : value,
-                  })
-                }
-              >
-                <SelectTrigger data-testid="select-machine">
-                  <SelectValue
-                    placeholder={t("production.reports.selectMachine")}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    {t("production.reports.allMachines")}
-                  </SelectItem>
-                  {machines?.map((machine: any) => (
-                    <SelectItem key={machine.id} value={machine.id}>
-                      {machine.name_ar || machine.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-1">
+                  <Label htmlFor="machine" className="text-xs font-bold text-gray-500">
+                    {t("production.reports.machine")}
+                  </Label>
+                  <Select
+                    value={filters.machineId || "all"}
+                    onValueChange={(value) =>
+                      setFilters({ ...filters, machineId: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-xs font-bold rounded-xl" data-testid="select-machine">
+                      <SelectValue placeholder={t("production.reports.selectMachine")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("production.reports.allMachines")}</SelectItem>
+                      {machines?.map((machine: any) => (
+                        <SelectItem key={machine.id} value={machine.id}>
+                          {machine.name_ar || machine.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="flex gap-2 mt-4">
-            <Button onClick={handleSearch} data-testid="button-search">
-              <Search className="mr-2 h-4 w-4" />
-              {t("production.reports.search")}
+          <div className="flex gap-2 pt-1">
+            <Button
+              onClick={handleSearch}
+              className="h-9 px-4 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-xs"
+              data-testid="button-search"
+            >
+              <Search className="h-3.5 w-3.5" />
+              تطبيق التقرير
             </Button>
             <Button
               onClick={handleReset}
               variant="outline"
+              className="h-9 px-3 text-xs font-bold rounded-xl gap-1.5"
               data-testid="button-reset"
             >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              {t("production.reports.reset")}
+              <RotateCcw className="h-3.5 w-3.5" />
+              إعادة تعيين
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("production.reports.totalOrders")}
-            </CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div
-                className="text-2xl font-bold"
-                data-testid="text-total-orders"
-              >
-                {summary?.data?.totalOrders || 0}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* بطاقات مؤشرات الأداء السريعة (KPIs) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <span className="text-[11px] font-bold text-gray-500 block mb-1">
+            {t("production.reports.totalOrders")}
+          </span>
+          {summaryLoading ? (
+            <Skeleton className="h-7 w-16" />
+          ) : (
+            <p className="text-xl font-black text-gray-900 dark:text-white" data-testid="text-total-orders">
+              {summary?.data?.totalOrders || 0}
+            </p>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("production.reports.activeOrders")}
-            </CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div
-                className="text-2xl font-bold text-blue-600"
-                data-testid="text-active-orders"
-              >
-                {summary?.data?.activeOrders || 0}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <span className="text-[11px] font-bold text-gray-500 block mb-1">
+            {t("production.reports.activeOrders")}
+          </span>
+          {summaryLoading ? (
+            <Skeleton className="h-7 w-16" />
+          ) : (
+            <p className="text-xl font-black text-blue-600 dark:text-blue-400" data-testid="text-active-orders">
+              {summary?.data?.activeOrders || 0}
+            </p>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("production.reports.producedRolls")}
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div
-                className="text-2xl font-bold"
-                data-testid="text-total-rolls"
-              >
-                {summary?.data?.totalRolls || 0}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <span className="text-[11px] font-bold text-gray-500 block mb-1">
+            {t("production.reports.producedRolls")}
+          </span>
+          {summaryLoading ? (
+            <Skeleton className="h-7 w-16" />
+          ) : (
+            <p className="text-xl font-black text-indigo-600 dark:text-indigo-400" data-testid="text-total-rolls">
+              {summary?.data?.totalRolls || 0}
+            </p>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("production.reports.avgProductionTime")}
-            </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold" data-testid="text-avg-time">
-                {summary?.data?.avgProductionTime?.toFixed(1) || "0"}{" "}
-                {t("production.reports.hour")}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <span className="text-[11px] font-bold text-gray-500 block mb-1">
+            {t("production.reports.avgProductionTime")}
+          </span>
+          {summaryLoading ? (
+            <Skeleton className="h-7 w-16" />
+          ) : (
+            <p className="text-xl font-black text-amber-600 dark:text-amber-400" data-testid="text-avg-time">
+              {summary?.data?.avgProductionTime?.toFixed(1) || "0"} <span className="text-xs font-normal">س</span>
+            </p>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("production.reports.wastePercentage")}
-            </CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div
-                className={`text-2xl font-bold rounded px-2 ${getStatusColor(summary?.data?.wastePercentage || 0, "waste")}`}
-                data-testid="text-waste-percentage"
-              >
-                {summary?.data?.wastePercentage?.toFixed(2) || "0"}%
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <span className="text-[11px] font-bold text-gray-500 block mb-1">
+            {t("production.reports.wastePercentage")}
+          </span>
+          {summaryLoading ? (
+            <Skeleton className="h-7 w-16" />
+          ) : (
+            <p
+              className={`text-xl font-black inline-block px-1.5 py-0.5 rounded-lg border ${getStatusColor(
+                summary?.data?.wastePercentage || 0,
+                "waste",
+              )}`}
+              data-testid="text-waste-percentage"
+            >
+              {summary?.data?.wastePercentage?.toFixed(2) || "0"}%
+            </p>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("production.reports.completionRate")}
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div
-                className={`text-2xl font-bold rounded px-2 ${getStatusColor(summary?.data?.completionRate || 0, "completion")}`}
-                data-testid="text-completion-rate"
-              >
-                {summary?.data?.completionRate?.toFixed(1) || "0"}%
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <span className="text-[11px] font-bold text-gray-500 block mb-1">
+            {t("production.reports.completionRate")}
+          </span>
+          {summaryLoading ? (
+            <Skeleton className="h-7 w-16" />
+          ) : (
+            <p
+              className={`text-xl font-black inline-block px-1.5 py-0.5 rounded-lg border ${getStatusColor(
+                summary?.data?.completionRate || 0,
+                "completion",
+              )}`}
+              data-testid="text-completion-rate"
+            >
+              {summary?.data?.completionRate?.toFixed(1) || "0"}%
+            </p>
+          )}
+        </div>
       </div>
 
+      {/* تبويبات التقارير التفصيلية */}
       <Tabs defaultValue="daily" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="daily" data-testid="tab-daily">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl gap-1">
+          <TabsTrigger value="daily" data-testid="tab-daily" className="py-2 text-xs font-bold rounded-xl">
             {t("production.reports.dailyProduction")}
           </TabsTrigger>
-          <TabsTrigger value="products" data-testid="tab-products">
+          <TabsTrigger value="products" data-testid="tab-products" className="py-2 text-xs font-bold rounded-xl">
             {t("production.reports.byProduct")}
           </TabsTrigger>
-          <TabsTrigger value="waste" data-testid="tab-waste">
+          <TabsTrigger value="waste" data-testid="tab-waste" className="py-2 text-xs font-bold rounded-xl">
             {t("production.reports.wasteAnalysis")}
           </TabsTrigger>
-          <TabsTrigger value="machines" data-testid="tab-machines">
+          <TabsTrigger value="machines" data-testid="tab-machines" className="py-2 text-xs font-bold rounded-xl">
             {t("production.reports.machinePerformance")}
           </TabsTrigger>
-          <TabsTrigger value="operators" data-testid="tab-operators">
+          <TabsTrigger value="operators" data-testid="tab-operators" className="py-2 text-xs font-bold rounded-xl">
             {t("production.reports.operatorPerformance")}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="daily" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("production.reports.dailyProduction")}</CardTitle>
-              <CardDescription>
-                {t("production.reports.dailyProductionDesc")}
-              </CardDescription>
+        {/* الإنتاج اليومي */}
+        <TabsContent value="daily" className="space-y-4 mt-2">
+          <Card className="rounded-2xl border shadow-xs">
+            <CardHeader className="p-4 border-b">
+              <CardTitle className="text-sm font-black flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-blue-600" />
+                {t("production.reports.dailyProduction")}
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               {dateLoading ? (
-                <Skeleton className="h-[300px] w-full" />
+                <Skeleton className="h-[280px] w-full" />
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={productionByDate?.data || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
                     <Tooltip />
@@ -543,17 +511,17 @@ export default function ProductionReports() {
                       yAxisId="left"
                       type="monotone"
                       dataKey="rollsCount"
-                      stroke="#3b82f6"
+                      stroke="#2563eb"
                       name={t("production.reports.rollsCount")}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                     />
                     <Line
                       yAxisId="right"
                       type="monotone"
                       dataKey="totalWeight"
-                      stroke="#10b981"
+                      stroke="#16a34a"
                       name={t("production.reports.weightKg")}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -562,110 +530,96 @@ export default function ProductionReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="products" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {t("production.reports.productionByProduct")}
-              </CardTitle>
-              <CardDescription>
-                {t("production.reports.productDistributionDesc")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {productLoading ? (
-                <Skeleton className="h-[300px] w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={productionByProduct?.data || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="productName" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar
-                      dataKey="totalWeight"
-                      fill="#3b82f6"
-                      name={t("production.reports.weightKg")}
-                    />
-                    <Bar
-                      dataKey="rollsCount"
-                      fill="#10b981"
-                      name={t("production.reports.rollsCount")}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+        {/* حسب المنتجات */}
+        <TabsContent value="products" className="space-y-4 mt-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="rounded-2xl border shadow-xs">
+              <CardHeader className="p-4 border-b">
+                <CardTitle className="text-sm font-black flex items-center gap-2">
+                  <Package className="h-4 w-4 text-indigo-600" />
+                  {t("production.reports.productionByProduct")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {productLoading ? (
+                  <Skeleton className="h-[280px] w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={productionByProduct?.data || []}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="productName" tick={{ fontSize: 10 }} />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="totalWeight" fill="#2563eb" name={t("production.reports.weightKg")} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="rollsCount" fill="#16a34a" name={t("production.reports.rollsCount")} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {t("production.reports.productDistribution")}
-              </CardTitle>
-              <CardDescription>
-                {t("production.reports.percentageByProduct")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {productLoading ? (
-                <Skeleton className="h-[300px] w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={productionByProduct?.data || []}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) => entry.productName}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="totalWeight"
-                    >
-                      {(productionByProduct?.data || []).map(
-                        (entry: any, index: number) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ),
-                      )}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+            <Card className="rounded-2xl border shadow-xs">
+              <CardHeader className="p-4 border-b">
+                <CardTitle className="text-sm font-black flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-purple-600" />
+                  {t("production.reports.productDistribution")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {productLoading ? (
+                  <Skeleton className="h-[280px] w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={productionByProduct?.data || []}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry: any) => entry.productName}
+                        outerRadius={85}
+                        dataKey="totalWeight"
+                      >
+                        {(productionByProduct?.data || []).map((_: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        <TabsContent value="waste" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("production.reports.wasteTrend")}</CardTitle>
-              <CardDescription>
-                {t("production.reports.wasteTrendDesc")}
-              </CardDescription>
+        {/* تحليل الهدر */}
+        <TabsContent value="waste" className="space-y-4 mt-2">
+          <Card className="rounded-2xl border shadow-xs">
+            <CardHeader className="p-4 border-b">
+              <CardTitle className="text-sm font-black flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-rose-600" />
+                {t("production.reports.wasteTrend")}
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               {wasteLoading ? (
-                <Skeleton className="h-[300px] w-full" />
+                <Skeleton className="h-[280px] w-full" />
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={wasteAnalysis?.data || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                     <YAxis />
                     <Tooltip />
                     <Legend />
                     <Area
                       type="monotone"
                       dataKey="totalWaste"
-                      stroke="#ef4444"
-                      fill="#fecaca"
+                      stroke="#dc2626"
+                      fill="#fee2e2"
                       name={t("production.reports.wasteAmount")}
                     />
                   </AreaChart>
@@ -675,120 +629,77 @@ export default function ProductionReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="machines" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {t("production.reports.machinePerformance")}
-              </CardTitle>
-              <CardDescription>
-                {t("production.reports.machinePerformanceDesc")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {machineLoading ? (
-                <Skeleton className="h-[300px] w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={machinePerformance?.data || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="machineName" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar
-                      dataKey="totalWeight"
-                      fill="#3b82f6"
-                      name={t("production.reports.weightKg")}
-                    />
-                    <Bar
-                      dataKey="rollsCount"
-                      fill="#10b981"
-                      name={t("production.reports.rollsCount")}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>
+        {/* أداء المكائن */}
+        <TabsContent value="machines" className="space-y-4 mt-2">
+          <Card className="rounded-2xl border shadow-xs overflow-hidden">
+            <CardHeader className="p-4 border-b bg-gray-50/50 dark:bg-gray-800/40">
+              <CardTitle className="text-sm font-black flex items-center gap-2">
+                <Factory className="h-4 w-4 text-blue-600" />
                 {t("production.reports.machinePerformanceTable")}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("production.reports.machineName")}</TableHead>
-                    <TableHead>{t("production.reports.rollsCount")}</TableHead>
-                    <TableHead>{t("production.reports.totalWeight")}</TableHead>
-                    <TableHead>{t("production.reports.avgTime")}</TableHead>
-                    <TableHead>{t("production.reports.efficiency")}</TableHead>
+                  <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                    <TableHead className="font-black text-xs">{t("production.reports.machineName")}</TableHead>
+                    <TableHead className="font-black text-xs text-center">{t("production.reports.rollsCount")}</TableHead>
+                    <TableHead className="font-black text-xs text-center">{t("production.reports.totalWeight")}</TableHead>
+                    <TableHead className="font-black text-xs text-center">{t("production.reports.avgTime")}</TableHead>
+                    <TableHead className="font-black text-xs text-center">{t("production.reports.efficiency")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {machinePerformance?.data?.map(
-                    (machine: any, index: number) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {machine.machineName}
-                        </TableCell>
-                        <TableCell>{machine.rollsCount}</TableCell>
-                        <TableCell>{formatNumberAr(Number(machine.totalWeight), 2)}</TableCell>
-                        <TableCell>{machine.avgTime?.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={getStatusColor(
-                              machine.efficiency || 0,
-                              "efficiency",
-                            )}
-                          >
-                            {machine.efficiency?.toFixed(1) || 0}%
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
+                  {machinePerformance?.data?.map((machine: any, index: number) => (
+                    <TableRow key={index} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
+                      <TableCell className="font-black text-xs">{machine.machineName}</TableCell>
+                      <TableCell className="text-center font-bold text-xs">{machine.rollsCount}</TableCell>
+                      <TableCell className="text-center font-bold text-xs text-blue-600">
+                        {formatNumberAr(Number(machine.totalWeight), 2)} كجم
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-gray-500 font-bold">
+                        {machine.avgTime?.toFixed(2)} س
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          className={`text-[10px] font-bold border ${getStatusColor(
+                            machine.efficiency || 0,
+                            "efficiency",
+                          )}`}
+                        >
+                          {machine.efficiency?.toFixed(1) || 0}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="operators" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>
+        {/* أداء المشغلين */}
+        <TabsContent value="operators" className="space-y-4 mt-2">
+          <Card className="rounded-2xl border shadow-xs">
+            <CardHeader className="p-4 border-b">
+              <CardTitle className="text-sm font-black flex items-center gap-2">
+                <Users className="h-4 w-4 text-teal-600" />
                 {t("production.reports.operatorPerformance")}
               </CardTitle>
-              <CardDescription>
-                {t("production.reports.machinePerformanceDesc")}
-              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               {operatorLoading ? (
-                <Skeleton className="h-[300px] w-full" />
+                <Skeleton className="h-[280px] w-full" />
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={operatorPerformance?.data || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="operatorName" />
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="operatorName" tick={{ fontSize: 10 }} />
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar
-                      dataKey="totalWeight"
-                      fill="#3b82f6"
-                      name={t("production.reports.weightKg")}
-                    />
-                    <Bar
-                      dataKey="rollsCount"
-                      fill="#10b981"
-                      name={t("production.reports.rollsCount")}
-                    />
+                    <Bar dataKey="totalWeight" fill="#2563eb" name={t("production.reports.weightKg")} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="rollsCount" fill="#16a34a" name={t("production.reports.rollsCount")} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}

@@ -9,16 +9,14 @@ import {
   Package,
   Activity,
   Target,
-  CheckCircle2,
   Factory,
-  Scale,
   Award,
   ChevronDown,
   ChevronUp,
   AlertTriangle,
   Layers,
-  Palette,
   Boxes,
+  Calendar,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -72,10 +70,10 @@ import {
 import { useLocalizedName } from "../../hooks/use-localized-name";
 
 const SECTION_COLORS = {
-  film: "#3B82F6",
-  printing: "#8B5CF6",
-  cutting: "#F59E0B",
-  done: "#22C55E",
+  film: "#2563eb",
+  printing: "#7c3aed",
+  cutting: "#d97706",
+  done: "#16a34a",
 };
 
 export default function ProductionMonitoring() {
@@ -98,6 +96,7 @@ export default function ProductionMonitoring() {
     data: dashboardData,
     isLoading,
     refetch,
+    isFetching,
   } = useQuery<{ success: boolean; data: any }>({
     queryKey: ["/api/production/monitoring-dashboard", { dateFrom, dateTo }],
     enabled: !!dateFrom && !!dateTo,
@@ -117,19 +116,11 @@ export default function ProductionMonitoring() {
 
   const COMPONENT_KEYS = ["HDPE", "LLDPE", "LDPE", "FILLER", "COLOR"] as const;
   const COMPONENT_COLORS: Record<string, string> = {
-    HDPE: "bg-blue-50 text-blue-700 border-blue-200",
-    LLDPE: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    LDPE: "bg-violet-50 text-violet-700 border-violet-200",
-    FILLER: "bg-amber-50 text-amber-700 border-amber-200",
-    COLOR: "bg-pink-50 text-pink-700 border-pink-200",
-  };
-  const STATUS_LABELS_AR_MAT: Record<string, string> = {
-    all: "كل الحالات",
-    pending: "قيد الانتظار",
-    active: "قيد التنفيذ",
-    completed: "مكتمل",
-    archived: "مؤرشف",
-    cancelled: "ملغي",
+    HDPE: "bg-blue-50/80 text-blue-900 border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800",
+    LLDPE: "bg-indigo-50/80 text-indigo-900 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-200 dark:border-indigo-800",
+    LDPE: "bg-purple-50/80 text-purple-900 border-purple-200 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-800",
+    FILLER: "bg-amber-50/80 text-amber-900 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800",
+    COLOR: "bg-pink-50/80 text-pink-900 border-pink-200 dark:bg-pink-950/40 dark:text-pink-200 dark:border-pink-800",
   };
 
   const recipesMap = useMemo(() => {
@@ -152,8 +143,6 @@ export default function ProductionMonitoring() {
 
     for (const o of orders) {
       if (matStatusFilter !== "all" && o.status !== matStatusFilter) continue;
-      // Basis per status: pending → planned (final_quantity_kg);
-      // active/completed/archived → actual produced_quantity_kg; cancelled → excluded.
       const basis =
         o.status === "pending"
           ? o.final_quantity_kg || 0
@@ -172,20 +161,6 @@ export default function ProductionMonitoring() {
     }
     return { totals, totalKg, orderCount };
   }, [materials.orders, recipesMap, matStatusFilter]);
-  const STATUS_LABELS_AR: Record<string, string> = {
-    pending: "قيد الانتظار",
-    active: "قيد التنفيذ",
-    completed: "مكتمل",
-    cancelled: "ملغي",
-    archived: "مؤرشف",
-  };
-  const STATUS_COLORS: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-800",
-    active: "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-    cancelled: "bg-red-100 text-red-800",
-    archived: "bg-gray-100 text-gray-700",
-  };
 
   const formatNum = (n: number = 0) =>
     new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -248,205 +223,181 @@ export default function ProductionMonitoring() {
         title="مراقبة الإنتاج"
         description="إحصائيات ومراقبة عمليات الإنتاج"
       >
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center h-80">
           <div className="flex flex-col items-center gap-3">
-            <Activity className="h-10 w-10 animate-pulse text-primary" />
-            <p className="text-muted-foreground">جاري تحميل البيانات...</p>
+            <Activity className="h-10 w-10 animate-spin text-blue-600" />
+            <p className="text-gray-500 font-medium">جاري تحميل بيانات المراقبة...</p>
           </div>
         </div>
       </PageLayout>
     );
   }
 
+  const wastePercent =
+    summary.total_kg > 0
+      ? ((summary.total_waste_kg / summary.total_kg) * 100).toFixed(1)
+      : "0";
+
   return (
     <PageLayout
       title="مراقبة الإنتاج"
-      description="إحصائيات ومراقبة عمليات الإنتاج"
+      description="إحصائيات شاملة ومراقبة حية للمكائن والعمال والمواد"
     >
-      <div className="space-y-6" dir="rtl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground">
-              الفترة:
-            </span>
+      <div className="space-y-5" dir="rtl">
+        {/* شريط الفلاتر والتاريخ */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
+              <Calendar className="h-4 w-4 text-blue-600" />
+              <span>فترة المراقبة:</span>
+            </div>
             <Input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-40"
+              className="w-36 h-9 text-xs font-bold rounded-xl"
             />
-            <span className="text-sm text-muted-foreground">إلى</span>
+            <span className="text-xs text-gray-400">إلى</span>
             <Input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-40"
+              className="w-36 h-9 text-xs font-bold rounded-xl"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="w-4 h-4 ml-2" />
-            تحديث
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="h-9 px-4 text-xs font-bold rounded-xl gap-1.5"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            تحديث البيانات
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card className="border-r-4 border-r-indigo-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    إجمالي الإنتاج
-                  </p>
-                  <p className="text-xl font-bold text-indigo-600">
-                    {formatKg(summary.total_kg)}
-                  </p>
-                </div>
-                <Target className="h-8 w-8 text-indigo-200" />
-              </div>
-            </CardContent>
-          </Card>
+        {/* بطاقات الإحصائيات الشاملة */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-xs border-r-4 border-r-indigo-600">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-500">إجمالي الإنتاج</span>
+              <Target className="h-4 w-4 text-indigo-600" />
+            </div>
+            <p className="text-lg font-black text-indigo-700 dark:text-indigo-400">
+              {formatKg(summary.total_kg)}
+            </p>
+          </div>
 
-          <Card className="border-r-4 border-r-slate-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">عدد الرولات</p>
-                  <p className="text-xl font-bold">
-                    {formatNum(summary.total_rolls)}
-                  </p>
-                </div>
-                <Package className="h-8 w-8 text-slate-200" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs border-r-4 border-r-slate-600">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-500">إجمالي الرولات</span>
+              <Package className="h-4 w-4 text-slate-600" />
+            </div>
+            <p className="text-lg font-black text-gray-900 dark:text-white">
+              {formatNum(summary.total_rolls)} <span className="text-xs font-normal text-gray-400">رول</span>
+            </p>
+          </div>
 
-          <Card className="border-r-4 border-r-blue-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">فيلم</p>
-                  <p className="text-xl font-bold text-blue-600">
-                    {formatKg(summary.film_kg)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {summary.film_rolls} رول
-                  </p>
-                </div>
-                <Film className="h-8 w-8 text-blue-200" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-xs border-r-4 border-r-blue-600">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-500">قسم الفيلم</span>
+              <Film className="h-4 w-4 text-blue-600" />
+            </div>
+            <p className="text-lg font-black text-blue-700 dark:text-blue-400">
+              {formatKg(summary.film_kg)}
+            </p>
+            <span className="text-[10px] text-gray-400 font-semibold">{summary.film_rolls} رول</span>
+          </div>
 
-          <Card className="border-r-4 border-r-purple-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">طباعة</p>
-                  <p className="text-xl font-bold text-purple-600">
-                    {formatKg(summary.printing_kg)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {summary.printing_rolls} رول
-                  </p>
-                </div>
-                <Printer className="h-8 w-8 text-purple-200" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-purple-100 dark:border-purple-900/50 shadow-xs border-r-4 border-r-purple-600">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-500">قسم الطباعة</span>
+              <Printer className="h-4 w-4 text-purple-600" />
+            </div>
+            <p className="text-lg font-black text-purple-700 dark:text-purple-400">
+              {formatKg(summary.printing_kg)}
+            </p>
+            <span className="text-[10px] text-gray-400 font-semibold">{summary.printing_rolls} رول</span>
+          </div>
 
-          <Card className="border-r-4 border-r-amber-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">تقطيع</p>
-                  <p className="text-xl font-bold text-amber-600">
-                    {formatKg(summary.cutting_kg)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {summary.cutting_rolls} رول
-                  </p>
-                </div>
-                <Scissors className="h-8 w-8 text-amber-200" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-xs border-r-4 border-r-amber-600">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-500">قسم التقطيع</span>
+              <Scissors className="h-4 w-4 text-amber-600" />
+            </div>
+            <p className="text-lg font-black text-amber-700 dark:text-amber-400">
+              {formatKg(summary.cutting_kg)}
+            </p>
+            <span className="text-[10px] text-gray-400 font-semibold">{summary.cutting_rolls} رول</span>
+          </div>
 
-          <Card className="border-r-4 border-r-red-400">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">الهدر</p>
-                  <p className="text-xl font-bold text-red-500">
-                    {formatKg(summary.total_waste_kg)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {summary.total_kg > 0
-                      ? (
-                          (summary.total_waste_kg / summary.total_kg) *
-                          100
-                        ).toFixed(1)
-                      : 0}
-                    %
-                  </p>
-                </div>
-                <AlertTriangle className="h-8 w-8 text-red-200" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-xs border-r-4 border-r-rose-600">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-500">إجمالي الهدر</span>
+              <AlertTriangle className="h-4 w-4 text-rose-600" />
+            </div>
+            <p className="text-lg font-black text-rose-600 dark:text-rose-400">
+              {formatKg(summary.total_waste_kg)}
+            </p>
+            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 px-1.5 py-0.5 rounded">
+              {wastePercent}% هدر
+            </span>
+          </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 h-auto">
-            <TabsTrigger value="overview" className="py-2.5 gap-2">
-              <Activity className="w-4 h-4" />
+        {/* تبويبات الشاشة */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl gap-1">
+            <TabsTrigger value="overview" className="py-2 text-xs font-bold rounded-xl gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-blue-600" />
               <span>نظرة عامة</span>
             </TabsTrigger>
-            <TabsTrigger value="live-tracking" className="py-2.5 gap-2">
-              <Boxes className="w-4 h-4" />
+            <TabsTrigger value="live-tracking" className="py-2 text-xs font-bold rounded-xl gap-1.5">
+              <Boxes className="w-3.5 h-3.5 text-amber-600" />
               <span>تتبع حي</span>
             </TabsTrigger>
-            <TabsTrigger value="machines" className="py-2.5 gap-2">
-              <Factory className="w-4 h-4" />
+            <TabsTrigger value="machines" className="py-2 text-xs font-bold rounded-xl gap-1.5">
+              <Factory className="w-3.5 h-3.5 text-purple-600" />
               <span>المكائن</span>
             </TabsTrigger>
-            <TabsTrigger value="workers" className="py-2.5 gap-2">
-              <Users className="w-4 h-4" />
+            <TabsTrigger value="workers" className="py-2 text-xs font-bold rounded-xl gap-1.5">
+              <Users className="w-3.5 h-3.5 text-teal-600" />
               <span>العمال</span>
             </TabsTrigger>
-            <TabsTrigger value="materials" className="py-2.5 gap-2">
-              <Layers className="w-4 h-4" />
+            <TabsTrigger value="materials" className="py-2 text-xs font-bold rounded-xl gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
               <span>المواد الخام</span>
             </TabsTrigger>
-            <TabsTrigger value="products" className="py-2.5 gap-2">
-              <Award className="w-4 h-4" />
+            <TabsTrigger value="products" className="py-2 text-xs font-bold rounded-xl gap-1.5">
+              <Award className="w-3.5 h-3.5 text-emerald-600" />
               <span>المنتجات</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6 mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary" />
+          {/* تبويب: نظرة عامة */}
+          <TabsContent value="overview" className="space-y-4 mt-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="rounded-2xl border shadow-xs">
+                <CardHeader className="p-4 pb-2 border-b">
+                  <CardTitle className="text-sm font-black flex items-center gap-2 text-gray-900 dark:text-white">
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
                     توزيع الإنتاج حسب المرحلة
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4">
                   {sectionPieData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <PieChart>
                         <Pie
                           data={sectionPieData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
+                          innerRadius={55}
+                          outerRadius={90}
                           paddingAngle={3}
                           dataKey="value"
-                          label={({ name, value }) =>
-                            `${name}: ${formatKg(value)}`
-                          }
                         >
                           {sectionPieData.map((entry, i) => (
                             <Cell key={i} fill={entry.color} />
@@ -457,107 +408,75 @@ export default function ProductionMonitoring() {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="flex items-center justify-center h-[280px] text-muted-foreground">
-                      لا توجد بيانات
+                    <div className="flex items-center justify-center h-52 text-gray-400 text-xs">
+                      لا توجد بيانات متاحة
                     </div>
                   )}
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Factory className="h-5 w-5 text-primary" />
+              <Card className="rounded-2xl border shadow-xs">
+                <CardHeader className="p-4 pb-2 border-b">
+                  <CardTitle className="text-sm font-black flex items-center gap-2 text-gray-900 dark:text-white">
+                    <Factory className="h-4 w-4 text-indigo-600" />
                     أعلى 10 مكائن إنتاجاً
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4">
                   {machineChartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <BarChart
                         data={machineChartData}
                         layout="vertical"
-                        margin={{ right: 80 }}
+                        margin={{ right: 20, left: 20 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" />
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                         <XAxis type="number" />
-                        <YAxis
-                          dataKey="name"
-                          type="category"
-                          width={100}
-                          tick={{ fontSize: 11 }}
-                        />
+                        <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 10 }} />
                         <Tooltip formatter={(v: number) => formatKg(v)} />
-                        <Bar
-                          dataKey="total"
-                          fill="#6366F1"
-                          radius={[0, 4, 4, 0]}
-                        />
+                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="flex items-center justify-center h-[280px] text-muted-foreground">
-                      لا توجد بيانات
+                    <div className="flex items-center justify-center h-52 text-gray-400 text-xs">
+                      لا توجد بيانات متاحة
                     </div>
                   )}
                 </CardContent>
               </Card>
 
+              {/* بطاقات العمال لكل قسم */}
               {(
                 [
-                  {
-                    key: "film" as const,
-                    label: "أعلى 10 عمال إنتاجاً - قسم الفيلم",
-                    color: SECTION_COLORS.film,
-                  },
-                  {
-                    key: "printing" as const,
-                    label: "أعلى 10 عمال إنتاجاً - قسم الطباعة",
-                    color: SECTION_COLORS.printing,
-                  },
-                  {
-                    key: "cutting" as const,
-                    label: "أعلى 10 عمال إنتاجاً - قسم التقطيع",
-                    color: SECTION_COLORS.cutting,
-                  },
+                  { key: "film" as const, label: "أعلى 10 عمال - قسم الفيلم", color: SECTION_COLORS.film },
+                  { key: "printing" as const, label: "أعلى 10 عمال - قسم الطباعة", color: SECTION_COLORS.printing },
+                  { key: "cutting" as const, label: "أعلى 10 عمال - قسم التقطيع", color: SECTION_COLORS.cutting },
                 ]
               ).map((dept) => (
-                <Card key={dept.key}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Users
-                        className="h-5 w-5"
-                        style={{ color: dept.color }}
-                      />
+                <Card key={dept.key} className="rounded-2xl border shadow-xs">
+                  <CardHeader className="p-4 pb-2 border-b">
+                    <CardTitle className="text-sm font-black flex items-center gap-2 text-gray-900 dark:text-white">
+                      <Users className="h-4 w-4" style={{ color: dept.color }} />
                       {dept.label}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4">
                     {departmentWorkerCharts[dept.key].length > 0 ? (
-                      <ResponsiveContainer width="100%" height={280}>
+                      <ResponsiveContainer width="100%" height={240}>
                         <BarChart
                           data={departmentWorkerCharts[dept.key]}
                           layout="vertical"
-                          margin={{ right: 80 }}
+                          margin={{ right: 20, left: 20 }}
                         >
-                          <CartesianGrid strokeDasharray="3 3" />
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                           <XAxis type="number" />
-                          <YAxis
-                            dataKey="name"
-                            type="category"
-                            width={100}
-                            tick={{ fontSize: 11 }}
-                          />
+                          <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 10 }} />
                           <Tooltip formatter={(v: number) => formatKg(v)} />
-                          <Bar
-                            dataKey="total"
-                            fill={dept.color}
-                            radius={[0, 4, 4, 0]}
-                          />
+                          <Bar dataKey="total" fill={dept.color} radius={[0, 4, 4, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex items-center justify-center h-[280px] text-muted-foreground">
+                      <div className="flex items-center justify-center h-48 text-gray-400 text-xs">
                         لا توجد بيانات
                       </div>
                     )}
@@ -565,36 +484,35 @@ export default function ProductionMonitoring() {
                 </Card>
               ))}
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Award className="h-5 w-5 text-primary" />
-                    أكثر المنتجات إنتاجاً
+              {/* أكثر المنتجات إنتاجاً */}
+              <Card className="rounded-2xl border shadow-xs">
+                <CardHeader className="p-4 pb-2 border-b">
+                  <CardTitle className="text-sm font-black flex items-center gap-2 text-gray-900 dark:text-white">
+                    <Award className="h-4 w-4 text-amber-600" />
+                    أكثر المنتجات طلباً وإنتاجاً
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4">
                   {productsList.length > 0 ? (
                     <div className="space-y-3">
-                      {productsList.slice(0, 8).map((p: any, i: number) => {
+                      {productsList.slice(0, 7).map((p: any, i: number) => {
                         const maxKg = productsList[0]?.total_kg || 1;
                         const percent = (p.total_kg / maxKg) * 100;
                         return (
                           <div key={i} className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
+                                <span className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-black flex items-center justify-center">
                                   {i + 1}
-                                </Badge>
-                                <span className="font-medium">
-                                  {ln(p.item_name_ar, p.item_name) ||
-                                    p.size_caption ||
-                                    "غير محدد"}
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="font-extrabold text-gray-900 dark:text-gray-100">
+                                  {ln(p.item_name_ar, p.item_name) || p.size_caption || "غير محدد"}
+                                </span>
+                                <span className="text-[11px] text-gray-400">
                                   ({ln(p.customer_name_ar, p.customer_name)})
                                 </span>
                               </div>
-                              <span className="font-bold">
+                              <span className="font-black text-indigo-600 dark:text-indigo-400">
                                 {formatKg(p.total_kg)}
                               </span>
                             </div>
@@ -604,7 +522,7 @@ export default function ProductionMonitoring() {
                       })}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center h-[280px] text-muted-foreground">
+                    <div className="flex items-center justify-center h-48 text-gray-400 text-xs">
                       لا توجد بيانات
                     </div>
                   )}
@@ -613,166 +531,118 @@ export default function ProductionMonitoring() {
             </div>
           </TabsContent>
 
-          <TabsContent value="live-tracking" className="space-y-6 mt-6">
+          {/* تبويب: التتبع الحي */}
+          <TabsContent value="live-tracking" className="mt-2">
             <FloorRollsTracker />
           </TabsContent>
 
-          <TabsContent value="machines" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader className="pb-3">
+          {/* تبويب: المكائن */}
+          <TabsContent value="machines" className="mt-2">
+            <Card className="rounded-2xl border shadow-xs overflow-hidden">
+              <CardHeader className="p-4 border-b bg-gray-50/50 dark:bg-gray-800/40">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Factory className="h-5 w-5" />
+                  <CardTitle className="text-sm font-black flex items-center gap-2">
+                    <Factory className="h-4 w-4 text-purple-600" />
                     إنتاج المكائن التفصيلي
-                    <Badge variant="secondary">{machinesList.length}</Badge>
                   </CardTitle>
+                  <Badge variant="secondary" className="font-bold">{machinesList.length} ماكينة</Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold">الماكينة</TableHead>
-                      <TableHead className="font-semibold">النوع</TableHead>
-                      <TableHead className="font-semibold text-center">
-                        إجمالي الإنتاج
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        عدد الرولات
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        آخر إنتاج
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        تفاصيل
-                      </TableHead>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                      <TableHead className="font-black text-xs">الماكينة</TableHead>
+                      <TableHead className="font-black text-xs">النوع</TableHead>
+                      <TableHead className="font-black text-xs text-center">إجمالي الإنتاج</TableHead>
+                      <TableHead className="font-black text-xs text-center">عدد الرولات</TableHead>
+                      <TableHead className="font-black text-xs text-center">آخر إنتاج</TableHead>
+                      <TableHead className="font-black text-xs text-center">التفاصيل</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {machinesList.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center py-12 text-muted-foreground"
-                        >
-                          <Factory className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                          لا توجد بيانات إنتاج للمكائن
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      machinesList.map((m: any) => {
-                        const isExpanded = expandedMachine === m.id;
-                        const maxKg = machinesList[0]?.total_kg || 1;
-                        return (
-                          <MachineRow
-                            key={m.id}
-                            machine={m}
-                            maxKg={maxKg}
-                            isExpanded={isExpanded}
-                            onToggle={() =>
-                              setExpandedMachine(isExpanded ? null : m.id)
-                            }
-                            ln={ln}
-                            formatKg={formatKg}
-                            formatNum={formatNum}
-                          />
-                        );
-                      })
-                    )}
+                    {machinesList.map((m: any) => {
+                      const isExpanded = expandedMachine === m.id;
+                      const maxKg = machinesList[0]?.total_kg || 1;
+                      return (
+                        <MachineRow
+                          key={m.id}
+                          machine={m}
+                          maxKg={maxKg}
+                          isExpanded={isExpanded}
+                          onToggle={() => setExpandedMachine(isExpanded ? null : m.id)}
+                          ln={ln}
+                          formatKg={formatKg}
+                          formatNum={formatNum}
+                        />
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="workers" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader className="pb-3">
+          {/* تبويب: العمال */}
+          <TabsContent value="workers" className="mt-2">
+            <Card className="rounded-2xl border shadow-xs overflow-hidden">
+              <CardHeader className="p-4 border-b bg-gray-50/50 dark:bg-gray-800/40">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-5 w-5" />
+                  <CardTitle className="text-sm font-black flex items-center gap-2">
+                    <Users className="h-4 w-4 text-teal-600" />
                     إنتاج العمال التفصيلي
-                    <Badge variant="secondary">{workersList.length}</Badge>
                   </CardTitle>
+                  <Badge variant="secondary" className="font-bold">{workersList.length} عامل</Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold">العامل</TableHead>
-                      <TableHead className="font-semibold text-center">
-                        إجمالي الإنتاج
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        عدد الرولات
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        تفاصيل
-                      </TableHead>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                      <TableHead className="font-black text-xs">العامل</TableHead>
+                      <TableHead className="font-black text-xs text-center">إجمالي الإنتاج</TableHead>
+                      <TableHead className="font-black text-xs text-center">عدد الرولات</TableHead>
+                      <TableHead className="font-black text-xs text-center">التفاصيل</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {workersList.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={4}
-                          className="text-center py-12 text-muted-foreground"
-                        >
-                          <Users className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                          لا توجد بيانات إنتاج للعمال
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      workersList.map((w: any) => {
-                        const isExpanded = expandedWorker === w.id;
-                        const maxKg = workersList[0]?.total_kg || 1;
-                        return (
-                          <WorkerRow
-                            key={w.id}
-                            worker={w}
-                            maxKg={maxKg}
-                            isExpanded={isExpanded}
-                            onToggle={() =>
-                              setExpandedWorker(isExpanded ? null : w.id)
-                            }
-                            ln={ln}
-                            formatKg={formatKg}
-                            formatNum={formatNum}
-                          />
-                        );
-                      })
-                    )}
+                    {workersList.map((w: any) => {
+                      const isExpanded = expandedWorker === w.id;
+                      const maxKg = workersList[0]?.total_kg || 1;
+                      return (
+                        <WorkerRow
+                          key={w.id}
+                          worker={w}
+                          maxKg={maxKg}
+                          isExpanded={isExpanded}
+                          onToggle={() => setExpandedWorker(isExpanded ? null : w.id)}
+                          ln={ln}
+                          formatKg={formatKg}
+                          formatNum={formatNum}
+                        />
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="materials" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Layers className="h-5 w-5" />
-                  المواد الخام المطلوبة
+          {/* تبويب: المواد الخام */}
+          <TabsContent value="materials" className="mt-2">
+            <Card className="rounded-2xl border shadow-xs">
+              <CardHeader className="p-4 border-b">
+                <CardTitle className="text-sm font-black flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-indigo-600" />
+                  حسابات المواد الخام المطلوبة
                 </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  الحساب بحسب الوصفات الثابتة: HDPE ملون (35/35/25/5)، HDPE شفاف
-                  (50/50)، LDPE ملون (LLDPE 60 / LDPE 10 / 25 / 5)، LDPE شفاف
-                  (LLDPE 80 / LDPE 20). الكميات بالكيلوجرام.
-                </p>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-                  <div className="flex-1 max-w-xs">
-                    <label className="text-xs text-muted-foreground mb-1 block">
-                      حالة أمر الإنتاج
-                    </label>
-                    <Select
-                      value={matStatusFilter}
-                      onValueChange={setMatStatusFilter}
-                    >
-                      <SelectTrigger>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800/40 p-3 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500">فلترة الحالة:</span>
+                    <Select value={matStatusFilter} onValueChange={setMatStatusFilter}>
+                      <SelectTrigger className="w-36 h-9 text-xs font-bold rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -784,37 +654,28 @@ export default function ProductionMonitoring() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-semibold text-foreground">
-                      {formatNum(materialAggregates.orderCount)}
-                    </span>{" "}
-                    أمر إنتاج —{" "}
-                    <span className="font-semibold text-foreground">
-                      {formatKg(materialAggregates.totalKg)}
-                    </span>{" "}
-                    إجمالي الإنتاج
+
+                  <div className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                    <span className="text-indigo-600">{formatNum(materialAggregates.orderCount)}</span> أمر إنتاج |{" "}
+                    <span className="text-indigo-600">{formatKg(materialAggregates.totalKg)}</span> إجمالي المطلوب
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   {COMPONENT_KEYS.map((k) => (
                     <div
                       key={k}
-                      className={`rounded-lg border p-4 text-center ${COMPONENT_COLORS[k]}`}
+                      className={`rounded-2xl border p-3.5 text-center ${COMPONENT_COLORS[k]} shadow-xs`}
                     >
-                      <p className="text-sm font-semibold mb-1">{k}</p>
-                      <p className="text-2xl font-bold">
+                      <p className="text-xs font-black mb-1">{k}</p>
+                      <p className="text-xl font-black">
                         {formatKg(materialAggregates.totals[k])}
                       </p>
-                      <p className="text-[10px] opacity-75 mt-1">
+                      <p className="text-[10px] font-bold opacity-75 mt-1">
                         {materialAggregates.totalKg > 0
-                          ? (
-                              (materialAggregates.totals[k] /
-                                materialAggregates.totalKg) *
-                              100
-                            ).toFixed(1)
+                          ? ((materialAggregates.totals[k] / materialAggregates.totalKg) * 100).toFixed(1)
                           : 0}
-                        %
+                        % من الإجمالي
                       </p>
                     </div>
                   ))}
@@ -823,96 +684,49 @@ export default function ProductionMonitoring() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="products" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Award className="h-5 w-5" />
-                  أكثر المنتجات إنتاجاً
-                  <Badge variant="secondary">{productsList.length}</Badge>
-                </CardTitle>
+          {/* تبويب: المنتجات */}
+          <TabsContent value="products" className="mt-2">
+            <Card className="rounded-2xl border shadow-xs overflow-hidden">
+              <CardHeader className="p-4 border-b bg-gray-50/50 dark:bg-gray-800/40">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-black flex items-center gap-2">
+                    <Award className="h-4 w-4 text-amber-600" />
+                    ترتيب كافة المنتجات حسب الإنتاج
+                  </CardTitle>
+                  <Badge variant="secondary" className="font-bold">{productsList.length} منتج</Badge>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold w-12 text-center">
-                        #
-                      </TableHead>
-                      <TableHead className="font-semibold">المنتج</TableHead>
-                      <TableHead className="font-semibold">العميل</TableHead>
-                      <TableHead className="font-semibold">المقاس</TableHead>
-                      <TableHead className="font-semibold text-center">
-                        الإنتاج (كجم)
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        عدد الرولات
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        النسبة
-                      </TableHead>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/80">
+                      <TableHead className="w-12 text-center font-black text-xs">#</TableHead>
+                      <TableHead className="font-black text-xs">المنتج</TableHead>
+                      <TableHead className="font-black text-xs">العميل</TableHead>
+                      <TableHead className="font-black text-xs">المقاس</TableHead>
+                      <TableHead className="font-black text-xs text-center">الإنتاج (كجم)</TableHead>
+                      <TableHead className="font-black text-xs text-center">الرولات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {productsList.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="text-center py-12 text-muted-foreground"
-                        >
-                          <Award className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                          لا توجد بيانات إنتاج
+                    {productsList.map((p: any, i: number) => (
+                      <TableRow key={i} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
+                        <TableCell className="text-center font-bold text-xs">
+                          {i + 1}
                         </TableCell>
+                        <TableCell className="font-black text-xs text-gray-900 dark:text-white">
+                          {ln(p.item_name_ar, p.item_name) || "غير محدد"}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-blue-700 dark:text-blue-400">
+                          {ln(p.customer_name_ar, p.customer_name)}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold">{p.size_caption || "-"}</TableCell>
+                        <TableCell className="text-center font-black text-xs text-indigo-600 dark:text-indigo-400">
+                          {formatKg(p.total_kg)}
+                        </TableCell>
+                        <TableCell className="text-center font-bold text-xs">{formatNum(p.total_rolls)}</TableCell>
                       </TableRow>
-                    ) : (
-                      productsList.map((p: any, i: number) => {
-                        const maxKg = productsList[0]?.total_kg || 1;
-                        const percent = (p.total_kg / maxKg) * 100;
-                        return (
-                          <TableRow key={i} className="hover:bg-muted/50">
-                            <TableCell className="text-center">
-                              {i < 3 ? (
-                                <Badge
-                                  className={
-                                    i === 0
-                                      ? "bg-yellow-500"
-                                      : i === 1
-                                        ? "bg-gray-400"
-                                        : "bg-amber-700"
-                                  }
-                                >
-                                  {i + 1}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  {i + 1}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {ln(p.item_name_ar, p.item_name) || "غير محدد"}
-                            </TableCell>
-                            <TableCell>
-                              {ln(p.customer_name_ar, p.customer_name)}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {p.size_caption || "-"}
-                            </TableCell>
-                            <TableCell className="text-center font-bold">
-                              {formatKg(p.total_kg)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {formatNum(p.total_rolls)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="w-20 mx-auto">
-                                <Progress value={percent} className="h-2" />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -924,92 +738,47 @@ export default function ProductionMonitoring() {
   );
 }
 
-function MachineRow({
-  machine: m,
-  maxKg,
-  isExpanded,
-  onToggle,
-  ln,
-  formatKg,
-  formatNum,
-}: any) {
-  const typeLabels: Record<string, string> = {
-    extruder: "إكسترودر",
-    printer: "طابعة",
-    cutter: "مقطع",
-    quality_check: "فحص جودة",
-  };
+function MachineRow({ machine: m, maxKg, isExpanded, onToggle, ln, formatKg, formatNum }: any) {
   const percent = maxKg > 0 ? (m.total_kg / maxKg) * 100 : 0;
-
   return (
     <>
-      <TableRow className="hover:bg-muted/50 cursor-pointer" onClick={onToggle}>
+      <TableRow className="hover:bg-gray-50/80 dark:hover:bg-gray-800/50 cursor-pointer" onClick={onToggle}>
         <TableCell>
-          <div className="font-bold">{ln(m.name_ar, m.name)}</div>
-          <div className="text-xs text-muted-foreground">{m.id}</div>
+          <div className="font-black text-xs text-gray-900 dark:text-white">{ln(m.name_ar, m.name)}</div>
+          <div className="text-[10px] text-gray-400 font-mono">{m.id}</div>
         </TableCell>
         <TableCell>
-          <Badge variant="outline">{typeLabels[m.type] || m.type}</Badge>
+          <Badge variant="outline" className="text-[11px] font-bold">{m.type}</Badge>
         </TableCell>
         <TableCell className="text-center">
-          <div className="space-y-1">
-            <div className="font-bold">{formatKg(m.total_kg)}</div>
-            <div className="w-20 mx-auto">
-              <Progress value={percent} className="h-1.5" />
-            </div>
-          </div>
+          <div className="font-black text-xs text-indigo-600 dark:text-indigo-400">{formatKg(m.total_kg)}</div>
+          <Progress value={percent} className="h-1 mt-1 w-16 mx-auto" />
         </TableCell>
-        <TableCell className="text-center font-semibold">
-          {formatNum(m.total_rolls)}
-        </TableCell>
-        <TableCell className="text-center text-sm text-muted-foreground">
-          {m.last_production
-            ? new Date(m.last_production).toLocaleDateString("en-US")
-            : "-"}
+        <TableCell className="text-center font-bold text-xs">{formatNum(m.total_rolls)}</TableCell>
+        <TableCell className="text-center text-xs text-gray-400">
+          {m.last_production ? new Date(m.last_production).toLocaleDateString("en-US") : "-"}
         </TableCell>
         <TableCell className="text-center">
-          <Button variant="ghost" size="sm">
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </TableCell>
       </TableRow>
       {isExpanded && (
         <TableRow>
-          <TableCell colSpan={6} className="bg-muted/30 p-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center border border-blue-200">
-                <Film className="h-5 w-5 mx-auto mb-1 text-blue-600" />
-                <div className="text-xs text-muted-foreground">فيلم</div>
-                <div className="text-lg font-bold text-blue-600">
-                  {formatKg(m.film_kg)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {m.film_rolls} رول
-                </div>
+          <TableCell colSpan={6} className="bg-gray-50 dark:bg-gray-800/30 p-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-blue-50/70 dark:bg-blue-950/40 p-2.5 rounded-xl text-center border border-blue-200 dark:border-blue-900">
+                <span className="text-[11px] font-bold text-blue-700 block">فيلم</span>
+                <span className="text-sm font-black text-blue-900 dark:text-blue-100">{formatKg(m.film_kg)}</span>
               </div>
-              <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-3 text-center border border-purple-200">
-                <Printer className="h-5 w-5 mx-auto mb-1 text-purple-600" />
-                <div className="text-xs text-muted-foreground">طباعة</div>
-                <div className="text-lg font-bold text-purple-600">
-                  {formatKg(m.printing_kg)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {m.printing_rolls} رول
-                </div>
+              <div className="bg-purple-50/70 dark:bg-purple-950/40 p-2.5 rounded-xl text-center border border-purple-200 dark:border-purple-900">
+                <span className="text-[11px] font-bold text-purple-700 block">طباعة</span>
+                <span className="text-sm font-black text-purple-900 dark:text-purple-100">{formatKg(m.printing_kg)}</span>
               </div>
-              <div className="bg-amber-50 dark:bg-amber-950 rounded-lg p-3 text-center border border-amber-200">
-                <Scissors className="h-5 w-5 mx-auto mb-1 text-amber-600" />
-                <div className="text-xs text-muted-foreground">تقطيع</div>
-                <div className="text-lg font-bold text-amber-600">
-                  {formatKg(m.cutting_kg)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {m.cutting_rolls} رول
-                </div>
+              <div className="bg-amber-50/70 dark:bg-amber-950/40 p-2.5 rounded-xl text-center border border-amber-200 dark:border-amber-900">
+                <span className="text-[11px] font-bold text-amber-700 block">تقطيع</span>
+                <span className="text-sm font-black text-amber-900 dark:text-amber-100">{formatKg(m.cutting_kg)}</span>
               </div>
             </div>
           </TableCell>
@@ -1019,77 +788,40 @@ function MachineRow({
   );
 }
 
-function WorkerRow({
-  worker: w,
-  maxKg,
-  isExpanded,
-  onToggle,
-  ln,
-  formatKg,
-  formatNum,
-}: any) {
+function WorkerRow({ worker: w, maxKg, isExpanded, onToggle, ln, formatKg, formatNum }: any) {
   const percent = maxKg > 0 ? (w.total_kg / maxKg) * 100 : 0;
-
   return (
     <>
-      <TableRow className="hover:bg-muted/50 cursor-pointer" onClick={onToggle}>
+      <TableRow className="hover:bg-gray-50/80 dark:hover:bg-gray-800/50 cursor-pointer" onClick={onToggle}>
         <TableCell>
-          <div className="font-bold">{ln(w.name_ar, w.name)}</div>
+          <div className="font-black text-xs text-gray-900 dark:text-white">{ln(w.name_ar, w.name)}</div>
         </TableCell>
         <TableCell className="text-center">
-          <div className="space-y-1">
-            <div className="font-bold">{formatKg(w.total_kg)}</div>
-            <div className="w-20 mx-auto">
-              <Progress value={percent} className="h-1.5" />
-            </div>
-          </div>
+          <div className="font-black text-xs text-teal-600 dark:text-teal-400">{formatKg(w.total_kg)}</div>
+          <Progress value={percent} className="h-1 mt-1 w-16 mx-auto" />
         </TableCell>
-        <TableCell className="text-center font-semibold">
-          {formatNum(w.total_rolls)}
-        </TableCell>
+        <TableCell className="text-center font-bold text-xs">{formatNum(w.total_rolls)}</TableCell>
         <TableCell className="text-center">
-          <Button variant="ghost" size="sm">
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </TableCell>
       </TableRow>
       {isExpanded && (
         <TableRow>
-          <TableCell colSpan={4} className="bg-muted/30 p-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center border border-blue-200">
-                <Film className="h-5 w-5 mx-auto mb-1 text-blue-600" />
-                <div className="text-xs text-muted-foreground">فيلم</div>
-                <div className="text-lg font-bold text-blue-600">
-                  {formatKg(w.film_kg)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {w.film_rolls} رول
-                </div>
+          <TableCell colSpan={4} className="bg-gray-50 dark:bg-gray-800/30 p-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-blue-50/70 dark:bg-blue-950/40 p-2.5 rounded-xl text-center border border-blue-200 dark:border-blue-900">
+                <span className="text-[11px] font-bold text-blue-700 block">فيلم</span>
+                <span className="text-sm font-black text-blue-900 dark:text-blue-100">{formatKg(w.film_kg)}</span>
               </div>
-              <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-3 text-center border border-purple-200">
-                <Printer className="h-5 w-5 mx-auto mb-1 text-purple-600" />
-                <div className="text-xs text-muted-foreground">طباعة</div>
-                <div className="text-lg font-bold text-purple-600">
-                  {formatKg(w.printing_kg)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {w.printing_rolls} رول
-                </div>
+              <div className="bg-purple-50/70 dark:bg-purple-950/40 p-2.5 rounded-xl text-center border border-purple-200 dark:border-purple-900">
+                <span className="text-[11px] font-bold text-purple-700 block">طباعة</span>
+                <span className="text-sm font-black text-purple-900 dark:text-purple-100">{formatKg(w.printing_kg)}</span>
               </div>
-              <div className="bg-amber-50 dark:bg-amber-950 rounded-lg p-3 text-center border border-amber-200">
-                <Scissors className="h-5 w-5 mx-auto mb-1 text-amber-600" />
-                <div className="text-xs text-muted-foreground">تقطيع</div>
-                <div className="text-lg font-bold text-amber-600">
-                  {formatKg(w.cutting_kg)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {w.cutting_rolls} رول
-                </div>
+              <div className="bg-amber-50/70 dark:bg-amber-950/40 p-2.5 rounded-xl text-center border border-amber-200 dark:border-amber-900">
+                <span className="text-[11px] font-bold text-amber-700 block">تقطيع</span>
+                <span className="text-sm font-black text-amber-900 dark:text-amber-100">{formatKg(w.cutting_kg)}</span>
               </div>
             </div>
           </TableCell>
