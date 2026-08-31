@@ -137,6 +137,37 @@ export function getShiftWindow(shift: ShiftType, dateStr: string): ShiftWindow {
 }
 
 /**
+ * Attendance rows are grouped by the date on which the employee's shift
+ * starts. A night shift therefore keeps the previous calendar date from
+ * midnight until the next night shift begins at 19:00 Riyadh time.
+ */
+export function getAttendanceDateForShift(
+  shift: ShiftType,
+  now: Date = new Date(),
+): string {
+  const today = factoryNowParts(now).dateStr;
+  if (shift !== "night") return today;
+
+  const currentNightStart = getShiftWindow("night", today).start;
+  if (now.getTime() >= currentNightStart.getTime()) return today;
+
+  return factoryNowParts(
+    new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  ).dateStr;
+}
+
+export function resolveShiftAcrossMonthBoundary(
+  currentShift: unknown,
+  previousShift: unknown,
+  isBeforeDayStart: boolean,
+  shiftStartCrossesMonth: boolean,
+): ShiftType | null {
+  const candidate =
+    isBeforeDayStart && shiftStartCrossesMonth ? previousShift : currentShift;
+  return isShiftType(candidate) ? candidate : null;
+}
+
+/**
  * Returns the previous calendar day's night shift only while it is still
  * active after midnight. At exactly 07:00 Riyadh the carry-over ends and a
  * fresh day-shift attendance session may begin.

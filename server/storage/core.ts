@@ -705,7 +705,10 @@ export interface IStorage {
   backfillProductionOrderStages(): Promise<number>;
   getProductionOrderById(id: number): Promise<ProductionOrder | undefined>;
   createProductionOrder(po: InsertProductionOrder, extra?: { final_quantity_kg?: number }): Promise<ProductionOrder>;
-  findOpenCheckIn(userId: number): Promise<Attendance | null>;
+  findOpenCheckIn(
+    userId: number,
+    window?: { dateStr: string; start: Date; end: Date },
+  ): Promise<Attendance | null>;
   ensureBatchNumber(productionOrderId: number): Promise<string | null>;
   // Note: implementation returns Promise<any> (kept identical for the
   // fragment interface merge; the resolved shape is
@@ -801,7 +804,11 @@ export interface IStorage {
   getAttendanceReport(start: Date, end: Date, filters?: any): Promise<any[]>;
   getDailyAttendanceStats(date: string): Promise<any>;
   upsertManualAttendance(entries: any[]): Promise<any[]>;
-  getDailyAttendanceStatus(userId: number, date: string): Promise<any>;
+  getDailyAttendanceStatus(
+    userId: number,
+    date: string,
+    window?: { start: Date; end: Date; checkoutEnd?: Date },
+  ): Promise<any>;
   getDailyAttendanceOverview(
     date: string,
     sectionIds?: string[],

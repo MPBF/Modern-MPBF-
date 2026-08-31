@@ -308,6 +308,7 @@ import {
   getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
 } from "../services/leave-attendance";
 import { toNumericSectionIds } from "./section-ids";
+import { filterAttendanceRecordsByWindow } from "./attendance-session";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
 import { db, pool } from "../db";
@@ -686,14 +687,13 @@ export class HrStorage extends MachinesStorage {
     }
     return results;
   }
-
-
-  async getDailyAttendanceStatus(userId: number, date: string): Promise<any> {
-    const records = await db
+  async getDailyAttendanceStatus(userId: number, date: string, window?: { start: Date; end: Date; checkoutEnd?: Date }): Promise<any> {
+    const dateRecords = await db
       .select()
       .from(attendance)
       .where(and(eq(attendance.user_id, userId), eq(attendance.date, date)))
       .orderBy(desc(attendance.created_at));
+    const records = filterAttendanceRecordsByWindow(dateRecords, window);
 
     if (records.length === 0) {
       // Only the active 19:00–07:00 night shift may cross the date boundary.
@@ -701,7 +701,7 @@ export class HrStorage extends MachinesStorage {
       const previousNightWindow = getActivePreviousNightShift(now);
       const openRecord =
         date === factoryNowParts(now).dateStr && previousNightWindow
-          ? await this.findOpenCheckIn(userId)
+          ? await this.findOpenCheckIn(userId, previousNightWindow)
           : null;
       const openCheckInMs = openRecord?.check_in_time
         ? new Date(openRecord.check_in_time).getTime()

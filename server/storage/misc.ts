@@ -339,23 +339,31 @@ import { SystemStorage } from "./system";
 export class MiscStorage extends SystemStorage {
 
 
-  // يبحث عن آخر تسجيل دخول مفتوح (لم يُسجَّل خروجه بعد) خلال الـ 24 ساعة الماضية.
-  // يُستخدم لدعم موظفي الوردية الليلية الذين يدخلون قبل منتصف الليل ويخرجون بعده.
-  async findOpenCheckIn(userId: number): Promise<Attendance | null> {
+  // يبحث عن آخر تسجيل دخول مفتوح داخل نافذة الوردية المحددة. يبقى مسار
+  // الـ 24 ساعة للتوافق مع الاستدعاءات القديمة فقط.
+  async findOpenCheckIn(
+    userId: number,
+    window?: { dateStr: string; start: Date; end: Date },
+  ): Promise<Attendance | null> {
     return withDatabaseErrorHandling(
       async () => {
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const conditions = [
+          eq(attendance.user_id, userId),
+          isNotNull(attendance.check_in_time),
+          isNull(attendance.check_out_time),
+          window
+            ? eq(attendance.date, window.dateStr)
+            : sql`${attendance.check_in_time} >= ${cutoff.toISOString()}`,
+        ];
+        if (window) {
+          conditions.push(gte(attendance.check_in_time, window.start));
+          conditions.push(sql`${attendance.check_in_time} < ${window.end}`);
+        }
         const [record] = await db
           .select()
           .from(attendance)
-          .where(
-            and(
-              eq(attendance.user_id, userId),
-              isNotNull(attendance.check_in_time),
-              isNull(attendance.check_out_time),
-              sql`${attendance.check_in_time} >= ${cutoff.toISOString()}`,
-            ),
-          )
+          .where(and(...conditions))
           .orderBy(desc(attendance.check_in_time))
           .limit(1);
         if (!record?.check_in_time) return null;

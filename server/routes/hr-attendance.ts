@@ -10,12 +10,53 @@ import { z } from "zod";
 import { parseIntSafe } from "@shared/validation-utils";
 import {
   factoryNowParts,
+  getAttendanceDateForShift,
   getActivePreviousNightShift,
+  getShiftWindow,
+  isShiftType,
+  resolveShiftAcrossMonthBoundary,
 } from "@shared/shifts";
 
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { getNotificationManager } from "../services/notification-manager";
 import { notificationService, notificationManagerHolder, getAuthUserId, parseRouteParam } from "./shared";
+
+async function getAssignedShiftForInstant(
+  userId: number,
+  now: Date,
+): Promise<"day" | "night" | null> {
+  const today = factoryNowParts(now);
+  const currentAssignment = await storage.getShiftAssignmentForUserMonth(
+    userId,
+    today.year,
+    today.month,
+  );
+  const dayStart = getShiftWindow("day", today.dateStr).start;
+  let previousShift: unknown = currentAssignment?.shift;
+  let shiftStartCrossesMonth = false;
+  if (now.getTime() < dayStart.getTime()) {
+    const previous = factoryNowParts(
+      new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    );
+    shiftStartCrossesMonth =
+      previous.year !== today.year || previous.month !== today.month;
+    if (shiftStartCrossesMonth) {
+      previousShift = (
+        await storage.getShiftAssignmentForUserMonth(
+          userId,
+          previous.year,
+          previous.month,
+        )
+      )?.shift;
+    }
+  }
+  return resolveShiftAcrossMonthBoundary(
+    currentAssignment?.shift,
+    previousShift,
+    now.getTime() < dayStart.getTime(),
+    shiftStartCrossesMonth,
+  );
+}
 
 // Extracted from server/routes/hr.ts (registration order preserved; called
 // from registerHrRoutes). See server/routes/README.md.
@@ -108,10 +149,32 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         if (isNaN(userId) || userId <= 0) {
           return res.status(400).json({ message: "معرف المستخدم غير صحيح" });
         }
+        const now = new Date();
+        const factoryToday = factoryNowParts(now);
+        const requestedDate = (req.query.date as string) || factoryToday.dateStr;
+        const assignedShift = await getAssignedShiftForInstant(userId, now);
         const date =
-          (req.query.date as string) || factoryNowParts(new Date()).dateStr;
+          requestedDate === factoryToday.dateStr && assignedShift
+            ? getAttendanceDateForShift(assignedShift, now)
+            : requestedDate;
+        const baseNightWindow =
+          assignedShift === "night"
+            ? getShiftWindow("night", date)
+            : undefined;
+        const currentNightWindow = baseNightWindow
+          ? {
+              ...baseNightWindow,
+              checkoutEnd: new Date(
+                baseNightWindow.end.getTime() + 12 * 60 * 60 * 1000,
+              ),
+            }
+          : undefined;
 
-        const status = await storage.getDailyAttendanceStatus(userId, date);
+        const status = await storage.getDailyAttendanceStatus(
+          userId,
+          date,
+          currentNightWindow,
+        );
         res.json(status);
       } catch (error) {
         console.error("Error fetching daily attendance status:", error);
@@ -407,6 +470,31 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const nowTs = new Date();
         const status = String(req.body.status || "");
         const action = String(req.body.action || "");
+        const factoryToday = factoryNowParts(nowTs);
+        const assignedShift = await getAssignedShiftForInstant(
+          req.body.user_id,
+          nowTs,
+        );
+        const attendanceDate = assignedShift
+          ? getAttendanceDateForShift(assignedShift, nowTs)
+          : factoryToday.dateStr;
+        const assignedWindow = assignedShift
+          ? getShiftWindow(assignedShift, attendanceDate)
+          : null;
+        if (
+          status === "حاضر" &&
+          assignedWindow &&
+          (nowTs.getTime() < assignedWindow.start.getTime() ||
+            nowTs.getTime() >= assignedWindow.end.getTime())
+        ) {
+          return res.status(400).json({
+            message:
+              assignedShift === "night"
+                ? "يمكن تسجيل حضور الوردية الليلية من 7 مساءً إلى 7 صباحاً"
+                : "يمكن تسجيل حضور الوردية النهارية من 7 صباحاً إلى 7 مساءً",
+            code: "OUTSIDE_ASSIGNED_SHIFT",
+          });
+        }
         const stampOverrides: Record<string, Date | undefined> = {};
         if (status === "حاضر" && !req.body.check_in_time) {
           stampOverrides.check_in_time = nowTs;
@@ -429,7 +517,10 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           ...stampOverrides,
           // Attendance action dates are server-authoritative and use the
           // factory's Riyadh calendar, not the browser/UTC calendar.
-          date: factoryNowParts(nowTs).dateStr,
+          date: attendanceDate,
+          ...(assignedShift && {
+            shift_type: assignedShift === "night" ? "ليلي" : "صباحي",
+          }),
           location_accuracy: accuracy,
           location_lat: lat,
           location_lng: lng,
@@ -443,7 +534,16 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         // نبحث عن آخر دخول مفتوح خلال الـ 24 ساعة الماضية.
         // إذا وُجد في يوم سابق، نستخدم تاريخه لربط الخروج بنفس وردية الدخول.
         if (status === "مغادر") {
-          const openRecord = await storage.findOpenCheckIn(req.body.user_id);
+          const openCheckInWindow = assignedShift
+            ? {
+                dateStr: attendanceDate,
+                ...assignedWindow!,
+              }
+            : null;
+          const openRecord = await storage.findOpenCheckIn(
+            req.body.user_id,
+            openCheckInWindow || undefined,
+          );
           const previousNightWindow = getActivePreviousNightShift(nowTs);
           const openCheckInMs = openRecord?.check_in_time
             ? new Date(openRecord.check_in_time).getTime()
@@ -458,7 +558,10 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             openCheckInMs < previousNightWindow.end.getTime();
           if (
             openRecord &&
-            isActivePreviousNightShift &&
+            ((openCheckInWindow &&
+              String(openRecord.date).slice(0, 10) ===
+                openCheckInWindow.dateStr) ||
+              isActivePreviousNightShift) &&
             String(openRecord.date).slice(0, 10) !== attendanceData.date
           ) {
             attendanceData.date = openRecord.date;
