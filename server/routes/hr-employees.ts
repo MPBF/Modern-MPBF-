@@ -13,6 +13,40 @@ import { notificationService, addJsonSheet, getAuthUserId } from "./shared";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 
+function parseSectionIdsQuery(
+  rawSectionIds: unknown,
+): { sectionIds?: string[]; error?: string } {
+  if (rawSectionIds === undefined) return {};
+  if (
+    rawSectionIds === "" ||
+    (Array.isArray(rawSectionIds) &&
+      rawSectionIds.length === 1 &&
+      rawSectionIds[0] === "")
+  ) {
+    return { sectionIds: [] };
+  }
+
+  const rawValues = Array.isArray(rawSectionIds)
+    ? rawSectionIds
+    : [rawSectionIds];
+  if (rawValues.some((value) => typeof value !== "string" || value === "")) {
+    return { error: "معرفات الأقسام غير صحيحة" };
+  }
+
+  const sectionIds = (rawValues as string[]).flatMap((value) =>
+    value.split(","),
+  );
+  if (
+    sectionIds.some(
+      (sectionId) => !sectionId || !/^SEC\d+$/.test(sectionId),
+    )
+  ) {
+    return { error: "معرفات الأقسام غير صحيحة" };
+  }
+
+  return { sectionIds: [...new Set(sectionIds)] };
+}
+
 // Extracted from server/routes/hr.ts (registration order preserved; called
 // from registerHrRoutes). See server/routes/README.md.
 export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
@@ -508,7 +542,14 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
           return res.status(400).json({ message: "تاريخ غير صحيح" });
         }
-        const data = await storage.getDailyAttendanceOverview(date);
+        const parsedSections = parseSectionIdsQuery(req.query.sectionIds);
+        if (parsedSections.error) {
+          return res.status(400).json({ message: parsedSections.error });
+        }
+        const data = await storage.getDailyAttendanceOverview(
+          date,
+          parsedSections.sectionIds,
+        );
         res.json({ data, date });
       } catch (error) {
         console.error("Error fetching daily attendance overview:", error);

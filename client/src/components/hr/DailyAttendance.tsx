@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Pencil, RefreshCw, Send } from "lucide-react";
@@ -36,6 +36,9 @@ import { apiRequest, queryClient } from "../../lib/queryClient";
 import { useAuth } from "../../hooks/use-auth";
 import { userHasPermission } from "../../utils/roleUtils";
 import { useLanguage } from "../../contexts/LanguageContext";
+import SectionMultiSelect, {
+  type AttendanceSection,
+} from "./SectionMultiSelect";
 
 function todayStr() {
   const now = new Date();
@@ -110,6 +113,36 @@ type EditForm = {
   status: string;
 };
 
+const DEFAULT_SECTION_NAMES = [
+  ["الإنتاج - فيلم", "production-extruder"],
+  ["الإنتاج - طباعة", "production-printing"],
+  ["الإنتاج - قطع", "production-cutting"],
+  ["المستودع", "warehouse"],
+] as const;
+
+function getDefaultSectionIds(sections: AttendanceSection[]): string[] {
+  const sectionNumber = (id: string) => {
+    const match = /^SEC(\d+)$/.exec(id);
+    const value = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+    return Number.isSafeInteger(value) ? value : Number.POSITIVE_INFINITY;
+  };
+  const sortedSections = [...sections].sort(
+    (a, b) =>
+      sectionNumber(a.id) - sectionNumber(b.id) || a.id.localeCompare(b.id),
+  );
+  const normalize = (value: string | null | undefined) =>
+    (value || "").trim().toLocaleLowerCase("en-US");
+
+  return DEFAULT_SECTION_NAMES.flatMap(([arabicName, englishName]) => {
+    const match = sortedSections.find(
+      (section) =>
+        normalize(section.name_ar) === normalize(arabicName) ||
+        normalize(section.name) === englishName,
+    );
+    return match ? [match.id] : [];
+  });
+}
+
 function toTimeInput(t: string | null): string {
   if (!t) return "";
   const d = new Date(t);
@@ -131,8 +164,29 @@ export default function DailyAttendance() {
   const { toast } = useToast();
   const L = (ar: string, en: string) => (isRTL ? ar : en);
   const [date, setDate] = useState(todayStr());
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[] | null>(
+    null,
+  );
   const isToday = date === todayStr();
   const canManage = userHasPermission(user, ["manage_attendance", "manage_hr"]);
+
+  const sectionsQuery = useQuery<AttendanceSection[]>({
+    queryKey: ["/api/sections"],
+  });
+
+  useEffect(() => {
+    if (selectedSectionIds !== null) return;
+    if (sectionsQuery.isSuccess) {
+      setSelectedSectionIds(getDefaultSectionIds(sectionsQuery.data || []));
+    } else if (sectionsQuery.isError) {
+      setSelectedSectionIds([]);
+    }
+  }, [
+    sectionsQuery.data,
+    sectionsQuery.isError,
+    sectionsQuery.isSuccess,
+    selectedSectionIds,
+  ]);
 
   const [editRow, setEditRow] = useState<DailyRow | null>(null);
   const [form, setForm] = useState<EditForm>({
@@ -224,16 +278,33 @@ export default function DailyAttendance() {
     },
   });
 
-  const { data, isLoading, isFetching, refetch } = useQuery<{
+  const {
+    data,
+    isLoading: attendanceLoading,
+    isFetching,
+    refetch,
+  } = useQuery<{
     data: DailyRow[];
     date: string;
   }>({
-    queryKey: ["/api/hr/attendance/daily", { date }],
-    enabled: !!date,
+    queryKey: [
+      "/api/hr/attendance/daily",
+      { date, sectionIds: selectedSectionIds },
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({ date });
+      params.set("sectionIds", (selectedSectionIds || []).join(","));
+      const response = await apiRequest(
+        `/api/hr/attendance/daily?${params.toString()}`,
+      );
+      return response.json();
+    },
+    enabled: !!date && selectedSectionIds !== null,
     refetchInterval: isToday ? 60_000 : false,
   });
 
   const rows = data?.data ?? [];
+  const isLoading = selectedSectionIds === null || attendanceLoading;
 
   const empName = (r: DailyRow) =>
     (isRTL ? r.display_name_ar : r.display_name) ||
@@ -287,6 +358,13 @@ export default function DailyAttendance() {
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
           <span>{L("الحضور والانصراف اليومي", "Daily Attendance")}</span>
           <div className="flex flex-wrap items-center gap-2">
+            <SectionMultiSelect
+              sections={sectionsQuery.data || []}
+              selectedIds={selectedSectionIds || []}
+              isLoading={selectedSectionIds === null}
+              isRTL={isRTL}
+              onChange={setSelectedSectionIds}
+            />
             <Input
               type="date"
               value={date}
@@ -336,7 +414,12 @@ export default function DailyAttendance() {
           </div>
         ) : rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            {L("لا توجد بيانات لهذا اليوم", "No data for this day")}
+            {selectedSectionIds?.length === 0
+              ? L(
+                  "اختر قسماً واحداً على الأقل لعرض الحضور",
+                  "Select at least one section to view attendance",
+                )
+              : L("لا توجد بيانات لهذا اليوم", "No data for this day")}
           </p>
         ) : (
           <div className="overflow-x-auto">

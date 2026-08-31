@@ -307,9 +307,9 @@ import {
   applyApprovedLeaveToAttendance as applyApprovedLeaveToAttendanceImpl,
   getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
 } from "../services/leave-attendance";
+import { toNumericSectionIds } from "./section-ids";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
-
 import { db, pool } from "../db";
 import {
   computeEmployeeAttendance,
@@ -790,13 +790,13 @@ export class HrStorage extends MachinesStorage {
       records: records,
     };
   }
-
-
   // نظرة يومية على حضور كل الموظفين: دمج كل صفوف اليوم في سجل واحد لكل مستخدم
   // (التسجيل الذاتي ينشئ صفاً منفصلاً لكل إجراء، لذا يجب التجميع وليس أخذ صف واحد)
-  async getDailyAttendanceOverview(date: string): Promise<any[]> {
+  async getDailyAttendanceOverview(date: string, sectionIds?: string[]): Promise<any[]> {
     return withDatabaseErrorHandling(
       async () => {
+        const numericSectionIds = toNumericSectionIds(sectionIds);
+        if (numericSectionIds?.length === 0) return [];
         const allUsers = await db
           .select({
             id: users.id,
@@ -813,10 +813,12 @@ export class HrStorage extends MachinesStorage {
             and(
               eq(users.status, "active"),
               eq(users.include_in_attendance, true),
+              numericSectionIds
+                ? inArray(users.section_id, numericSectionIds)
+                : undefined,
             ),
           )
           .orderBy(users.display_name);
-
         const attRows = await db
           .select()
           .from(attendance)

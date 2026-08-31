@@ -802,7 +802,10 @@ export interface IStorage {
   getDailyAttendanceStats(date: string): Promise<any>;
   upsertManualAttendance(entries: any[]): Promise<any[]>;
   getDailyAttendanceStatus(userId: number, date: string): Promise<any>;
-  getDailyAttendanceOverview(date: string): Promise<any[]>;
+  getDailyAttendanceOverview(
+    date: string,
+    sectionIds?: string[],
+  ): Promise<any[]>;
   updateDailyAttendance(userId: number, date: string, patch: {
       check_in_time?: Date | null;
       break_start_time?: Date | null;
@@ -1249,8 +1252,8 @@ export class StorageBase {
   }
 
 
-  // users.section_id (integer) و sections.id (varchar) غير متطابقين في النوع،
-  // لذلك نحل اسم القسم عبر خريطة مفتاحها نص المعرّف بدل ربط SQL مباشر.
+  // users.section_id (integer) و sections.id (varchar مثل SEC03) غير متطابقين،
+  // لذلك تدعم الخريطة كلاً من معرّف القسم النصي ورقمه المقابل.
   protected async getSectionsMap(): Promise<
     Map<string, { name: string; name_ar: string | null }>
   > {
@@ -1263,7 +1266,12 @@ export class StorageBase {
       .from(sections);
     const map = new Map<string, { name: string; name_ar: string | null }>();
     for (const s of all) {
-      map.set(String(s.id), { name: s.name, name_ar: s.name_ar });
+      const section = { name: s.name, name_ar: s.name_ar };
+      map.set(String(s.id), section);
+      const numericMatch = /^SEC0*(\d+)$/.exec(String(s.id));
+      if (numericMatch) {
+        map.set(String(Number(numericMatch[1])), section);
+      }
     }
     return map;
   }
