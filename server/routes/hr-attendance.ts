@@ -23,6 +23,33 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
 
   // ============ HR Attendance Management API ============
 
+  /**
+   * @swagger
+   * /api/attendance:
+   *   get:
+   *     tags:
+   *       - HR
+   *     summary: Get attendance records
+   *     description: Retrieve all attendance records with pagination support
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *     responses:
+   *       200:
+   *         description: List of attendance records
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   app.get("/api/attendance", requireAuth, async (req, res) => {
     try {
       const limit = Math.max(
@@ -41,6 +68,36 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/attendance/daily-status/{userId}:
+   *   get:
+   *     tags:
+   *       - HR
+   *     summary: Get daily attendance status
+   *     description: Get the attendance status for a specific user on a given date
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: integer
+   *       - in: query
+   *         name: date
+   *         schema:
+   *           type: string
+   *           format: date
+   *         description: Date in YYYY-MM-DD format (defaults to today)
+   *     responses:
+   *       200:
+   *         description: Daily attendance status
+   *       400:
+   *         description: Invalid user ID
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   // Get daily attendance status for a user
   app.get(
     "/api/attendance/daily-status/:userId",
@@ -63,6 +120,39 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
     },
   );
 
+  /**
+   * @swagger
+   * /api/attendance:
+   *   post:
+   *     tags:
+   *       - HR
+   *     summary: Record attendance check-in/check-out
+   *     description: Record user attendance with location verification
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               user_id:
+   *                 type: integer
+   *               latitude:
+   *                 type: number
+   *               longitude:
+   *                 type: number
+   *               accuracy:
+   *                 type: number
+   *     responses:
+   *       200:
+   *         description: Attendance recorded successfully
+   *       400:
+   *         description: Invalid location or parameters
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   // تسجيل الحضور مع تحقق الموقع الجغرافي المحسّن
   app.post(
     [

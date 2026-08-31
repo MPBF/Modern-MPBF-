@@ -18,6 +18,13 @@ import { populateUserFromSession } from "./middleware/session-auth";
 import monitoringRoutes from "./routes/monitoring";
 import { setupVite, serveStatic, log } from "./vite";
 
+// 📚 API Documentation & Monitoring Services
+import { swaggerSpec } from "./swagger-config";
+import swaggerUi from "swagger-ui-express";
+import { loggerMiddleware, winstonLogger } from "./services/logger";
+import { initializeSentry, sentryContextMiddleware } from "./services/sentry-monitoring";
+import { registerMonitoringRoutes } from "./services/monitoring-dashboard";
+
 function sanitizeErrorForLog(error: any): any {
   if (!error || typeof error !== "object") return error;
   try {
@@ -474,7 +481,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// 📊 Performance monitoring middleware - tracks API response times and resource usage
+// � Initialize Error Tracking (Sentry) - must be early in middleware chain
+if (process.env.SENTRY_ENABLED === "true" && process.env.SENTRY_DSN) {
+  initializeSentry(app);
+  winstonLogger.info("✅ Sentry error tracking initialized");
+}
+
+// 📝 HTTP Request Logging - logs all API requests with duration
+app.use(loggerMiddleware);
+
+// 👤 Sentry Context Middleware - adds user context for error tracking
+app.use(sentryContextMiddleware);
+
+// �📊 Performance monitoring middleware - tracks API response times and resource usage
 app.use(performanceMonitor);
 
 // Session extension middleware - extends session on any API call with enhanced reliability
@@ -2344,7 +2363,30 @@ function sanitizeResponseForLogging(response: any): any {
   // 📊 Start memory monitoring
   MemoryMonitor.startMonitoring(30000); // Every 30 seconds
 
-  // 🔧 Register monitoring routes
+  // � Register Swagger/OpenAPI Documentation
+  if (process.env.SWAGGER_ENABLED !== "false") {
+    app.use(
+      "/api/docs",
+      swaggerUi.serve,
+      swaggerUi.setup(swaggerSpec, {
+        swaggerOptions: {
+          persistAuthorization: true,
+          docExpansion: "list",
+          filter: true,
+          deepLinking: true,
+        },
+        customCss:
+          ".topbar { display: none } .swagger-ui .topbar-wrapper { display: none }",
+      })
+    );
+    winstonLogger.info("✅ Swagger API documentation available at /api/docs");
+  }
+
+  // 📊 Register Monitoring Dashboard Routes
+  registerMonitoringRoutes(app);
+  winstonLogger.info("✅ Monitoring dashboard available at /api/admin/monitoring/*");
+
+  // 🔧 Register monitoring routes (legacy)
   app.use(monitoringRoutes);
 
   const { registerRoutes } = await import("./routes");

@@ -183,7 +183,48 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
     parseManifestId,
   } = ctx;
 
-
+  /**
+   * @swagger
+   * /api/orders:
+   *   get:
+   *     tags:
+   *       - Orders
+   *     summary: Get all orders
+   *     description: Retrieve all orders with pagination support. Results returned as array with pagination metadata in headers.
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *           maximum: 500
+   *         description: Items per page (default 50, max 500)
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *         description: Number of items to skip
+   *     responses:
+   *       200:
+   *         description: Array of orders
+   *         headers:
+   *           X-Pagination-Limit:
+   *             schema:
+   *               type: string
+   *           X-Pagination-Offset:
+   *             schema:
+   *               type: string
+   *           X-Pagination-Count:
+   *             schema:
+   *               type: string
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - insufficient permissions
+   *     security:
+   *       - sessionAuth: []
+   */
   // Orders routes — pagination default-on (limit=50, max=500). Response is a
   // plain array (historical contract). Clients needing the full list pass an
   // explicit `?limit=500`. Pagination metadata is exposed via headers.
@@ -217,6 +258,30 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/orders/next-number:
+   *   get:
+   *     tags:
+   *       - Orders
+   *     summary: Generate next order number
+   *     description: Get the next available order number (preview only, not final)
+   *     responses:
+   *       200:
+   *         description: Next order number
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 orderNumber:
+   *                   type: string
+   *                   example: "ORD001"
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   // Generate next order number using SQL MAX for atomicity (preview only)
   app.get("/api/orders/next-number", requireAuth, async (req, res) => {
     try {
@@ -240,6 +305,40 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/orders:
+   *   post:
+   *     tags:
+   *       - Orders
+   *     summary: Create new order
+   *     description: Create a new sales order with customer and product information
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - order_number
+   *               - customer_id
+   *             properties:
+   *               order_number:
+   *                 type: string
+   *               customer_id:
+   *                 type: integer
+   *               notes:
+   *                 type: string
+   *     responses:
+   *       201:
+   *         description: Order created successfully
+   *       400:
+   *         description: Invalid input
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   app.post(
     "/api/orders",
     requireAuth,

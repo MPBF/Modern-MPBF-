@@ -21,7 +21,28 @@ import { registerProductionMonitoringRoutes } from "./production-monitoring";
 // within this domain, delegated to production-* submodules). See server/routes/README.md.
 export async function registerProductionRoutes(app: Express, ctx: any) {
 
-
+  /**
+   * @swagger
+   * /api/production/orders-for-production:
+   *   get:
+   *     tags:
+   *       - Production
+   *     summary: Get orders ready for production
+   *     description: Retrieve all orders that are ready to be moved to production stage
+   *     responses:
+   *       200:
+   *         description: List of orders ready for production
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   // Get orders for production page
   app.get(
 
@@ -38,6 +59,22 @@ export async function registerProductionRoutes(app: Express, ctx: any) {
     },
   );
 
+  /**
+   * @swagger
+   * /api/production/hierarchical-orders:
+   *   get:
+   *     tags:
+   *       - Production
+   *     summary: Get hierarchical production orders
+   *     description: Retrieve orders organized in a hierarchical structure
+   *     responses:
+   *       200:
+   *         description: Hierarchical structure of production orders
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   // Get hierarchical orders for production page
   app.get(
     "/api/production/hierarchical-orders",
@@ -56,6 +93,53 @@ export async function registerProductionRoutes(app: Express, ctx: any) {
     },
   );
 
+  /**
+   * @swagger
+   * /api/production-orders:
+   *   get:
+   *     tags:
+   *       - Production
+   *     summary: Get production orders with filtering
+   *     description: Retrieve production orders with support for filtering by order ID, customer, stage, and pagination
+   *     parameters:
+   *       - in: query
+   *         name: order_id
+   *         schema:
+   *           type: integer
+   *         description: Filter by order ID
+   *       - in: query
+   *         name: customer_id
+   *         schema:
+   *           type: string
+   *         description: Filter by customer ID
+   *       - in: query
+   *         name: production_stage
+   *         schema:
+   *           type: string
+   *           enum: [film, printing, cutting, done]
+   *         description: Filter by production stage
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *         description: Items per page (max 1000)
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *         description: Number of items to skip
+   *     responses:
+   *       200:
+   *         description: Production orders list
+   *       400:
+   *         description: Invalid parameters
+   *       401:
+   *         description: Unauthorized
+   *     security:
+   *       - sessionAuth: []
+   */
   // Production Orders routes
   app.get("/api/production-orders", requireAuth, async (req, res) => {
     try {
