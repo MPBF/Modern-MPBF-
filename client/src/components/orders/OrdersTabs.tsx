@@ -119,8 +119,21 @@ export default function OrdersTabs({
   const safeCustomerProducts = Array.isArray(customerProducts)
     ? customerProducts
     : [];
+  const safeProductionOrders = Array.isArray(productionOrders)
+    ? productionOrders
+    : [];
   const safeCategories = Array.isArray(categories) ? categories : [];
   const safeItems = Array.isArray(items) ? items : [];
+  const activeOrdersCount = safeOrders.filter((order: any) =>
+    ["waiting", "in_production", "on_hold", "paused"].includes(
+      String(order.status || ""),
+    ),
+  ).length;
+  const selectedStatusesCount = Array.isArray(statusFilter)
+    ? statusFilter.length
+    : statusFilter && statusFilter !== "all"
+      ? 1
+      : 0;
 
   // Bulk selection state
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
@@ -239,27 +252,68 @@ export default function OrdersTabs({
     });
 
   return (
-    <Tabs defaultValue="orders" className="space-y-4 w-full">
-      <div className="overflow-x-auto">
-        <TabsList className="w-full md:w-auto grid grid-cols-2 md:flex">
-          <TabsTrigger value="orders" className="text-xs md:text-sm">
+    <Tabs defaultValue="orders" className="w-full space-y-5">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-transparent p-0 md:inline-grid md:w-auto md:grid-cols-2">
+          <TabsTrigger
+            value="orders"
+            className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600 transition-all data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-950 dark:data-[state=active]:text-blue-300 md:text-sm"
+          >
             {t("navigation.orders")}
           </TabsTrigger>
-          <TabsTrigger value="production-orders" className="text-xs md:text-sm">
+          <TabsTrigger
+            value="production-orders"
+            className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600 transition-all data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-950 dark:data-[state=active]:text-blue-300 md:text-sm"
+          >
             {t("orders.productionOrders")}
           </TabsTrigger>
         </TabsList>
       </div>
 
       <TabsContent value="orders" className="space-y-4 w-full">
-        <Card className="w-full">
-          <CardHeader className="p-3 md:p-6">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-              <CardTitle className="text-lg md:text-2xl">
-                {t("orders.title")}
-              </CardTitle>
-              <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
-                <div className="w-full md:w-auto">
+        <Card className="w-full overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+          <CardHeader className="border-b border-slate-100 bg-gradient-to-l from-white via-slate-50 to-blue-50/70 p-4 dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/20 md:p-6">
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-xl font-black tracking-normal text-slate-950 dark:text-white md:text-2xl">
+                      {t("orders.title")}
+                    </CardTitle>
+                    {selectedStatusesCount > 0 && (
+                      <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                        {selectedStatusesCount.toLocaleString("ar-SA")} فلتر نشط
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    متابعة الطلبات من الاعتماد حتى الإنتاج، مع فلاتر سريعة وإجراءات تشغيل مباشرة.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/70 bg-white/70 p-2 text-center shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 sm:min-w-80">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                    <div className="text-lg font-black text-slate-950 dark:text-white">
+                      {filteredOrders.length.toLocaleString("ar-SA")}
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500">معروض</div>
+                  </div>
+                  <div className="rounded-xl bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
+                    <div className="text-lg font-black text-blue-700 dark:text-blue-300">
+                      {activeOrdersCount.toLocaleString("ar-SA")}
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500">نشط</div>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+                    <div className="text-lg font-black text-emerald-700 dark:text-emerald-300">
+                      {safeProductionOrders.length.toLocaleString("ar-SA")}
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500">إنتاج</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0 flex-1">
                   <OrdersSearch
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
@@ -271,14 +325,14 @@ export default function OrdersTabs({
                   />
                 </div>
                 <div
-                  className="flex w-full items-center rounded-lg border border-slate-200 bg-slate-50 p-1 md:w-auto"
+                  className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900 xl:w-auto"
                   aria-label="طريقة عرض الطلبات"
                 >
                   <Button
                     type="button"
                     variant={ordersView === "table" ? "default" : "ghost"}
                     size="sm"
-                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    className="h-9 gap-1.5 rounded-lg px-2.5 text-xs"
                     onClick={() => setOrdersView("table")}
                     title="عرض جدولي"
                     data-testid="button-orders-view-table"
@@ -290,7 +344,7 @@ export default function OrdersTabs({
                     type="button"
                     variant={ordersView === "cards" ? "default" : "ghost"}
                     size="sm"
-                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    className="h-9 gap-1.5 rounded-lg px-2.5 text-xs"
                     onClick={() => setOrdersView("cards")}
                     title="عرض بطاقات"
                     data-testid="button-orders-view-cards"
@@ -302,7 +356,7 @@ export default function OrdersTabs({
                     type="button"
                     variant={ordersView === "kanban" ? "default" : "ghost"}
                     size="sm"
-                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    className="h-9 gap-1.5 rounded-lg px-2.5 text-xs"
                     onClick={() => setOrdersView("kanban")}
                     title="عرض كانبان حسب الحالة"
                     data-testid="button-orders-view-kanban"
@@ -319,7 +373,7 @@ export default function OrdersTabs({
                     <Button
                       onClick={onAddOrder}
                       data-testid="button-add-order"
-                      className="text-xs md:text-sm"
+                      className="h-10 w-full rounded-xl px-4 text-xs font-bold shadow-sm md:text-sm xl:w-auto"
                     >
                       <Plus className="h-4 w-4 ml-1" />
                       <span className="hidden sm:inline">

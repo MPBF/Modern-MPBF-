@@ -150,14 +150,14 @@ export default function OrdersTable({
 
   const getPoStatusBadgeClass = (status: string) => {
     const map: Record<string, string> = {
-      pending: "bg-yellow-100 text-yellow-800",
-      active: "bg-blue-100 text-blue-800",
-      in_production: "bg-blue-100 text-blue-800",
-      completed: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
-      paused: "bg-orange-100 text-orange-800",
+      pending: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+      active: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
+      in_production: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
+      completed: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+      cancelled: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+      paused: "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
     };
-    return map[status] || "bg-gray-100 text-gray-800";
+    return map[status] || "border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300";
   };
 
   // Check if all orders are selected
@@ -186,48 +186,48 @@ export default function OrdersTable({
       waiting: {
         label: t("orders.statuses.waiting"),
         variant: "secondary",
-        color: "bg-yellow-100 text-yellow-800",
+        color: "border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
       },
       on_hold: {
         label: t("orders.statuses.on_hold"),
         variant: "secondary",
-        color: "bg-purple-100 text-purple-800",
+        color: "border border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
       },
       in_production: {
         label: t("orders.statuses.in_production"),
         variant: "default",
-        color: "bg-blue-100 text-blue-800",
+        color: "border border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
       },
       paused: {
         label: t("orders.statuses.paused"),
         variant: "destructive",
-        color: "bg-orange-100 text-orange-800",
+        color: "border border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
       },
       completed: {
         label: t("orders.statuses.completed"),
         variant: "default",
-        color: "bg-green-100 text-green-800",
+        color: "border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
       },
       cancelled: {
         label: t("orders.statuses.cancelled"),
         variant: "destructive",
-        color: "bg-red-100 text-red-800",
+        color: "border border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
       },
       archived: {
         label: t("orders.statuses.archived"),
         variant: "outline",
-        color: "bg-gray-200 text-gray-600",
+        color: "border border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
       },
     };
 
     const statusInfo = statusMap[status] || {
       label: status,
       variant: "outline",
-      color: "bg-gray-100 text-gray-800",
+      color: "border border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
     };
 
     return (
-      <Badge className={statusInfo.color} data-testid={`status-${status}`}>
+      <Badge className={`${statusInfo.color} rounded-full px-2.5 py-1 font-bold`} data-testid={`status-${status}`}>
         {statusInfo.label}
       </Badge>
     );
@@ -254,10 +254,10 @@ export default function OrdersTable({
   return (
     <>
       {/* Desktop Table */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 md:block">
         <Table>
-          <TableHeader>
-            <TableRow>
+          <TableHeader className="bg-slate-50 dark:bg-slate-900/80">
+            <TableRow className="border-slate-200 hover:bg-transparent dark:border-slate-800">
               {onOrderSelect && onSelectAll && (
                 <TableHead className="w-12 text-center">
                   <Checkbox
@@ -274,13 +274,13 @@ export default function OrdersTable({
                 </TableHead>
               )}
               <TableHead className="w-10" />
-              <TableHead className="text-center">
+              <TableHead className="text-center font-bold text-slate-600 dark:text-slate-300">
                 {t("orders.orderNumber")} / {t("orders.customer")}
               </TableHead>
-              <TableHead className="text-center">
+              <TableHead className="text-center font-bold text-slate-600 dark:text-slate-300">
                 {t("orders.createdDate")} / {t("orders.creator")}
               </TableHead>
-              <TableHead className="text-center">
+              <TableHead className="text-center font-bold text-slate-600 dark:text-slate-300">
                 <span
                   className="flex items-center justify-center gap-1"
                   title={t("orders.daysSinceCreation")}
@@ -291,7 +291,7 @@ export default function OrdersTable({
                   </span>
                 </span>
               </TableHead>
-              <TableHead className="text-center">
+              <TableHead className="text-center font-bold text-slate-600 dark:text-slate-300">
                 <span
                   className="flex items-center justify-center gap-1"
                   title={t("orders.completionRate")}
@@ -302,7 +302,7 @@ export default function OrdersTable({
                   </span>
                 </span>
               </TableHead>
-              <TableHead className="text-center">
+              <TableHead className="text-center font-bold text-slate-600 dark:text-slate-300">
                 {t("common.actions")}
               </TableHead>
             </TableRow>
@@ -381,7 +381,8 @@ export default function OrdersTable({
                   <TableRow
                     data-testid={`order-row-${order.id}`}
                     className={[
-                      selectedOrders.includes(order.id) ? "bg-blue-50" : "",
+                      "border-slate-100 transition-colors hover:bg-blue-50/60 dark:border-slate-800 dark:hover:bg-blue-950/20",
+                      selectedOrders.includes(order.id) ? "bg-blue-50 dark:bg-blue-950/30" : "",
                       shouldBlink ? "order-aging-alert" : "",
                     ]
                       .filter(Boolean)
@@ -423,11 +424,11 @@ export default function OrdersTable({
                       className="text-center"
                       data-testid={`order-number-${order.id}`}
                     >
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span className="font-semibold text-sm">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 font-black text-slate-900 dark:bg-slate-900 dark:text-white">
                           {order.order_number}
                         </span>
-                        <span className="font-bold text-red-600 text-sm">
+                        <span className="max-w-48 truncate text-sm font-bold text-blue-700 dark:text-blue-300">
                           {customer?.name_ar || customer?.name || "-"}
                         </span>
                       </div>
@@ -437,12 +438,12 @@ export default function OrdersTable({
                       data-testid={`created-date-${order.id}`}
                     >
                       <div className="flex flex-col items-center gap-0.5">
-                        <span className="text-sm">
+                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
                           {order.created_at
                             ? format(new Date(order.created_at), "dd/MM/yyyy")
                             : "-"}
                         </span>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="max-w-40 truncate text-sm text-muted-foreground">
                           {user?.display_name_ar ||
                             user?.display_name ||
                             user?.username ||
@@ -455,7 +456,7 @@ export default function OrdersTable({
                       data-testid={`delivery-${order.id}`}
                     >
                       {daysSinceCreation !== null ? (
-                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${shouldBlink ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"}`}>
                           {t("orders.daysSinceCreatedCount", {
                             count: daysSinceCreation,
                           })}
@@ -705,6 +706,9 @@ export default function OrdersTable({
                                   <TableHead className="text-right text-xs">
                                     الكمية المطلوبة (كجم)
                                   </TableHead>
+                                  <TableHead className="text-right text-xs min-w-[240px]">
+                                    نسبة الإنجاز
+                                  </TableHead>
                                   <TableHead className="text-right text-xs">
                                     الحالة
                                   </TableHead>
@@ -749,6 +753,21 @@ export default function OrdersTable({
                                       </TableCell>
                                       <TableCell className="text-sm">
                                         {required.toFixed(2)}
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        <ProductionProgress
+                                          filmPercentage={parseFloat(
+                                            po.film_completion_percentage || 0,
+                                          )}
+                                          printingPercentage={parseFloat(
+                                            po.printing_completion_percentage ||
+                                              0,
+                                          )}
+                                          cuttingPercentage={parseFloat(
+                                            po.cutting_completion_percentage ||
+                                              0,
+                                          )}
+                                        />
                                       </TableCell>
                                       <TableCell>
                                         <Badge
@@ -996,6 +1015,22 @@ export default function OrdersTable({
                                   {required.toFixed(2)}
                                 </span>
                               </span>
+                            </div>
+                            <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+                              <div className="mb-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                                نسبة إنجاز أمر الإنتاج
+                              </div>
+                              <ProductionProgress
+                                filmPercentage={parseFloat(
+                                  po.film_completion_percentage || 0,
+                                )}
+                                printingPercentage={parseFloat(
+                                  po.printing_completion_percentage || 0,
+                                )}
+                                cuttingPercentage={parseFloat(
+                                  po.cutting_completion_percentage || 0,
+                                )}
+                              />
                             </div>
                           </div>
                         );

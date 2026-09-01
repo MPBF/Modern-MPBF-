@@ -1,4 +1,4 @@
-import { Search, ListFilter } from "lucide-react";
+import { ListFilter, Search, SlidersHorizontal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "../ui/button";
@@ -71,45 +71,50 @@ export default function OrdersSearch({
           });
 
   return (
-    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-      <div className="relative flex-1 sm:flex-none">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+    <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="relative min-w-0 flex-1">
+        <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <Input
-          placeholder={t("common.search")}
+          placeholder={
+            isProduction
+              ? "ابحث في أوامر الإنتاج أو رقم الطلب أو العميل"
+              : "ابحث برقم الطلب أو العميل أو المندوب"
+          }
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 w-full sm:w-64 text-xs sm:text-sm"
+          className="h-11 w-full rounded-xl border-slate-200 bg-white pr-10 text-sm shadow-sm transition-all placeholder:text-slate-400 focus-visible:ring-blue-500 dark:border-slate-800 dark:bg-slate-950"
           data-testid={
             isProduction ? "input-search-production" : "input-search-orders"
           }
         />
       </div>
-      {!isProduction && setSalesRepFilter && salesReps.length > 0 && (
-        <Select value={salesRepFilter || "all"} onValueChange={setSalesRepFilter}>
-          <SelectTrigger
-            className="w-full sm:w-44 text-xs sm:text-sm"
-            data-testid="select-sales-rep-filter"
-          >
-            <SelectValue placeholder="المندوب" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">كل المندوبين</SelectItem>
-            <SelectItem value="none">بدون مندوب</SelectItem>
-            {salesReps.map((rep: any) => (
-              <SelectItem key={rep.id} value={String(rep.id)}>
-                {rep.display_name_ar || rep.display_name || rep.username}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:auto-cols-max lg:grid-flow-col">
+        {!isProduction && setSalesRepFilter && salesReps.length > 0 && (
+          <Select value={salesRepFilter || "all"} onValueChange={setSalesRepFilter}>
+            <SelectTrigger
+              className="h-11 w-full rounded-xl border-slate-200 bg-white text-sm shadow-sm lg:w-48 dark:border-slate-800 dark:bg-slate-950"
+              data-testid="select-sales-rep-filter"
+            >
+              <SelectValue placeholder="المندوب" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل المندوبين</SelectItem>
+              <SelectItem value="none">بدون مندوب</SelectItem>
+              {salesReps.map((rep: any) => (
+                <SelectItem key={rep.id} value={String(rep.id)}>
+                  {rep.display_name_ar || rep.display_name || rep.username}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       {isProduction ? (
         <Select
           value={(statusFilter as string) || ""}
           onValueChange={setStatusFilter}
         >
           <SelectTrigger
-            className="w-full sm:w-48 text-xs sm:text-sm"
+            className="h-11 w-full rounded-xl border-slate-200 bg-white text-sm shadow-sm lg:w-48 dark:border-slate-800 dark:bg-slate-950"
             data-testid="select-status-filter"
           >
             <SelectValue placeholder={t("common.status")} />
@@ -132,14 +137,17 @@ export default function OrdersSearch({
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className="w-full sm:w-48 justify-between text-xs sm:text-sm font-normal"
+              className="h-11 w-full justify-between rounded-xl border-slate-200 bg-white text-sm font-medium shadow-sm lg:w-52 dark:border-slate-800 dark:bg-slate-950"
               data-testid="select-status-filter"
             >
-              <span className="truncate">{triggerLabel}</span>
-              <ListFilter className="h-4 w-4 opacity-50 shrink-0" />
+              <span className="flex min-w-0 items-center gap-2 truncate">
+                <SlidersHorizontal className="h-4 w-4 shrink-0 text-blue-500" />
+                <span className="truncate">{triggerLabel}</span>
+              </span>
+              <ListFilter className="h-4 w-4 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-2" align="end">
+          <PopoverContent className="w-64 rounded-xl p-2" align="end">
             <div className="flex items-center justify-between px-1 pb-2">
               <span className="text-xs font-medium text-muted-foreground">
                 {t("common.status")}
@@ -173,6 +181,22 @@ export default function OrdersSearch({
           </PopoverContent>
         </Popover>
       )}
+        {(searchTerm || selectedStatuses.length > 0 || salesRepFilter !== "all") && !isProduction && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 rounded-xl px-3 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            onClick={() => {
+              setSearchTerm("");
+              setStatusFilter([]);
+              setSalesRepFilter?.("all");
+            }}
+          >
+            <X className="ml-2 h-4 w-4" />
+            مسح الفلاتر
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
