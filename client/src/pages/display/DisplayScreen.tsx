@@ -25,6 +25,11 @@ import {
   Medal,
   Copy,
   Check,
+  Film,
+  Printer,
+  Scissors,
+  ClipboardList,
+  Sparkles,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -86,6 +91,28 @@ interface TopProducersData {
   sections: Record<string, any[]>;
 }
 
+interface OrdersBoardData {
+  filters: { status: string; stage: string; limit: number };
+  orders: any[];
+}
+
+interface SectionStatsData {
+  period: string;
+  sections: any[];
+}
+
+interface MachineStatsData {
+  period: string;
+  stage: string;
+  machines: any[];
+}
+
+interface UserStatsData {
+  period: string;
+  stage: string;
+  users: any[];
+}
+
 function useLocale() {
   const { i18n } = useTranslation();
   const lang = (i18n.language || "en").toLowerCase();
@@ -108,8 +135,77 @@ function formatTime(dateStr: string, locale: string = "en-US") {
   return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
+const stageLabels: Record<string, string> = {
+  film: "الفيلم",
+  printing: "الطباعة",
+  cutting: "التقطيع",
+  done: "جاهز",
+  all: "كل الأقسام",
+};
+
+const stageLabelsEn: Record<string, string> = {
+  film: "Film",
+  printing: "Printing",
+  cutting: "Cutting",
+  done: "Ready",
+  all: "All Sections",
+};
+
+const stageIcons: Record<string, any> = {
+  film: Film,
+  printing: Printer,
+  cutting: Scissors,
+  done: Check,
+  all: Factory,
+};
+
+const stageColors: Record<string, string> = {
+  film: "from-slate-200 to-white text-slate-950",
+  printing: "from-red-500 to-rose-700 text-white",
+  cutting: "from-amber-400 to-orange-600 text-slate-950",
+  done: "from-emerald-500 to-teal-700 text-white",
+  all: "from-blue-500 to-cyan-700 text-white",
+};
+
+function StageProgressStrip({ order }: { order: any }) {
+  const stages = [
+    { key: "film", value: Number(order.film_completion_percentage) || 0 },
+    { key: "printing", value: Number(order.printing_completion_percentage) || 0 },
+    { key: "cutting", value: Number(order.cutting_completion_percentage) || 0 },
+  ];
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {stages.map((stage) => {
+        const Icon = stageIcons[stage.key];
+        const value = Math.min(Math.max(stage.value, 0), 100);
+        return (
+          <div key={stage.key} className="rounded-xl bg-white/10 p-2">
+            <div className="mb-1 flex items-center justify-between gap-2 text-white/80">
+              <span className="flex items-center gap-1 text-xs font-bold">
+                <Icon className="h-3.5 w-3.5" />
+                <span>{stageLabels[stage.key]}</span>
+                <span className="opacity-70" dir="ltr">
+                  {stageLabelsEn[stage.key]}
+                </span>
+              </span>
+              <span className="text-xs font-black">{Math.round(value)}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/15">
+              <div
+                className={`h-full rounded-full bg-gradient-to-l ${stageColors[stage.key]}`}
+                style={{ width: `${value}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CurrentDateTime() {
-  const locale = useLocale();
+  const displayLocale = "en-US";
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -119,14 +215,14 @@ function CurrentDateTime() {
   return (
     <div className="flex items-center gap-4 text-white/90">
       <div className="text-2xl font-bold tabular-nums">
-        {now.toLocaleTimeString(locale, {
+        {now.toLocaleTimeString(displayLocale, {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
         })}
       </div>
       <div className="text-lg opacity-80">
-        {now.toLocaleDateString(locale, {
+        {now.toLocaleDateString(displayLocale, {
           weekday: "long",
           year: "numeric",
           month: "long",
@@ -186,6 +282,227 @@ function ProductionStatsSlide({
           <div className="text-2xl text-white/90 font-medium">{item.label}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function OrdersBoardSlide({ data }: { data: OrdersBoardData | undefined }) {
+  const locale = useLocale();
+  const englishLocale = "en-US";
+  const orders = data?.orders || [];
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-center text-white/50">
+        <div>
+          <ClipboardList className="mx-auto mb-4 h-24 w-24 opacity-40" />
+          <p className="text-3xl font-bold">لا توجد طلبات مطابقة للفلاتر</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid h-full grid-cols-2 gap-5 p-6">
+      {orders.slice(0, data?.filters?.limit || 8).map((order, index) => (
+        <div
+          key={order.id}
+          className="flex min-h-0 flex-col rounded-3xl border border-white/10 bg-white/10 p-5 shadow-2xl backdrop-blur-sm"
+          style={{ animation: `fadeSlideUp 0.45s ease-out ${index * 0.07}s both` }}
+        >
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-3xl font-black text-white">
+                {order.order_number}
+              </div>
+              <div className="mt-2 space-y-1">
+                <div className="truncate text-xl font-bold text-blue-200">
+                  {order.customer_name_ar || "بدون اسم عربي"}
+                </div>
+                <div className="truncate text-base font-semibold text-white/65" dir="ltr">
+                  {order.customer_name || "No English customer name"}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-white/15 px-4 py-2 text-center">
+              <div className="text-3xl font-black text-white">
+                {formatNumber(order.production_order_count, englishLocale)}
+              </div>
+              <div className="text-xs font-bold uppercase tracking-wide text-white/60" dir="ltr">
+                Production Orders
+              </div>
+            </div>
+          </div>
+
+          <StageProgressStrip order={order} />
+
+          <div className="mt-4 flex-1 space-y-2 overflow-hidden">
+            {(order.production_orders || []).slice(0, 3).map((po: any) => {
+              const StageIcon = stageIcons[po.production_stage || "film"] || Factory;
+              const customerProductLabel =
+                po.customer_product_display_name ||
+                [
+                  po.category_name_ar || po.category_name,
+                  po.item_name_ar || po.item_name,
+                ]
+                  .filter(Boolean)
+                  .join(" - ") ||
+                "منتج العميل غير محدد";
+              return (
+                <div
+                  key={po.id}
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl bg-black/20 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-lg font-black text-white">
+                        {po.production_order_number}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-white/60">
+                        منتج العميل
+                      </span>
+                      <span className="truncate text-base font-bold text-blue-100">
+                        {customerProductLabel}
+                      </span>
+                    </div>
+                    <div className="truncate text-sm text-white/60">
+                      المقاس: {po.size_caption || "غير محدد"} • {formatNumber(po.quantity_kg, locale)} كجم
+                    </div>
+                  </div>
+                  <div className={`flex items-center gap-2 rounded-full bg-gradient-to-l px-3 py-1.5 text-sm font-black ${stageColors[po.production_stage] || stageColors.all}`}>
+                    <StageIcon className="h-4 w-4" />
+                    <span>{stageLabels[po.production_stage] || po.production_stage}</span>
+                    <span className="opacity-70" dir="ltr">
+                      {stageLabelsEn[po.production_stage] || po.production_stage}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SectionStatsSlide({ data }: { data: SectionStatsData | undefined }) {
+  const locale = useLocale();
+  const sections = data?.sections || [];
+  const totalWeight = sections.reduce(
+    (sum, item) => sum + Number(item.total_weight_kg || 0),
+    0,
+  );
+
+  return (
+    <div className="grid h-full grid-cols-3 gap-6 p-8">
+      {sections.map((section, index) => {
+        const Icon = stageIcons[section.stage] || Factory;
+        const weight = Number(section.total_weight_kg || 0);
+        const share = totalWeight > 0 ? Math.round((weight / totalWeight) * 100) : 0;
+        return (
+          <div
+            key={section.stage}
+            className="flex flex-col justify-between overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-2xl backdrop-blur-sm"
+            style={{ animation: `fadeScaleIn 0.5s ease-out ${index * 0.12}s both` }}
+          >
+            <div>
+              <div className={`mb-8 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br ${stageColors[section.stage] || stageColors.all}`}>
+                <Icon className="h-10 w-10" />
+              </div>
+              <h3 className="text-4xl font-black text-white">
+                {stageLabels[section.stage] || section.stage}
+              </h3>
+              <p className="mt-2 text-xl text-white/60">إنتاج الفترة المحددة</p>
+            </div>
+            <div className="space-y-5">
+              <div>
+                <div className="text-7xl font-black text-white tabular-nums">
+                  {formatNumber(weight, locale)}
+                </div>
+                <div className="text-2xl font-bold text-white/70">كجم</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="rounded-2xl bg-black/20 p-4">
+                  <div className="text-3xl font-black text-white">
+                    {formatNumber(section.roll_count, locale)}
+                  </div>
+                  <div className="text-sm text-white/60">رول</div>
+                </div>
+                <div className="rounded-2xl bg-black/20 p-4">
+                  <div className="text-3xl font-black text-white">{share}%</div>
+                  <div className="text-sm text-white/60">الحصة</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RankingStatsSlide({
+  title,
+  rows,
+  rowLabel,
+}: {
+  title: string;
+  rows: any[];
+  rowLabel: "machine" | "user";
+}) {
+  const locale = useLocale();
+  const medalStyles = [
+    "from-yellow-300 to-amber-500 text-slate-950",
+    "from-slate-200 to-slate-400 text-slate-950",
+    "from-orange-300 to-orange-700 text-white",
+  ];
+
+  return (
+    <div className="p-8">
+      <div className="mb-6 flex items-center justify-between rounded-3xl border border-white/10 bg-white/10 px-8 py-5 backdrop-blur-sm">
+        <h3 className="text-4xl font-black text-white">{title}</h3>
+        <Trophy className="h-12 w-12 text-yellow-300" />
+      </div>
+      <div className="grid gap-4">
+        {rows.slice(0, 8).map((row, index) => {
+          const StageIcon = stageIcons[row.stage] || Factory;
+          const name =
+            rowLabel === "machine"
+              ? row.name_ar || row.name || row.machine_id
+              : row.full_name || row.username || row.user_id;
+          return (
+            <div
+              key={`${row.stage}-${row.machine_id || row.user_id}-${index}`}
+              className="grid grid-cols-[5rem_1fr_12rem_10rem] items-center gap-5 rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm"
+              style={{ animation: `fadeSlideRight 0.4s ease-out ${index * 0.06}s both` }}
+            >
+              <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br text-3xl font-black ${medalStyles[index] || "from-white/10 to-white/5 text-white"}`}>
+                {index + 1}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-3xl font-black text-white">{name}</div>
+                <div className="mt-1 flex items-center gap-2 text-lg font-bold text-white/60">
+                  <StageIcon className="h-5 w-5" />
+                  {stageLabels[row.stage] || row.stage}
+                </div>
+              </div>
+              <div className="text-left">
+                <div className="text-4xl font-black text-white">
+                  {formatNumber(row.total_weight_kg, locale)}
+                </div>
+                <div className="text-sm font-bold text-white/50">كجم</div>
+              </div>
+              <div className="rounded-2xl bg-black/20 p-4 text-center">
+                <div className="text-3xl font-black text-white">
+                  {formatNumber(row.roll_count, locale)}
+                </div>
+                <div className="text-sm text-white/60">رول</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -901,6 +1218,90 @@ export default function DisplayScreen() {
 
   const currentSlide = slides[currentSlideIndex];
 
+  const ordersBoardContent =
+    currentSlide?.slide_type === "orders_board" ? currentSlide.content : null;
+  const statsContent = ["section_stats", "machine_stats", "user_stats"].includes(
+    currentSlide?.slide_type || "",
+  )
+    ? currentSlide.content
+    : null;
+  const livePeriod = statsContent?.period || "today";
+  const liveStage = statsContent?.stage || "all";
+  const liveLimit = statsContent?.limit || 8;
+
+  const { data: ordersBoardData } = useQuery<OrdersBoardData>({
+    queryKey: [
+      "/api/display/live/orders-board",
+      ordersBoardContent?.status || "active",
+      ordersBoardContent?.stage || "all",
+      ordersBoardContent?.limit || 8,
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        status: ordersBoardContent?.status || "active",
+        stage: ordersBoardContent?.stage || "all",
+        limit: String(ordersBoardContent?.limit || 8),
+      });
+      const res = await fetch(`/api/display/live/orders-board?${params}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch display orders board");
+      return res.json();
+    },
+    refetchInterval: fastPolling,
+    enabled: currentSlide?.slide_type === "orders_board",
+  });
+
+  const { data: sectionStatsData } = useQuery<SectionStatsData>({
+    queryKey: ["/api/display/live/section-stats", livePeriod],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/display/live/section-stats?period=${livePeriod}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) throw new Error("Failed to fetch section stats");
+      return res.json();
+    },
+    refetchInterval: fastPolling,
+    enabled: currentSlide?.slide_type === "section_stats",
+  });
+
+  const { data: machineStatsData } = useQuery<MachineStatsData>({
+    queryKey: ["/api/display/live/machine-stats", livePeriod, liveStage, liveLimit],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period: livePeriod,
+        stage: liveStage,
+        limit: String(liveLimit),
+      });
+      const res = await fetch(`/api/display/live/machine-stats?${params}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch machine stats");
+      return res.json();
+    },
+    refetchInterval: fastPolling,
+    enabled: currentSlide?.slide_type === "machine_stats",
+  });
+
+  const { data: userStatsData } = useQuery<UserStatsData>({
+    queryKey: ["/api/display/live/user-stats", livePeriod, liveStage, liveLimit],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period: livePeriod,
+        stage: liveStage,
+        limit: String(liveLimit),
+      });
+      const res = await fetch(`/api/display/live/user-stats?${params}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch user stats");
+      return res.json();
+    },
+    refetchInterval: fastPolling,
+    enabled: currentSlide?.slide_type === "user_stats",
+  });
+
   const topProducersContent =
     currentSlide?.slide_type === "top_producers" ? currentSlide.content : null;
   const topProducersPeriod = topProducersContent?.period || "today";
@@ -1017,6 +1418,26 @@ export default function DisplayScreen() {
     switch (currentSlide.slide_type) {
       case "production_stats":
         return <ProductionStatsSlide stats={productionStats} />;
+      case "orders_board":
+        return <OrdersBoardSlide data={ordersBoardData} />;
+      case "section_stats":
+        return <SectionStatsSlide data={sectionStatsData} />;
+      case "machine_stats":
+        return (
+          <RankingStatsSlide
+            title="أعلى الماكينات إنتاجًا"
+            rows={machineStatsData?.machines || []}
+            rowLabel="machine"
+          />
+        );
+      case "user_stats":
+        return (
+          <RankingStatsSlide
+            title="أعلى العاملين إنتاجًا"
+            rows={userStatsData?.users || []}
+            rowLabel="user"
+          />
+        );
       case "recent_production":
         return <RecentProductionSlide orders={recentProduction} />;
       case "latest_rolls":
@@ -1046,6 +1467,10 @@ export default function DisplayScreen() {
 
   const slideTypeIcons: Record<string, any> = {
     production_stats: BarChart3,
+    orders_board: ClipboardList,
+    section_stats: Sparkles,
+    machine_stats: Factory,
+    user_stats: Users,
     recent_production: Package,
     latest_rolls: Factory,
     announcement: Megaphone,

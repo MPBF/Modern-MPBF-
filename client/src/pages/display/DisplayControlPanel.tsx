@@ -27,6 +27,7 @@ import {
   Film,
   Sparkles,
   Languages,
+  ClipboardList,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -95,6 +96,30 @@ function useSlideTypes() {
       label: t("display.types.recent_production"),
       icon: Package,
       description: t("display.types.recent_productionDesc"),
+    },
+    {
+      value: "orders_board",
+      label: "الطلبات وأوامر الإنتاج",
+      icon: ClipboardList,
+      description: "عرض الطلبات النشطة مع أوامر الإنتاج ونسب الإنجاز لكل قسم",
+    },
+    {
+      value: "section_stats",
+      label: "إحصائيات الأقسام",
+      icon: Sparkles,
+      description: "مقارنة إنتاج الفيلم والطباعة والتقطيع حسب الفترة",
+    },
+    {
+      value: "machine_stats",
+      label: "إحصائيات الماكينات",
+      icon: Factory,
+      description: "ترتيب الماكينات حسب الوزن وعدد الرولات",
+    },
+    {
+      value: "user_stats",
+      label: "إحصائيات المستخدمين",
+      icon: Users,
+      description: "متابعة إنتاج العاملين حسب القسم والفترة",
     },
     {
       value: "latest_rolls",
@@ -259,6 +284,10 @@ function SlideForm({
   const [topStage, setTopStage] = useState(
     initialData?.content?.stage || "all",
   );
+  const [orderStatus, setOrderStatus] = useState(
+    initialData?.content?.status || "active",
+  );
+  const [rowLimit, setRowLimit] = useState(initialData?.content?.limit || 8);
 
   const handleSubmit = () => {
     if (!title || !slideType) return;
@@ -289,6 +318,22 @@ function SlideForm({
         url: imageUrl,
         caption: imageCaption || undefined,
         fit: imageFit,
+      };
+    } else if (slideType === "orders_board") {
+      content = {
+        status: orderStatus,
+        stage: topStage,
+        limit: rowLimit,
+      };
+    } else if (
+      slideType === "section_stats" ||
+      slideType === "machine_stats" ||
+      slideType === "user_stats"
+    ) {
+      content = {
+        period: topPeriod,
+        stage: topStage,
+        limit: rowLimit,
       };
     } else if (slideType === "top_producers") {
       content = { period: topPeriod, stage: topStage };
@@ -817,6 +862,110 @@ function SlideForm({
         </div>
       )}
 
+      {slideType === "orders_board" && (
+        <div className="space-y-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800">
+          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            إعدادات شريحة الطلبات وأوامر الإنتاج
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label>حالة الطلبات</Label>
+              <Select value={orderStatus} onValueChange={setOrderStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">الطلبات النشطة</SelectItem>
+                  <SelectItem value="all">كل الطلبات</SelectItem>
+                  <SelectItem value="waiting">بانتظار الإنتاج</SelectItem>
+                  <SelectItem value="in_production">قيد الإنتاج</SelectItem>
+                  <SelectItem value="on_hold">معلّقة</SelectItem>
+                  <SelectItem value="paused">متوقفة</SelectItem>
+                  <SelectItem value="completed">مكتملة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>القسم</Label>
+              <Select value={topStage} onValueChange={setTopStage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الأقسام</SelectItem>
+                  <SelectItem value="film">الفيلم</SelectItem>
+                  <SelectItem value="printing">الطباعة</SelectItem>
+                  <SelectItem value="cutting">التقطيع</SelectItem>
+                  <SelectItem value="done">جاهز</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>عدد الطلبات</Label>
+              <Input
+                type="number"
+                min={3}
+                max={20}
+                value={rowLimit}
+                onChange={(e) => setRowLimit(Number(e.target.value))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(slideType === "section_stats" ||
+        slideType === "machine_stats" ||
+        slideType === "user_stats") && (
+        <div className="space-y-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800">
+          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            إعدادات شريحة الإحصائيات
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label>الفترة</Label>
+              <Select value={topPeriod} onValueChange={setTopPeriod}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">اليوم</SelectItem>
+                  <SelectItem value="month">الشهر</SelectItem>
+                  <SelectItem value="year">السنة</SelectItem>
+                  <SelectItem value="all">كل الفترات</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>القسم</Label>
+              <Select value={topStage} onValueChange={setTopStage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الأقسام</SelectItem>
+                  <SelectItem value="film">الفيلم</SelectItem>
+                  <SelectItem value="printing">الطباعة</SelectItem>
+                  <SelectItem value="cutting">التقطيع</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {slideType !== "section_stats" && (
+              <div className="space-y-2">
+                <Label>عدد النتائج</Label>
+                <Input
+                  type="number"
+                  min={3}
+                  max={10}
+                  value={rowLimit}
+                  onChange={(e) => setRowLimit(Number(e.target.value))}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {slideType === "top_producers" && (
         <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
           <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300">
@@ -839,6 +988,7 @@ function SlideForm({
                   <SelectItem value="month">
                     {t("display.top_producers_slide.month")}
                   </SelectItem>
+                  <SelectItem value="year">السنة</SelectItem>
                   <SelectItem value="all">
                     {t("display.top_producers_slide.allTime")}
                   </SelectItem>
@@ -1007,6 +1157,35 @@ export default function DisplayControlPanel() {
 
   const getSlideTypeInfo = (type: string) =>
     SLIDE_TYPES.find((t) => t.value === type);
+  const activeSlides = slides.filter((slide) => slide.is_active).length;
+  const totalDuration = slides.reduce(
+    (sum, slide) => sum + Number(slide.duration_seconds || 0),
+    0,
+  );
+  const liveSlides = slides.filter((slide) =>
+    [
+      "production_stats",
+      "recent_production",
+      "orders_board",
+      "section_stats",
+      "machine_stats",
+      "user_stats",
+      "top_producers",
+      "attendance",
+      "latest_rolls",
+    ].includes(slide.slide_type),
+  ).length;
+  const formatSlideContent = (slide: SlideData) => {
+    const content = slide.content || {};
+    const parts = [];
+    if (content.period) parts.push(`الفترة: ${content.period === "today" ? "اليوم" : content.period === "month" ? "الشهر" : content.period === "year" ? "السنة" : "كل الفترات"}`);
+    if (content.stage) parts.push(`القسم: ${content.stage === "all" ? "كل الأقسام" : content.stage === "film" ? "الفيلم" : content.stage === "printing" ? "الطباعة" : content.stage === "cutting" ? "التقطيع" : content.stage}`);
+    if (content.status) parts.push(`الحالة: ${content.status === "active" ? "النشطة" : content.status}`);
+    if (content.limit) parts.push(`عدد العرض: ${content.limit}`);
+    if (content.message) parts.push(content.message);
+    if (content.items) parts.push(`${content.items.length} تعليمات`);
+    return parts.join(" • ");
+  };
 
   return (
     <PageLayout
@@ -1014,16 +1193,23 @@ export default function DisplayControlPanel() {
       description={t("display.manageSlidesDesc")}
     >
       <div className="space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">{t("display.manageSlides")}</h2>
-            <p className="text-gray-500 mt-1">
-              {t("display.manageSlidesDesc")}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-l from-slate-950 via-blue-950 to-slate-900 p-6 text-white shadow-xl">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-bold text-blue-100 ring-1 ring-white/10">
+                <Monitor className="h-4 w-4" />
+                شاشة المصنع المباشرة
+              </div>
+              <h2 className="text-3xl font-black tracking-normal">
+                {t("display.manageSlides")}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+                إدارة الشرائح التي تظهر أمام عمال الفيلم والطباعة والتقطيع، مع بيانات مباشرة عن الطلبات والإنتاج والمراكز الأولى.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
             <a href="/display-screen" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline">
+              <Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white">
                 <Monitor className="w-4 h-4 ml-2" />
                 {t("display.openDisplay")}
                 <ExternalLink className="w-3 h-3 mr-2" />
@@ -1037,7 +1223,7 @@ export default function DisplayControlPanel() {
               }}
             >
               <DialogTrigger asChild>
-                <Button onClick={openCreate}>
+                <Button onClick={openCreate} className="bg-blue-500 text-white hover:bg-blue-600">
                   <Plus className="w-4 h-4 ml-2" />
                   {t("display.addSlide")}
                 </Button>
@@ -1065,6 +1251,28 @@ export default function DisplayControlPanel() {
                 />
               </DialogContent>
             </Dialog>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-4">
+            {[
+              { label: "إجمالي الشرائح", value: slides.length, icon: Table2 },
+              { label: "شرائح فعالة", value: activeSlides, icon: Eye },
+              { label: "شرائح مباشرة", value: liveSlides, icon: Sparkles },
+              { label: "مدة الدورة", value: `${totalDuration}s`, icon: Clock },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-2xl font-black">{item.value}</div>
+                      <div className="text-xs font-medium text-white/60">{item.label}</div>
+                    </div>
+                    <Icon className="h-6 w-6 text-blue-200" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -1092,18 +1300,19 @@ export default function DisplayControlPanel() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-4 xl:grid-cols-2">
             {slides.map((slide, index) => {
               const typeInfo = getSlideTypeInfo(slide.slide_type);
               const Icon = typeInfo?.icon || Monitor;
+              const contentSummary = formatSlideContent(slide);
               return (
                 <Card
                   key={slide.id}
-                  className={`transition-all ${!slide.is_active ? "opacity-50" : ""}`}
+                  className={`overflow-hidden border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800 dark:bg-slate-950 ${!slide.is_active ? "opacity-55" : ""}`}
                 >
-                  <CardContent className="py-4 px-5">
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col gap-1">
+                  <CardContent className="p-0">
+                    <div className="flex items-stretch gap-4">
+                      <div className="flex flex-col items-center justify-center gap-1 border-l border-slate-100 bg-slate-50 px-2 dark:border-slate-800 dark:bg-slate-900">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1125,31 +1334,31 @@ export default function DisplayControlPanel() {
                         </Button>
                       </div>
 
-                      <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                        <Icon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-lg">{slide.title}</h3>
-                          <Badge variant="secondary" className="text-xs">
-                            {typeInfo?.label || slide.slide_type}
-                          </Badge>
+                      <div className="min-w-0 flex-1 py-4 pl-2">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900">
+                            <Icon className="h-6 w-6" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="truncate text-lg font-black text-slate-950 dark:text-white">
+                                {slide.title}
+                              </h3>
+                              <Badge variant="secondary" className="rounded-full text-xs">
+                                {typeInfo?.label || slide.slide_type}
+                              </Badge>
+                              <Badge className={slide.is_active ? "rounded-full bg-emerald-50 text-emerald-700" : "rounded-full bg-slate-100 text-slate-500"}>
+                                {slide.is_active ? "نشطة" : "متوقفة"}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                              {contentSummary || typeInfo?.description || "شريحة عرض"}
+                            </p>
+                          </div>
                         </div>
-                        {slide.content?.message && (
-                          <p className="text-sm text-gray-500 truncate mt-1">
-                            {slide.content.message}
-                          </p>
-                        )}
-                        {slide.content?.items && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            {slide.content.items.length}{" "}
-                            {t("display.instructions_form.itemPlaceholder")}
-                          </p>
-                        )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-gray-500">
+                      <div className="hidden items-center gap-2 px-2 text-gray-500 sm:flex">
                         <Clock className="w-4 h-4" />
                         <span className="text-sm font-medium">
                           {slide.duration_seconds}s
