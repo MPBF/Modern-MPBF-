@@ -339,15 +339,8 @@ function OrdersBoardSlide({ data }: { data: OrdersBoardData | undefined }) {
           <div className="mt-4 flex-1 space-y-2 overflow-hidden">
             {(order.production_orders || []).slice(0, 3).map((po: any) => {
               const StageIcon = stageIcons[po.production_stage || "film"] || Factory;
-              const customerProductLabel =
-                po.customer_product_display_name ||
-                [
-                  po.category_name_ar || po.category_name,
-                  po.item_name_ar || po.item_name,
-                ]
-                  .filter(Boolean)
-                  .join(" - ") ||
-                "منتج العميل غير محدد";
+              const categoryName = po.category_name_ar || "غير محدد";
+              const itemName = po.item_name_ar || "غير محدد";
               return (
                 <div
                   key={po.id}
@@ -358,11 +351,8 @@ function OrdersBoardSlide({ data }: { data: OrdersBoardData | undefined }) {
                       <span className="shrink-0 text-lg font-black text-white">
                         {po.production_order_number}
                       </span>
-                      <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-white/60">
-                        منتج العميل
-                      </span>
                       <span className="truncate text-base font-bold text-blue-100">
-                        {customerProductLabel}
+                        الفئة: {categoryName} · الصنف: {itemName}
                       </span>
                     </div>
                     <div className="truncate text-sm text-white/60">
