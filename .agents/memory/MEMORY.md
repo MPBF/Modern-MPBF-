@@ -55,3 +55,4 @@
 - [Modern-agent saved references](modern-agent-saved-references.md) — permanent AI uploads stay owner-scoped and enter requests as untrusted reference data, never global system knowledge.
 - [Schema drift migrations](schema-drift-migrations.md) — when drizzle-kit push prompts over existing drift, do not force a broad diff for one reviewed additive change.
 - [Maintenance schedule run idempotency](maintenance-schedule-run-idempotency.md) — periodic checklist runs are date-unique; advance configurable due cycles only on completion, never on start.
+- [Publish snapshot exclusions](publish-snapshot-exclusions.md) — root .gitignore must explicitly exclude Replit/editor caches; global ignore rules may not keep them out of the 8 GiB publish image.
