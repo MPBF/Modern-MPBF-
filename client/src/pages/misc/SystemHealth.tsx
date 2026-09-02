@@ -46,6 +46,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 interface HealthCheck {
   id: number;
@@ -270,7 +271,7 @@ export default function SystemHealth() {
                     {t("system.health.uptimePercent")}
                   </p>
                   <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                    {overview.uptime_percent?.toFixed(1)}%
+                    {formatNumberAr(overview.uptime_percent ?? 0, 1)}%
                   </p>
                 </div>
                 <Zap className="w-10 h-10 text-blue-600" />
@@ -344,7 +345,7 @@ export default function SystemHealth() {
                               className="h-2"
                             />
                             <div className="text-xs text-center mt-1 text-gray-600 dark:text-gray-300">
-                              {check.success_rate_24h?.toFixed(1)}%
+                              {formatNumberAr(check.success_rate_24h ?? 0, 1)}%
                             </div>
                           </div>
 
@@ -488,12 +489,13 @@ export default function SystemHealth() {
                       {t("system.health.successRate")}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
-                      {(
+                      {formatNumberAr(
                         healthChecks.reduce(
                           (acc, check) => acc + check.success_rate_24h,
                           0,
-                        ) / (healthChecks.length || 1)
-                      ).toFixed(1)}
+                        ) / (healthChecks.length || 1),
+                        1,
+                      )}
                       %
                     </p>
                   </div>
@@ -557,7 +559,7 @@ export default function SystemHealth() {
                     {t("system.health.uptimePercent")}:
                   </span>
                   <span className="font-medium">
-                    {overview?.uptime_percent?.toFixed(2)}%
+                    {formatNumberAr(overview?.uptime_percent ?? 0, 2)}%
                   </span>
                 </div>
                 <div className="flex justify-between">

@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatNumberAr } from "../../../../shared/number-utils";
 import {
   LineChart,
   Line,
@@ -33,6 +32,8 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -422,7 +423,7 @@ export default function ProductionReports() {
             <Skeleton className="h-7 w-16" />
           ) : (
             <p className="text-xl font-black text-amber-600 dark:text-amber-400" data-testid="text-avg-time">
-              {summary?.data?.avgProductionTime?.toFixed(1) || "0"} <span className="text-xs font-normal">س</span>
+              {formatNumberAr(summary?.data?.avgProductionTime ?? 0, 1)} <span className="text-xs font-normal">س</span>
             </p>
           )}
         </div>
@@ -441,7 +442,7 @@ export default function ProductionReports() {
               )}`}
               data-testid="text-waste-percentage"
             >
-              {summary?.data?.wastePercentage?.toFixed(2) || "0"}%
+              {formatNumberAr(summary?.data?.wastePercentage ?? 0, 2)}%
             </p>
           )}
         </div>
@@ -460,7 +461,7 @@ export default function ProductionReports() {
               )}`}
               data-testid="text-completion-rate"
             >
-              {summary?.data?.completionRate?.toFixed(1) || "0"}%
+              {formatNumberAr(summary?.data?.completionRate ?? 0, 1)}%
             </p>
           )}
         </div>
@@ -658,7 +659,7 @@ export default function ProductionReports() {
                         {formatNumberAr(Number(machine.totalWeight), 2)} كجم
                       </TableCell>
                       <TableCell className="text-center text-xs text-gray-500 font-bold">
-                        {machine.avgTime?.toFixed(2)} س
+                        {formatNumberAr(machine.avgTime ?? 0, 2)} س
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
@@ -667,7 +668,7 @@ export default function ProductionReports() {
                             "efficiency",
                           )}`}
                         >
-                          {machine.efficiency?.toFixed(1) || 0}%
+                          {formatNumberAr(machine.efficiency ?? 0, 1)}%
                         </Badge>
                       </TableCell>
                     </TableRow>

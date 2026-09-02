@@ -942,8 +942,8 @@ function DeliveryDisclaimerTab({ logoUrl }: { logoUrl: string }) {
                 <tfoot className="bg-muted/60 font-semibold">
                   <tr>
                     <td className="p-2 text-end">الإجمالي</td>
-                    <td className="p-2">{totals.qty.toFixed(0)}</td>
-                    <td className="p-2">{totals.wt.toFixed(2)}</td>
+                    <td className="p-2">{formatNumberAr(totals.qty, 0)}</td>
+                    <td className="p-2">{formatNumberAr(totals.wt, 2)}</td>
                     <td colSpan={2}></td>
                   </tr>
                 </tfoot>
@@ -1018,8 +1018,8 @@ function DeliveryDisclaimerTab({ logoUrl }: { logoUrl: string }) {
                 <td colSpan={2} style={{ textAlign: "end", fontWeight: 600 }}>
                   الإجمالي
                 </td>
-                <td style={{ fontWeight: 600 }}>{totals.qty.toFixed(0)}</td>
-                <td style={{ fontWeight: 600 }}>{totals.wt.toFixed(2)}</td>
+                <td style={{ fontWeight: 600 }}>{formatNumberAr(totals.qty, 0)}</td>
+                <td style={{ fontWeight: 600 }}>{formatNumberAr(totals.wt, 2)}</td>
                 <td></td>
               </tr>
             </tbody>
@@ -3659,7 +3659,7 @@ function ViolationNoticeTab({ logoUrl }: { logoUrl: string }) {
 
   const penaltyPhrasesEn = penalties.map((p) =>
     p === "deduction"
-      ? `Financial Deduction${dedAmt > 0 ? ` of ${dedAmt.toFixed(2)} SAR` : ""}`
+      ? `Financial Deduction${dedAmt > 0 ? ` of ${formatNumberAr(dedAmt, 2)} SAR` : ""}`
       : penaltyLabelEn(p),
   );
 

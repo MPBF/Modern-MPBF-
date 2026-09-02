@@ -4,6 +4,7 @@
  */
 export function formatNumber(
   value: number | string | null | undefined,
+  maximumFractionDigits: number = 2,
 ): string {
   if (value === null || value === undefined || value === "") {
     return "0";
@@ -15,8 +16,8 @@ export function formatNumber(
     return "0";
   }
 
-  // عرض الرقم مع فاصلة الآلاف، وبكسور عشرية محدودة (حتى منزلتين) عند الحاجة
-  return num.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  // عرض الرقم مع فاصلة الآلاف، وإخفاء الأصفار العشرية غير اللازمة
+  return num.toLocaleString("en-US", { maximumFractionDigits });
 }
 
 /**
@@ -25,6 +26,7 @@ export function formatNumber(
  */
 export function formatNumberWithCommas(
   value: number | string | null | undefined,
+  maximumFractionDigits: number = 2,
 ): string {
   if (value === null || value === undefined || value === "") {
     return "0";
@@ -36,7 +38,7 @@ export function formatNumberWithCommas(
     return "0";
   }
 
-  return num.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return num.toLocaleString("en-US", { maximumFractionDigits });
 }
 
 /**

@@ -3,6 +3,8 @@ import { History, Pencil, Search, RotateCw, AlertTriangle, Layers, User, Package
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import PageLayout from "../../components/layout/PageLayout";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -365,7 +367,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
                 <div>
                   <span className="text-gray-400 block text-[10px]">الوزن الصافي</span>
                   <span className="font-black text-emerald-600 dark:text-emerald-400">
-                    {Number(r.weight_kg || 0).toFixed(2)} كجم
+                    {formatNumberAr(Number(r.weight_kg || 0), 2)} كجم
                   </span>
                 </div>
                 <div>
@@ -462,7 +464,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
                       <TableCell className="text-xs font-bold">{stageMachineName(r)}</TableCell>
                       <TableCell className="text-xs text-gray-500 font-medium">{producerName(r)}</TableCell>
                       <TableCell className="text-center font-black text-xs text-emerald-600 dark:text-emerald-400">
-                        {Number(r.weight_kg || 0).toFixed(2)} كجم
+                        {formatNumberAr(Number(r.weight_kg || 0), 2)} كجم
                       </TableCell>
                       <TableCell className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
                         {formatDate(stageDate(r))}

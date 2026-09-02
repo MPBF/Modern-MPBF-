@@ -46,6 +46,7 @@ import {
 import { useState, Suspense, useEffect, useCallback, useRef } from "react";
 import * as THREE from "three";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import Header from "../../components/layout/Header";
 import Sidebar from "../../components/layout/Sidebar";
 import { Badge } from "../../components/ui/badge";
@@ -1509,13 +1510,13 @@ function HallStructure({
       <Html position={[0, WALL_HEIGHT + 1.5, hallLength / 2]} center>
         <div className="bg-blue-600/90 text-white px-2 py-0.5 rounded text-[9px] font-bold shadow-lg pointer-events-none whitespace-nowrap">
           العرض: {(hallWidth * METERS_TO_CM).toFixed(0)} سم (
-          {hallWidth.toFixed(1)} م)
+          {formatNumberAr(hallWidth, 1)} م)
         </div>
       </Html>
       <Html position={[hallWidth / 2 + 1, WALL_HEIGHT + 1.5, 0]} center>
         <div className="bg-green-600/90 text-white px-2 py-0.5 rounded text-[9px] font-bold shadow-lg pointer-events-none whitespace-nowrap">
           الطول: {(hallLength * METERS_TO_CM).toFixed(0)} سم (
-          {hallLength.toFixed(1)} م)
+          {formatNumberAr(hallLength, 1)} م)
         </div>
       </Html>
       <Html position={[-hallWidth / 2 - 1, WALL_HEIGHT / 2, 0]} center>
@@ -1685,7 +1686,7 @@ function RollMesh({
       <Html position={[0, 0.8, 0]} center>
         <div className="bg-black/85 text-white px-1.5 py-0.5 rounded text-[7px] font-mono pointer-events-none whitespace-nowrap border border-white/15 backdrop-blur-sm">
           <span style={{ color: rollColor }}>●</span> {roll.roll_number} •{" "}
-          {parseFloat(roll.weight_kg).toFixed(1)}kg
+          {formatNumberAr(parseFloat(roll.weight_kg), 1)}kg
         </div>
       </Html>
       {isPrinted && (
@@ -1800,7 +1801,7 @@ function BundlePackage({
               {orderNum} • {rolls.length} رول
             </div>
             <div className="text-slate-400">
-              {customerName} • {totalWeight.toFixed(1)} كجم
+              {customerName} • {formatNumberAr(totalWeight, 1)} كجم
             </div>
           </div>
         </div>
@@ -3118,7 +3119,7 @@ export default function FactorySimulation3D() {
                               <span className="text-[9px] text-cyan-400 font-mono">
                                 {actualW} سم{" "}
                                 <span className="text-slate-500">
-                                  ({selectedMachine.scale[0].toFixed(1)}x)
+                                  ({formatNumberAr(selectedMachine.scale[0], 1)}x)
                                 </span>
                               </span>
                             </div>
@@ -3139,7 +3140,7 @@ export default function FactorySimulation3D() {
                               <span className="text-[9px] text-cyan-400 font-mono">
                                 {actualH} سم{" "}
                                 <span className="text-slate-500">
-                                  ({selectedMachine.scale[1].toFixed(1)}x)
+                                  ({formatNumberAr(selectedMachine.scale[1], 1)}x)
                                 </span>
                               </span>
                             </div>
@@ -3160,7 +3161,7 @@ export default function FactorySimulation3D() {
                               <span className="text-[9px] text-cyan-400 font-mono">
                                 {actualD} سم{" "}
                                 <span className="text-slate-500">
-                                  ({selectedMachine.scale[2].toFixed(1)}x)
+                                  ({formatNumberAr(selectedMachine.scale[2], 1)}x)
                                 </span>
                               </span>
                             </div>
@@ -3617,7 +3618,7 @@ export default function FactorySimulation3D() {
                           {(hallWidth * METERS_TO_CM).toFixed(0)} سم
                         </div>
                         <div className="text-[8px] text-slate-500">
-                          ({hallWidth.toFixed(1)} م)
+                          ({formatNumberAr(hallWidth, 1)} م)
                         </div>
                       </div>
                       <div className="bg-green-500/10 rounded p-1.5 text-center border border-green-500/20">
@@ -3628,7 +3629,7 @@ export default function FactorySimulation3D() {
                           {(hallLength * METERS_TO_CM).toFixed(0)} سم
                         </div>
                         <div className="text-[8px] text-slate-500">
-                          ({hallLength.toFixed(1)} م)
+                          ({formatNumberAr(hallLength, 1)} م)
                         </div>
                       </div>
                     </div>

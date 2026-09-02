@@ -926,7 +926,7 @@ export default function FilmMaterialMixingTab() {
                       <span
                         className={isOverLimit ? "text-red-600 font-bold" : ""}
                       >
-                        {Math.min(mixingProgress, 100).toFixed(1)}%
+                        {formatNumberAr(Math.min(mixingProgress, 100), 1)}%
                         {isOverLimit && " (تجاوز!)"}
                       </span>
                     </div>
@@ -1042,7 +1042,7 @@ export default function FilmMaterialMixingTab() {
                       </Label>
                       <Input
                         type="text"
-                        value={material.percentage.toFixed(2) + "%"}
+                        value={formatNumberAr(material.percentage, 2) + "%"}
                         disabled
                         className="bg-gray-100 dark:bg-gray-800"
                         data-testid={`text-percentage-${index}`}
@@ -1271,7 +1271,7 @@ export default function FilmMaterialMixingTab() {
                                                         {comp.material_name_ar ||
                                                           comp.material_name}{" "}
                                                         — {formatNumberAr(qty, 2)} كغ (
-                                                        {pct.toFixed(1)}%)
+                                                        {formatNumberAr(pct, 1)}%)
                                                       </div>
                                                     );
                                                   },
@@ -1325,10 +1325,10 @@ export default function FilmMaterialMixingTab() {
                       </div>
                       <div className="flex gap-3 text-xs font-semibold flex-wrap">
                         <span className="px-2 py-1 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
-                          سكرو A: {formatNumberAr(group.totalA, 2)} كغ ({group.pctA.toFixed(1)}%)
+                          سكرو A: {formatNumberAr(group.totalA, 2)} كغ ({formatNumberAr(group.pctA, 1)}%)
                         </span>
                         <span className="px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
-                          سكرو B: {formatNumberAr(group.totalB, 2)} كغ ({group.pctB.toFixed(1)}%)
+                          سكرو B: {formatNumberAr(group.totalB, 2)} كغ ({formatNumberAr(group.pctB, 1)}%)
                         </span>
                         <span className="px-2 py-1 rounded bg-amber-200 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100">
                           الإجمالي: {formatNumberAr(group.total, 2)} كغ
@@ -1376,13 +1376,13 @@ export default function FilmMaterialMixingTab() {
                                         {formatNumberAr(row.qty, 2)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5">
-                                        {row.pctInScrew.toFixed(1)}%
+                                        {formatNumberAr(row.pctInScrew, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {row.pctInTotal.toFixed(1)}%
+                                        {formatNumberAr(row.pctInTotal, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {formatNumberAr(row.materialTotalQty, 2)} ({row.materialTotalPct.toFixed(1)}%)
+                                        {formatNumberAr(row.materialTotalQty, 2)} ({formatNumberAr(row.materialTotalPct, 1)}%)
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -1399,7 +1399,7 @@ export default function FilmMaterialMixingTab() {
                                         100%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-blue-800 dark:text-blue-200">
-                                        {group.pctA.toFixed(1)}%
+                                        {formatNumberAr(group.pctA, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5"></TableCell>
                                     </TableRow>
@@ -1416,13 +1416,13 @@ export default function FilmMaterialMixingTab() {
                                         {formatNumberAr(row.qty, 2)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5">
-                                        {row.pctInScrew.toFixed(1)}%
+                                        {formatNumberAr(row.pctInScrew, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {row.pctInTotal.toFixed(1)}%
+                                        {formatNumberAr(row.pctInTotal, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {formatNumberAr(row.materialTotalQty, 2)} ({row.materialTotalPct.toFixed(1)}%)
+                                        {formatNumberAr(row.materialTotalQty, 2)} ({formatNumberAr(row.materialTotalPct, 1)}%)
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -1439,7 +1439,7 @@ export default function FilmMaterialMixingTab() {
                                         100%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-emerald-800 dark:text-emerald-200">
-                                        {group.pctB.toFixed(1)}%
+                                        {formatNumberAr(group.pctB, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5"></TableCell>
                                     </TableRow>
@@ -1591,7 +1591,7 @@ export default function FilmMaterialMixingTab() {
                                                           {formatNumberAr(qty, 2)} كغ
                                                         </span>
                                                         <span className="text-muted-foreground">
-                                                          ({pct.toFixed(1)}%)
+                                                          ({formatNumberAr(pct, 1)}%)
                                                         </span>
                                                       </div>
                                                     );
@@ -1758,7 +1758,7 @@ export default function FilmMaterialMixingTab() {
                               {formatNumberAr(parseFloat(ing.actual_weight_kg), 2)}
                             </TableCell>
                             <TableCell>
-                              {parseFloat(ing.percentage).toFixed(2)}%
+                              {formatNumberAr(parseFloat(ing.percentage), 2)}%
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1953,7 +1953,7 @@ export default function FilmMaterialMixingTab() {
                               data-testid={`input-edit-weight-${m.id}`}
                             />
                           </TableCell>
-                          <TableCell>{m.percentage.toFixed(2)}%</TableCell>
+                          <TableCell>{formatNumberAr(m.percentage, 2)}%</TableCell>
                           <TableCell>
                             <Button
                               type="button"

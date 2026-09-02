@@ -1463,7 +1463,7 @@ export default function UserDashboard() {
                           ⏰ {t("userDashboard.attendance.workingHours")}
                         </span>
                         <span className="font-semibold text-green-800 dark:text-green-200 tabular-nums">
-                          {dailyHours.workingHours.toFixed(1)}{" "}
+                          {formatNumber(dailyHours.workingHours, 1)}{" "}
                           {t("userDashboard.attendance.hour")}
                         </span>
                       </div>
@@ -1474,7 +1474,7 @@ export default function UserDashboard() {
                           ⚡ {t("userDashboard.attendance.overtimeHours")}
                         </span>
                         <span className="font-semibold text-orange-800 dark:text-orange-200 tabular-nums">
-                          {dailyHours.overtimeHours.toFixed(1)}{" "}
+                          {formatNumber(dailyHours.overtimeHours, 1)}{" "}
                           {t("userDashboard.attendance.hour")}
                         </span>
                       </div>
@@ -1510,7 +1510,7 @@ export default function UserDashboard() {
                             ⚠️ {t("userDashboard.attendance.deficitHours")}
                           </span>
                           <span className="font-semibold text-red-800 dark:text-red-200 tabular-nums">
-                            {dailyHours.deficitHours.toFixed(1)}{" "}
+                            {formatNumber(dailyHours.deficitHours, 1)}{" "}
                             {t("userDashboard.attendance.hour")}
                           </span>
                         </div>

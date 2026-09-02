@@ -163,7 +163,7 @@ function parseNum(v: unknown): number {
 
 function fmtNum(n: number): string {
   return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
 }

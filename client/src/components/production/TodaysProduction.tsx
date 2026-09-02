@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { useToast } from "../../hooks/use-toast";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -355,7 +357,7 @@ export default function TodaysProduction() {
       </div>
       <div className="flex items-center justify-between gap-3 sm:justify-end">
         <span className="whitespace-nowrap font-semibold text-gray-900 dark:text-gray-100">
-          {toNum(record.weight_kg).toFixed(2)} {t("common.kg")}
+          {formatNumberAr(toNum(record.weight_kg), 2)} {t("common.kg")}
         </span>
         <Button
           variant="outline"
@@ -464,7 +466,7 @@ export default function TodaysProduction() {
               <span className="text-sm font-normal text-muted-foreground">
                 {t("production.todayProduction.summary", {
                   count: totals.count,
-                  weight: totals.weight.toFixed(2),
+                  weight: formatNumberAr(totals.weight, 2),
                 })}
               </span>
             </CardTitle>
@@ -500,7 +502,7 @@ export default function TodaysProduction() {
                       })}
                     </Badge>
                     <span className="font-semibold text-gray-900 dark:text-gray-100">
-                      {emp.weight.toFixed(2)} {t("common.kg")}
+                      {formatNumberAr(emp.weight, 2)} {t("common.kg")}
                     </span>
                   </span>
                 </button>
@@ -542,7 +544,7 @@ export default function TodaysProduction() {
             <span className="text-sm font-normal text-muted-foreground">
               {t("production.todayProduction.summary", {
                 count: totals.count,
-                weight: totals.weight.toFixed(2),
+                weight: formatNumberAr(totals.weight, 2),
               })}
             </span>
           </CardTitle>

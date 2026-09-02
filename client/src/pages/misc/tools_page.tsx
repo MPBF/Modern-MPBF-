@@ -51,6 +51,7 @@ import { useToast } from "../../hooks/use-toast";
 import { getHangerHeightCm } from "../../lib/bag-rules-engine";
 import { extractColors, type ExtractedColor } from "../../lib/image-utils";
 import { apiRequest, queryClient } from "../../lib/queryClient";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 type TabId =
   | "bag-weight"
@@ -3827,7 +3828,7 @@ function BlendsTool(): JSX.Element {
   const totalAll = totalA + totalB;
 
   const getPercentage = (qty: number, total: number) =>
-    total > 0 ? ((qty / total) * 100).toFixed(1) : "0.0";
+    total > 0 ? formatNumberAr((qty / total) * 100, 1) : "0";
 
   const handleSave = () => {
     if (!form.machine_id) return;
@@ -3899,8 +3900,8 @@ function BlendsTool(): JSX.Element {
         <tr>
           <td>${screwLabel}</td>
           <td>${i.material_type}</td>
-          <td>${filled ? parseFloat(i.quantity || "0").toFixed(2) : ""}</td>
-          <td>${filled && tA > 0 ? ((parseFloat(i.quantity || "0") / tA) * 100).toFixed(1) + "%" : ""}</td>
+          <td>${filled ? formatNumberAr(parseFloat(i.quantity || "0"), 2) : ""}</td>
+          <td>${filled && tA > 0 ? formatNumberAr((parseFloat(i.quantity || "0") / tA) * 100, 1) + "%" : ""}</td>
         </tr>
       `,
           )
@@ -3908,7 +3909,7 @@ function BlendsTool(): JSX.Element {
         `
         <tr style="background:#e2e8f0;font-weight:bold">
           <td colspan="2">${t("tools.blends.totalQuantity")} ${screwLabel}</td>
-          <td>${filled ? tA.toFixed(2) : ""}</td>
+          <td>${filled ? formatNumberAr(tA, 2) : ""}</td>
           <td>100%</td>
         </tr>`
       );
@@ -3960,7 +3961,7 @@ tbody tr:nth-child(even){background:#f5f7fa}
 <tbody>
 ${filled ? materialRows(aItems, "A") : `<tr><td>A</td><td></td><td></td><td></td></tr><tr><td>A</td><td></td><td></td><td></td></tr><tr><td>A</td><td></td><td></td><td></td></tr><tr><td>A</td><td></td><td></td><td></td></tr><tr style="background:#e2e8f0;font-weight:bold"><td colspan="2">${t("tools.blends.totalQuantity")} A</td><td></td><td></td></tr>`}
 ${filled ? materialRows(bItems, "B") : `<tr><td>B</td><td></td><td></td><td></td></tr><tr><td>B</td><td></td><td></td><td></td></tr><tr style="background:#e2e8f0;font-weight:bold"><td colspan="2">${t("tools.blends.totalQuantity")} B</td><td></td><td></td></tr>`}
-<tr style="background:#cbd5e1;font-weight:bold"><td colspan="2">${t("tools.blends.overallSummary")}</td><td>${filled ? (aItems.reduce((s: number, i: any) => s + parseFloat(i.quantity || "0"), 0) + bItems.reduce((s: number, i: any) => s + parseFloat(i.quantity || "0"), 0)).toFixed(2) : ""}</td><td>100%</td></tr>
+<tr style="background:#cbd5e1;font-weight:bold"><td colspan="2">${t("tools.blends.overallSummary")}</td><td>${filled ? formatNumberAr(aItems.reduce((s: number, i: any) => s + parseFloat(i.quantity || "0"), 0) + bItems.reduce((s: number, i: any) => s + parseFloat(i.quantity || "0"), 0), 2) : ""}</td><td>100%</td></tr>
 </tbody>
 </table>
 
@@ -4062,7 +4063,7 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
           <span className="text-sm font-semibold">
             {t("tools.blends.totalQuantity")}:
           </span>
-          <Badge variant="default">{screwTotal.toFixed(2)}</Badge>
+          <Badge variant="default">{formatNumberAr(screwTotal, 2)}</Badge>
         </div>
       )}
     </div>
@@ -4164,12 +4165,12 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                     <td className="p-2 border text-center">
                       {i.material_type}
                     </td>
-                    <td className="p-2 border text-center">{qty.toFixed(2)}</td>
+                    <td className="p-2 border text-center">{formatNumberAr(qty, 2)}</td>
                     <td className="p-2 border text-center">
-                      {tA > 0 ? ((qty / tA) * 100).toFixed(1) : 0}%
+                      {tA > 0 ? formatNumberAr((qty / tA) * 100, 1) : 0}%
                     </td>
                     <td className="p-2 border text-center">
-                      {tA + tB > 0 ? ((qty / (tA + tB)) * 100).toFixed(1) : 0}%
+                      {tA + tB > 0 ? formatNumberAr((qty / (tA + tB)) * 100, 1) : 0}%
                     </td>
                   </tr>
                 );
@@ -4179,10 +4180,10 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                   <td className="p-2 border text-center" colSpan={2}>
                     {t("tools.blends.screwASummary")}
                   </td>
-                  <td className="p-2 border text-center">{tA.toFixed(2)}</td>
+                  <td className="p-2 border text-center">{formatNumberAr(tA, 2)}</td>
                   <td className="p-2 border text-center">100%</td>
                   <td className="p-2 border text-center">
-                    {tA + tB > 0 ? ((tA / (tA + tB)) * 100).toFixed(1) : 0}%
+                    {tA + tB > 0 ? formatNumberAr((tA / (tA + tB)) * 100, 1) : 0}%
                   </td>
                 </tr>
               )}
@@ -4197,12 +4198,12 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                     <td className="p-2 border text-center">
                       {i.material_type}
                     </td>
-                    <td className="p-2 border text-center">{qty.toFixed(2)}</td>
+                    <td className="p-2 border text-center">{formatNumberAr(qty, 2)}</td>
                     <td className="p-2 border text-center">
-                      {tB > 0 ? ((qty / tB) * 100).toFixed(1) : 0}%
+                      {tB > 0 ? formatNumberAr((qty / tB) * 100, 1) : 0}%
                     </td>
                     <td className="p-2 border text-center">
-                      {tA + tB > 0 ? ((qty / (tA + tB)) * 100).toFixed(1) : 0}%
+                      {tA + tB > 0 ? formatNumberAr((qty / (tA + tB)) * 100, 1) : 0}%
                     </td>
                   </tr>
                 );
@@ -4212,10 +4213,10 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                   <td className="p-2 border text-center" colSpan={2}>
                     {t("tools.blends.screwBSummary")}
                   </td>
-                  <td className="p-2 border text-center">{tB.toFixed(2)}</td>
+                  <td className="p-2 border text-center">{formatNumberAr(tB, 2)}</td>
                   <td className="p-2 border text-center">100%</td>
                   <td className="p-2 border text-center">
-                    {tA + tB > 0 ? ((tB / (tA + tB)) * 100).toFixed(1) : 0}%
+                    {tA + tB > 0 ? formatNumberAr((tB / (tA + tB)) * 100, 1) : 0}%
                   </td>
                 </tr>
               )}
@@ -4224,7 +4225,7 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                   {t("tools.blends.overallSummary")}
                 </td>
                 <td className="p-2 border text-center">
-                  {(tA + tB).toFixed(2)}
+                  {formatNumberAr(tA + tB, 2)}
                 </td>
                 <td className="p-2 border text-center">—</td>
                 <td className="p-2 border text-center">100%</td>
@@ -4471,13 +4472,13 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                               {mat}
                             </td>
                             <td className="p-2 border text-center">
-                              {vals.a > 0 ? vals.a.toFixed(2) : "—"}
+                              {vals.a > 0 ? formatNumberAr(vals.a, 2) : "—"}
                             </td>
                             <td className="p-2 border text-center">
-                              {vals.b > 0 ? vals.b.toFixed(2) : "—"}
+                              {vals.b > 0 ? formatNumberAr(vals.b, 2) : "—"}
                             </td>
                             <td className="p-2 border text-center font-semibold">
-                              {matTotal.toFixed(2)}
+                              {formatNumberAr(matTotal, 2)}
                             </td>
                             <td className="p-2 border text-center">
                               {getPercentage(matTotal, totalAll)}%
@@ -4492,13 +4493,13 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                       {t("tools.blends.overallSummary")}
                     </td>
                     <td className="p-2 border text-center">
-                      {totalA.toFixed(2)}
+                      {formatNumberAr(totalA, 2)}
                     </td>
                     <td className="p-2 border text-center">
-                      {totalB > 0 ? totalB.toFixed(2) : "—"}
+                      {totalB > 0 ? formatNumberAr(totalB, 2) : "—"}
                     </td>
                     <td className="p-2 border text-center text-primary">
-                      {totalAll.toFixed(2)}
+                      {formatNumberAr(totalAll, 2)}
                     </td>
                     <td className="p-2 border text-center">100%</td>
                   </tr>
@@ -4841,7 +4842,7 @@ ${evalRowFilled(t("tools.blends.thickness"), filled && blend?.thickness_u)}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {new Date(blend.created_at).toLocaleDateString()} —{" "}
                       {blendItems.length} {t("tools.blends.material")} —{" "}
-                      {tTotal.toFixed(1)} {t("common.kg")}
+                      {formatNumberAr(tTotal, 1)} {t("common.kg")}
                     </p>
                   </div>
                   <Button
@@ -4892,7 +4893,7 @@ function round(v: number, decimals: number): number {
 }
 
 function fmtFixed(v: number, d: number): string {
-  return toNumber(v).toFixed(d);
+  return formatNumberAr(toNumber(v), d);
 }
 
 interface CMYK {

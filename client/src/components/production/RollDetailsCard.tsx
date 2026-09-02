@@ -282,7 +282,7 @@ export default function RollDetailsCard({
     const totalWeight = parseFloat(rollDetails.weight_kg);
     const cutWeight = parseFloat(rollDetails.cut_weight_total_kg || "0");
     if (totalWeight === 0) return 0;
-    return ((cutWeight / totalWeight) * 100).toFixed(1);
+    return formatNumberAr((cutWeight / totalWeight) * 100, 1);
   };
 
   if (isLoadingDetails) {
@@ -429,11 +429,12 @@ export default function RollDetailsCard({
                                 2,
                               )}{" "}
                               {t("production.units.kg")} (
-                              {(
+                              {formatNumberAr(
                                 (parseFloat(rollDetails.waste_kg || "0") /
                                   parseFloat(rollDetails.weight_kg)) *
-                                100
-                              ).toFixed(1)}
+                                  100,
+                                1,
+                              )}
                               %)
                             </span>
                           </div>

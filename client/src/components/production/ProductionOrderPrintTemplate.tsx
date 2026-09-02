@@ -342,7 +342,7 @@ function PrintContentInner({
             {t("production.print.completionRate")}
           </div>
           <div className="print-info-value">
-            {progressPercentage.toFixed(1)}%
+            {formatNumberAr(progressPercentage, 1)}%
           </div>
         </div>
       </div>
@@ -451,7 +451,7 @@ function PrintContentInner({
               {t("production.print.completionPercentage")}
             </div>
             <div className="print-stat-value">
-              {progressPercentage.toFixed(1)}%
+              {formatNumberAr(progressPercentage, 1)}%
             </div>
           </div>
         </div>
@@ -461,7 +461,7 @@ function PrintContentInner({
             className="print-progress-bar"
             style={{ width: `${Math.min(progressPercentage, 100)}%` }}
           >
-            {progressPercentage > 10 && `${progressPercentage.toFixed(1)}%`}
+            {progressPercentage > 10 && `${formatNumberAr(progressPercentage, 1)}%`}
           </div>
         </div>
       </div>

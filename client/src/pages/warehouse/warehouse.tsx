@@ -2138,7 +2138,7 @@ function PackagingUnitPicker({
             </SelectItem>
             {activeUnits.map((u: any) => (
               <SelectItem key={u.id} value={String(u.id)}>
-                {u.name} — {parseFloat(u.unit_weight_kg).toFixed(3)}{" "}
+                {u.name} — {formatNumberAr(parseFloat(u.unit_weight_kg), 3)}{" "}
                 {t("warehouse.units.kilo")}
               </SelectItem>
             ))}
@@ -2156,7 +2156,7 @@ function PackagingUnitPicker({
                       disabled
                       className="opacity-60 line-through"
                     >
-                      {u.name} — {parseFloat(u.unit_weight_kg).toFixed(3)}{" "}
+                      {u.name} — {formatNumberAr(parseFloat(u.unit_weight_kg), 3)}{" "}
                       {t("warehouse.units.kilo")}
                     </SelectItem>
                   ))}
@@ -2625,7 +2625,7 @@ function ManagePackagingUnitsDialog({
                             className="h-8 text-center"
                           />
                         ) : (
-                          parseFloat(u.roll_weight_g).toFixed(2)
+                          formatNumberAr(parseFloat(u.roll_weight_g), 2)
                         )}
                       </td>
                       <td className="p-2 text-center">
@@ -2648,9 +2648,12 @@ function ManagePackagingUnitsDialog({
                         )}
                       </td>
                       <td className="p-2 text-center font-medium">
-                        {isEditing && editComputed !== null
-                          ? editComputed.toFixed(3)
-                          : parseFloat(u.unit_weight_kg).toFixed(3)}
+                        {formatNumberAr(
+                          isEditing && editComputed !== null
+                            ? editComputed
+                            : parseFloat(u.unit_weight_kg),
+                          3,
+                        )}
                       </td>
                       <td className="p-2 text-center">
                         {u.is_default ? (

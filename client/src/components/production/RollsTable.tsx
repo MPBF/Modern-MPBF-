@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { useAuth } from "../../hooks/use-auth";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest } from "../../lib/queryClient";
@@ -451,7 +453,7 @@ export default function RollsTable({ stage }: RollsTableProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {roll.weight_kg
-                      ? parseFloat(roll.weight_kg.toString()).toFixed(1)
+                      ? formatNumberAr(parseFloat(roll.weight_kg.toString()), 1)
                       : t("common.notSpecified")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -621,7 +623,7 @@ export default function RollsTable({ stage }: RollsTableProps) {
                   </span>
                   <div className="font-medium">
                     {roll.weight_kg
-                      ? parseFloat(roll.weight_kg.toString()).toFixed(1)
+                      ? formatNumberAr(parseFloat(roll.weight_kg.toString()), 1)
                       : "0"}{" "}
                     {t("common.kg")}
                   </div>

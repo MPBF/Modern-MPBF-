@@ -3,6 +3,8 @@ import { QrCode, Play, Scissors, Clock } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { useLocalizedName } from "../../hooks/use-localized-name";
 import { useToast } from "../../hooks/use-toast";
 import { Badge } from "../ui/badge";
@@ -258,7 +260,8 @@ export default function ProductionQueue({
                     </p>
                     <p className="text-sm text-gray-500">
                       {t("common.weight")}:{" "}
-                      {parseFloat(item.weight_kg || item.weight || 0).toFixed(
+                      {formatNumberAr(
+                        parseFloat(item.weight_kg || item.weight || 0),
                         2,
                       )}{" "}
                       {t("common.kg")}

@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { useToast } from "../../hooks/use-toast";
 import { useRemainingQuantity } from "../../hooks/useRemainingQuantity";
 import { apiRequest } from "../../lib/queryClient";
@@ -172,7 +173,7 @@ export default function CuttingCreationModal({
     if (remaining > 0 && weightParsed > remaining + 0.0001) {
       toast({
         title: t("modals.cuttingCreation.weightExceedsRemaining"),
-        description: `${t("modals.cuttingCreation.remaining")}: ${remaining.toFixed(2)} ${t("modals.cuttingCreation.kg")}`,
+        description: `${t("modals.cuttingCreation.remaining")}: ${formatNumberAr(remaining, 2)} ${t("modals.cuttingCreation.kg")}`,
         variant: "destructive",
       });
       return;
@@ -250,7 +251,8 @@ export default function CuttingCreationModal({
                     <p className="text-xs text-gray-600">
                       {t("modals.cuttingCreation.remaining")}:{" "}
                       <span className="font-medium">
-                        {remaining.toFixed(2)} {t("modals.cuttingCreation.kg")}
+                        {formatNumberAr(remaining, 2)}{" "}
+                        {t("modals.cuttingCreation.kg")}
                       </span>
                     </p>
                   )}

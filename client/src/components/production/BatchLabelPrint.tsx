@@ -1,5 +1,7 @@
 import { format } from "date-fns";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 export interface BatchLabelData {
   batch_number: string;
   production_order_number?: string;
@@ -163,9 +165,7 @@ export function printBatchLabels({
         </div>
         <div class="info-box highlight">
           <div class="info-label"><span class="lbl-ar">الوزن الصافي</span><span class="lbl-en">Net Weight</span></div>
-          <div class="info-value">${weightForIndex(index).toFixed(
-            2,
-          )} كجم / kg</div>
+          <div class="info-value">${formatNumberAr(weightForIndex(index), 2)} كجم / kg</div>
         </div>
         ${operatorsBlock}
         ${row("تاريخ الإنتاج", "Production Date", productionDate, { full: true })}

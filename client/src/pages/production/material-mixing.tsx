@@ -516,7 +516,7 @@ export default function MaterialMixing() {
                         </Label>
                         <Input
                           type="text"
-                          value={material.percentage.toFixed(2) + "%"}
+                          value={`${formatNumberAr(material.percentage, 2)}%`}
                           disabled
                           className="bg-gray-100"
                           data-testid={`text-percentage-${index}`}
@@ -1111,7 +1111,11 @@ export default function MaterialMixing() {
                               {formatNumberAr(parseFloat(ingredient.actual_weight_kg), 2)}
                             </TableCell>
                             <TableCell>
-                              {parseFloat(ingredient.percentage).toFixed(2)}%
+                              {formatNumberAr(
+                                parseFloat(ingredient.percentage),
+                                2,
+                              )}
+                              %
                             </TableCell>
                           </TableRow>
                         ))}

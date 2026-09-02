@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -57,7 +58,7 @@ export default function ProductionOrderStatsCard({
             <div className="flex justify-between text-sm mb-2">
               <span className="text-gray-600">نسبة الإكمال</span>
               <span className="font-medium">
-                {completionPercentage.toFixed(1)}%
+                {formatNumberAr(completionPercentage, 1)}%
               </span>
             </div>
             <Progress value={completionPercentage} className="h-2" />

@@ -17,6 +17,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { useRoute } from "wouter";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { Badge } from "../../components/ui/badge";
 import {
   Card,
@@ -162,7 +164,7 @@ export default function BatchLookup() {
                 <span className="text-gray-400 block text-[10px]">{t("batch.netQuantity")}</span>
                 <span className="font-black text-emerald-600 dark:text-emerald-400">
                   {data.net_quantity_kg != null
-                    ? `${parseFloat(String(data.net_quantity_kg)).toFixed(2)} كجم`
+                    ? `${formatNumberAr(parseFloat(String(data.net_quantity_kg)), 2)} كجم`
                     : "—"}
                 </span>
               </div>

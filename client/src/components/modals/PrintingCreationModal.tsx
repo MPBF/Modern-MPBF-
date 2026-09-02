@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { useToast } from "../../hooks/use-toast";
 import { useRemainingQuantity } from "../../hooks/useRemainingQuantity";
 import { apiRequest } from "../../lib/queryClient";
@@ -171,7 +172,7 @@ export default function PrintingCreationModal({
     if (remaining > 0 && weightParsed > remaining + 0.0001) {
       toast({
         title: t("modals.printingCreation.weightExceedsRemaining"),
-        description: `${t("modals.printingCreation.remaining")}: ${remaining.toFixed(2)} ${t("modals.printingCreation.kg")}`,
+        description: `${t("modals.printingCreation.remaining")}: ${formatNumberAr(remaining, 2)} ${t("modals.printingCreation.kg")}`,
         variant: "destructive",
       });
       return;
@@ -249,7 +250,8 @@ export default function PrintingCreationModal({
                     <p className="text-xs text-gray-600">
                       {t("modals.printingCreation.remaining")}:{" "}
                       <span className="font-medium">
-                        {remaining.toFixed(2)} {t("modals.printingCreation.kg")}
+                        {formatNumberAr(remaining, 2)}{" "}
+                        {t("modals.printingCreation.kg")}
                       </span>
                     </p>
                   )}

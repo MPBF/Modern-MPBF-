@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 interface RollLabelPrintProps {
   roll: {
@@ -267,7 +268,7 @@ export function printRollLabel({
             ${roll.roll_seq != null ? row("رقم الرول", "Roll #", `#${roll.roll_seq}`) : ""}
             <div class="info-box highlight full">
               <div class="info-label"><span class="lbl-ar">الوزن</span><span class="lbl-en">Weight</span></div>
-              <div class="info-value">${roll.weight_kg != null ? parseFloat(String(roll.weight_kg)).toFixed(2) : "0.00"} كجم / kg</div>
+              <div class="info-value">${formatNumberAr(roll.weight_kg != null ? parseFloat(String(roll.weight_kg)) : 0, 2)} كجم / kg</div>
             </div>
             ${
               roll.film_machine_name || roll.machine_id

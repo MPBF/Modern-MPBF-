@@ -34,6 +34,8 @@ import {
   Legend,
 } from "recharts";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import PageLayout from "../../components/layout/PageLayout";
 import FloorRollsTracker from "../../components/production/FloorRollsTracker";
 import { Badge } from "../../components/ui/badge";
@@ -163,9 +165,9 @@ export default function ProductionMonitoring() {
   }, [materials.orders, recipesMap, matStatusFilter]);
 
   const formatNum = (n: number = 0) =>
-    new Intl.NumberFormat("en-US").format(Math.round(n));
+    formatNumberAr(Math.round(n), 0);
   const formatKg = (n: number = 0) =>
-    `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(n)} كجم`;
+    `${formatNumberAr(n, 1)} كجم`;
 
   const sectionPieData = useMemo(
     () =>
@@ -235,7 +237,7 @@ export default function ProductionMonitoring() {
 
   const wastePercent =
     summary.total_kg > 0
-      ? ((summary.total_waste_kg / summary.total_kg) * 100).toFixed(1)
+      ? formatNumberAr((summary.total_waste_kg / summary.total_kg) * 100, 1)
       : "0";
 
   return (
@@ -673,7 +675,7 @@ export default function ProductionMonitoring() {
                       </p>
                       <p className="text-[10px] font-bold opacity-75 mt-1">
                         {materialAggregates.totalKg > 0
-                          ? ((materialAggregates.totals[k] / materialAggregates.totalKg) * 100).toFixed(1)
+                          ? formatNumberAr((materialAggregates.totals[k] / materialAggregates.totalKg) * 100, 1)
                           : 0}
                         % من الإجمالي
                       </p>

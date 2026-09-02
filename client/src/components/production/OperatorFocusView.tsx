@@ -512,7 +512,7 @@ export default function OperatorFocusView() {
               <span>
                 {rollsCount} {isArabic ? "رول مسجل" : "rolls recorded"}
               </span>
-              <span>{progressPercent.toFixed(1)}%</span>
+              <span>{formatNumberAr(progressPercent, 1)}%</span>
             </div>
             <Progress
               value={progressPercent}

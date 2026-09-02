@@ -20,7 +20,7 @@ import {
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -752,7 +752,7 @@ export default function OrdersTable({
                                         )}
                                       </TableCell>
                                       <TableCell className="text-sm">
-                                        {required.toFixed(2)}
+                                        {formatNumberAr(required, 2)}
                                       </TableCell>
                                       <TableCell className="text-sm">
                                         <ProductionProgress
@@ -1012,7 +1012,7 @@ export default function OrdersTable({
                               <span>
                                 الكمية المطلوبة:{" "}
                                 <span className="font-medium">
-                                  {required.toFixed(2)}
+                                  {formatNumberAr(required, 2)}
                                 </span>
                               </span>
                             </div>

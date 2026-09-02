@@ -396,7 +396,7 @@ export default function RollCreationModal({
                     <p className="text-xs text-gray-600">
                       {t("modals.rollCreation.remainingQuantityLabel")}:{" "}
                       <span className="font-medium">
-                        {remainingQuantity.toFixed(2)}{" "}
+                        {formatNumberAr(remainingQuantity, 2)}{" "}
                         {t("modals.rollCreation.kg")}
                       </span>
                     </p>
