@@ -180,6 +180,168 @@ interface AttendanceRecord {
   updated_at?: string;
 }
 
+interface DailyAttendanceSummary {
+  date: string;
+  status: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  lunchStartTime?: string;
+  lunchEndTime?: string;
+  totalMinutes: number | null;
+  notes: string[];
+  recordCount: number;
+}
+
+function getAttendanceRecordTimestamp(record: AttendanceRecord): number {
+  const timestamps = [
+    record.check_in_time,
+    record.check_out_time,
+    record.lunch_start_time,
+    record.lunch_end_time,
+    record.created_at,
+    record.updated_at,
+  ]
+    .map((value) => parseValidDate(value)?.getTime() ?? 0)
+    .filter((value) => value > 0);
+
+  return timestamps.length > 0 ? Math.max(...timestamps) : 0;
+}
+
+function getAttendanceStamp(
+  record: AttendanceRecord,
+  column:
+    | "check_in_time"
+    | "check_out_time"
+    | "lunch_start_time"
+    | "lunch_end_time",
+  statuses: string[],
+): string | undefined {
+  const columnValue = record[column];
+  if (columnValue) return columnValue;
+  return statuses.includes(record.status) ? record.created_at : undefined;
+}
+
+function pickAttendanceStamp(
+  records: AttendanceRecord[],
+  column:
+    | "check_in_time"
+    | "check_out_time"
+    | "lunch_start_time"
+    | "lunch_end_time",
+  statuses: string[],
+  direction: "first" | "last",
+): string | undefined {
+  const stamps = records
+    .map((record) => getAttendanceStamp(record, column, statuses))
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => {
+      const timeA = parseValidDate(a)?.getTime() ?? 0;
+      const timeB = parseValidDate(b)?.getTime() ?? 0;
+      return timeA - timeB;
+    });
+
+  return direction === "first" ? stamps[0] : stamps.at(-1);
+}
+
+function groupAttendanceByDay(
+  records: AttendanceRecord[] | undefined,
+): DailyAttendanceSummary[] {
+  const recordsByDay = new Map<string, AttendanceRecord[]>();
+
+  records?.forEach((record) => {
+    const dateKey = normalizeDateKey(record.date);
+    if (!dateKey) return;
+
+    const dayRecords = recordsByDay.get(dateKey) || [];
+    dayRecords.push(record);
+    recordsByDay.set(dateKey, dayRecords);
+  });
+
+  return Array.from(recordsByDay.entries())
+    .map(([date, dayRecords]) => {
+      const chronologicalRecords = [...dayRecords].sort(
+        (a, b) =>
+          getAttendanceRecordTimestamp(a) - getAttendanceRecordTimestamp(b),
+      );
+      const checkInTime = pickAttendanceStamp(
+        chronologicalRecords,
+        "check_in_time",
+        ["حاضر"],
+        "first",
+      );
+      const checkOutTime = pickAttendanceStamp(
+        chronologicalRecords,
+        "check_out_time",
+        ["مغادر"],
+        "last",
+      );
+      const lunchStartTime = pickAttendanceStamp(
+        chronologicalRecords,
+        "lunch_start_time",
+        ["في الاستراحة", "استراحة غداء"],
+        "first",
+      );
+      const lunchEndTime = pickAttendanceStamp(
+        chronologicalRecords,
+        "lunch_end_time",
+        ["يعمل"],
+        "last",
+      );
+      const checkInDate = parseValidDate(checkInTime);
+      const checkOutDate = parseValidDate(checkOutTime);
+      const totalMinutes =
+        checkInDate && checkOutDate
+          ? Math.max(
+              0,
+              Math.floor(
+                (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60),
+              ),
+            )
+          : null;
+      const latestRecord = chronologicalRecords.at(-1);
+      const notes = Array.from(
+        new Set(
+          dayRecords
+            .map((record) => record.notes?.trim())
+            .filter((note): note is string => Boolean(note)),
+        ),
+      );
+
+      return {
+        date,
+        status: checkOutTime ? "مغادر" : latestRecord?.status || "غير مسجل",
+        checkInTime,
+        checkOutTime,
+        lunchStartTime,
+        lunchEndTime,
+        totalMinutes,
+        notes,
+        recordCount: dayRecords.length,
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function formatAttendanceDate(dateKey: string): string {
+  const date = new Date(`${dateKey}T12:00:00`);
+  return date.toLocaleDateString("ar-SA-u-ca-gregory", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatAttendanceTime(value?: string): string {
+  const date = parseValidDate(value);
+  return date
+    ? date.toLocaleTimeString("ar-SA", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+}
+
 interface Violation {
   id: number;
   employee_id: number;
@@ -795,6 +957,7 @@ export default function UserDashboard() {
     user?.id || 0,
     withdrawalsToday?.totalMinutes || 0,
   );
+  const dailyAttendanceSummaries = groupAttendanceByDay(attendanceRecords);
 
   // Request form
   const requestForm = useForm({
@@ -1436,136 +1599,90 @@ export default function UserDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {attendanceRecords?.slice(0, 15).map((record) => (
+                  {dailyAttendanceSummaries.slice(0, 15).map((day) => (
                     <div
-                      key={record.id}
-                      className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm"
+                      key={day.date}
+                      className="rounded-lg border bg-white p-4 shadow-sm dark:bg-gray-800"
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Badge
-                            className={getStatusColor(record.status)}
-                            variant="outline"
-                          >
-                            {record.status}
-                          </Badge>
-                          <span className="font-medium text-gray-700 dark:text-gray-300">
-                            {new Date(record.date).toLocaleDateString("en-US", {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Calendar className="h-5 w-5 shrink-0 text-blue-600" />
+                          <span className="break-words font-medium text-gray-700 dark:text-gray-300">
+                            {formatAttendanceDate(day.date)}
                           </span>
                         </div>
-                        {record.notes && (
-                          <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                            {record.notes}
+                        <Badge
+                          className="w-fit shrink-0"
+                          variant="outline"
+                        >
+                          <span
+                            className={`mr-2 h-2 w-2 rounded-full ${getStatusColor(day.status)}`}
+                            aria-hidden="true"
+                          />
+                          {day.status}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                        {[
+                          {
+                            label: t("userDashboard.attendance.entry"),
+                            value: day.checkInTime,
+                            color: "text-green-600",
+                          },
+                          {
+                            label: t("userDashboard.attendance.breakStart"),
+                            value: day.lunchStartTime,
+                            color: "text-yellow-600",
+                          },
+                          {
+                            label: t("userDashboard.attendance.breakEnd"),
+                            value: day.lunchEndTime,
+                            color: "text-blue-600",
+                          },
+                          {
+                            label: t("userDashboard.attendance.exit"),
+                            value: day.checkOutTime,
+                            color: "text-gray-600 dark:text-gray-300",
+                          },
+                        ].map((item) => (
+                          <div
+                            key={item.label}
+                            className="flex min-w-0 flex-col rounded-md bg-gray-50 p-2 dark:bg-gray-700/50"
+                          >
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {item.label}
+                            </span>
+                            <span className={`font-medium ${item.color}`}>
+                              {formatAttendanceTime(item.value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {day.totalMinutes !== null && (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 pt-3 text-sm dark:border-gray-600">
+                          <span className="text-gray-500 dark:text-gray-400">
+                            {t("userDashboard.attendance.totalWorkHours")}:
                           </span>
-                        )}
-                      </div>
+                          <span className="font-medium text-blue-700 dark:text-blue-300">
+                            {Math.floor(day.totalMinutes / 60)}{" "}
+                            {t("userDashboard.attendance.hour")}{" "}
+                            {day.totalMinutes % 60}{" "}
+                            {t("userDashboard.attendance.minute")}
+                          </span>
+                        </div>
+                      )}
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        {record.check_in_time && (
-                          <div className="flex flex-col">
-                            <span className="text-gray-500 text-xs">
-                              {t("userDashboard.attendance.entry")}
-                            </span>
-                            <span className="font-medium text-green-600">
-                              {new Date(
-                                record.check_in_time,
-                              ).toLocaleTimeString("en-US", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                              })}
-                            </span>
-                          </div>
-                        )}
-
-                        {record.lunch_start_time && (
-                          <div className="flex flex-col">
-                            <span className="text-gray-500 text-xs">
-                              {t("userDashboard.attendance.breakStart")}
-                            </span>
-                            <span className="font-medium text-yellow-600">
-                              {new Date(
-                                record.lunch_start_time,
-                              ).toLocaleTimeString("en-US", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                              })}
-                            </span>
-                          </div>
-                        )}
-
-                        {record.lunch_end_time && (
-                          <div className="flex flex-col">
-                            <span className="text-gray-500 text-xs">
-                              {t("userDashboard.attendance.breakEnd")}
-                            </span>
-                            <span className="font-medium text-blue-600">
-                              {new Date(
-                                record.lunch_end_time,
-                              ).toLocaleTimeString("en-US", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                              })}
-                            </span>
-                          </div>
-                        )}
-
-                        {record.check_out_time && (
-                          <div className="flex flex-col">
-                            <span className="text-gray-500 text-xs">
-                              {t("userDashboard.attendance.exit")}
-                            </span>
-                            <span className="font-medium text-gray-600">
-                              {new Date(
-                                record.check_out_time,
-                              ).toLocaleTimeString("en-US", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                              })}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Calculate working hours if both check-in and check-out exist */}
-                      {record.check_in_time && record.check_out_time && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-500">
-                              {t("userDashboard.attendance.totalWorkHours")}:
-                            </span>
-                            <span className="font-medium text-blue-700 dark:text-blue-300">
-                              {(() => {
-                                const checkIn = new Date(record.check_in_time!);
-                                const checkOut = new Date(
-                                  record.check_out_time!,
-                                );
-                                const diff =
-                                  checkOut.getTime() - checkIn.getTime();
-                                const hours = Math.floor(
-                                  diff / (1000 * 60 * 60),
-                                );
-                                const minutes = Math.floor(
-                                  (diff % (1000 * 60 * 60)) / (1000 * 60),
-                                );
-                                return `${hours} ${t("userDashboard.attendance.hour")} ${minutes} ${t("userDashboard.attendance.minute")}`;
-                              })()}
-                            </span>
-                          </div>
+                      {day.notes.length > 0 && (
+                        <div className="mt-3 rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                          {day.notes.join(" • ")}
                         </div>
                       )}
                     </div>
                   ))}
 
-                  {(!attendanceRecords || attendanceRecords.length === 0) && (
+                  {dailyAttendanceSummaries.length === 0 && (
                     <div className="text-center text-gray-500 py-8">
                       <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>{t("userDashboard.attendance.noRecords")}</p>
