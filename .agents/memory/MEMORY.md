@@ -56,3 +56,4 @@
 - [Schema drift migrations](schema-drift-migrations.md) — when drizzle-kit push prompts over existing drift, do not force a broad diff for one reviewed additive change.
 - [Maintenance schedule run idempotency](maintenance-schedule-run-idempotency.md) — periodic checklist runs are date-unique; advance configurable due cycles only on completion, never on start.
 - [Publish snapshot exclusions](publish-snapshot-exclusions.md) — root .gitignore must explicitly exclude Replit/editor caches; global ignore rules may not keep them out of the 8 GiB publish image.
+- [Shift roster consistency](shift-roster-consistency.md) — validate roster revision and active employee set inside the month lock; open-session stamps stay bound by attendance date/snapshot.

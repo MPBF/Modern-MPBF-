@@ -3,7 +3,7 @@ import type { Express } from "express";
 
 import { storage } from "../storage";
 
-import { insertShiftAssignmentSchema } from "@shared/schema";
+import { insertShiftAssignmentSchema, insertShiftTemplateSchema } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
 import { z } from "zod";
 import ExcelJS from "exceljs";
@@ -12,6 +12,24 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 import { notificationService, addJsonSheet, getAuthUserId } from "./shared";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
+
+const shiftTemplateInput = insertShiftTemplateSchema
+  .pick({ name_ar: true, name_en: true, start_time: true, end_time: true, grace_minutes: true, base_work_hours: true, active: true })
+  .partial({ name_en: true, active: true })
+  .superRefine((value, ctx) => {
+    const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!time.test(value.start_time)) ctx.addIssue({ code: "custom", path: ["start_time"], message: "وقت البداية يجب أن يكون HH:mm" });
+    if (!time.test(value.end_time)) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية يجب أن يكون HH:mm" });
+    if (value.start_time === value.end_time) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية لا يساوي البداية" });
+    const graceMinutes = value.grace_minutes ?? 0;
+    if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 180) ctx.addIssue({ code: "custom", path: ["grace_minutes"], message: "فترة السماح من 0 إلى 180" });
+    const hours = Number(value.base_work_hours);
+    const [sh, sm] = value.start_time.split(":").map(Number);
+    const [eh, em] = value.end_time.split(":").map(Number);
+    const duration = ((eh * 60 + em - sh * 60 - sm + 1440) % 1440) / 60;
+    if (!(hours > 0) || hours > duration || Math.round(hours * 4) !== hours * 4)
+      ctx.addIssue({ code: "custom", path: ["base_work_hours"], message: "الساعات الأساسية يجب أن تكون أرباع ساعة ضمن مدة الوردية" });
+  });
 
 function parseSectionIdsQuery(
   rawSectionIds: unknown,
@@ -352,6 +370,34 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
     },
   );
 
+  // Reusable shift template administration.
+  app.get("/api/hr/shift-templates", requireAuth, requirePermission("view_hr", "manage_hr", "view_attendance"), async (req, res) => {
+    try {
+      const active = req.query.active === undefined ? undefined : req.query.active === "true";
+      res.json({ data: await storage.getShiftTemplates(active) });
+    } catch (error) { console.error("Error fetching shift templates:", error); res.status(500).json({ message: "خطأ في جلب قوالب الورديات" }); }
+  });
+  app.post("/api/hr/shift-templates", requireAuth, requirePermission("manage_attendance", "manage_hr"), async (req, res) => {
+    const parsed = shiftTemplateInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "بيانات القالب غير صحيحة", errors: parsed.error.flatten().fieldErrors });
+    try { res.status(201).json(await storage.createShiftTemplate(parsed.data, getAuthUserId(req) ?? null)); }
+    catch (error: any) { res.status(error?.code === "23505" ? 409 : 500).json({ message: error?.code === "23505" ? "اسم القالب مستخدم بالفعل" : "خطأ في إنشاء القالب" }); }
+  });
+  app.patch("/api/hr/shift-templates/:id", requireAuth, requirePermission("manage_attendance", "manage_hr"), async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = shiftTemplateInput.safeParse(req.body);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "معرف القالب غير صحيح" });
+    if (!parsed.success) return res.status(400).json({ message: "بيانات القالب غير صحيحة", errors: parsed.error.flatten().fieldErrors });
+    try { const item = await storage.updateShiftTemplate(id, parsed.data); return item ? res.json(item) : res.status(404).json({ message: "القالب غير موجود" }); }
+    catch (error: any) { res.status(error?.code === "23505" ? 409 : 500).json({ message: error?.code === "23505" ? "اسم القالب مستخدم بالفعل" : "خطأ في تحديث القالب" }); }
+  });
+  app.post("/api/hr/shift-templates/:id/disable", requireAuth, requirePermission("manage_attendance", "manage_hr"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "معرف القالب غير صحيح" });
+    const item = await storage.disableShiftTemplate(id);
+    return item ? res.json(item) : res.status(404).json({ message: "القالب غير موجود" });
+  });
+
   // جدول الورديات الشهري لكل الموظفين
   app.get(
     "/api/hr/shifts",
@@ -378,11 +424,8 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
         ) {
           return res.status(400).json({ message: "الشهر أو السنة غير صحيحة" });
         }
-        const assignments = await storage.getShiftAssignmentsByPeriod(
-          year,
-          month,
-        );
-        res.json({ data: assignments, year, month });
+        const roster = await storage.getShiftRoster(year, month);
+        res.json({ data: roster.rows, assignments: roster.rows.map((r: any) => r.assignment).filter(Boolean), year, month, roster_revision: roster.roster_revision });
       } catch (error) {
         console.error("Error fetching shift roster:", error);
         res.status(500).json({ message: "خطأ في جلب جدول الورديات" });
@@ -413,8 +456,20 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
         ) {
           return res.status(400).json({ message: "الشهر أو السنة غير صحيحة" });
         }
+        const now = factoryNowParts();
+        if (year < now.year || (year === now.year && month < now.month)) {
+          return res.status(400).json({ message: "الشهور المنتهية للقراءة فقط" });
+        }
+        const roster = await storage.getShiftRoster(year, month);
+        if (typeof body.roster_revision !== "string" || body.roster_revision !== roster.roster_revision) {
+          return res.status(409).json({ message: "تم تغيير جدول الموظفين، يرجى تحديث الصفحة", code: "STALE_ROSTER_REVISION" });
+        }
         const entries = [];
         const deleteUserIds: number[] = [];
+        const seenUserIds = new Set<number>();
+        const activeTemplates = new Map(
+          (await storage.getShiftTemplates(true)).map((template: any) => [template.id, template]),
+        );
         for (const e of rawEntries) {
           const userId = parseInt(String(e.user_id), 10);
           if (isNaN(userId) || userId <= 0) {
@@ -422,12 +477,25 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
               .status(400)
               .json({ message: "معرف الموظف غير صحيح في الجدول" });
           }
+          if (seenUserIds.has(userId)) {
+            return res.status(400).json({ message: "لا يجوز تكرار الموظف في الجدول" });
+          }
+          seenUserIds.add(userId);
           // "none" / فارغ / null يعني إلغاء جدولة الموظف لهذا الشهر (حذف).
-          if (e.shift === "none" || e.shift == null || e.shift === "") {
+          if (e.shift_template_id === null || e.shift === "none" || (e.shift_template_id === undefined && (e.shift == null || e.shift === ""))) {
             deleteUserIds.push(userId);
             continue;
           }
-          if (!isShiftType(e.shift)) {
+          const template = e.shift_template_id == null
+            ? null
+            : activeTemplates.get(Number(e.shift_template_id));
+          if (e.shift_template_id != null && !template) {
+            return res.status(400).json({ message: "القالب المحدد غير موجود أو معطل", user_id: userId });
+          }
+          const legacyShift = template
+            ? (template.end_time < template.start_time ? "night" : "day")
+            : e.shift;
+          if (!isShiftType(legacyShift)) {
             return res
               .status(400)
               .json({ message: "نوع الوردية غير صحيح (نهارية/ليلية فقط)" });
@@ -436,7 +504,13 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
             user_id: userId,
             year,
             month,
-            shift: e.shift,
+            shift: legacyShift,
+            shift_template_id: template?.id ?? null,
+            shift_snapshot: template ? {
+              template_id: template.id, name_ar: template.name_ar, name_en: template.name_en,
+              start_time: template.start_time, end_time: template.end_time,
+              grace_minutes: template.grace_minutes, base_work_hours: Number(template.base_work_hours),
+            } : undefined,
             notes: e.notes ?? null,
           });
           if (!parsed.success) {
@@ -447,6 +521,10 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
           }
           entries.push(parsed.data);
         }
+        const expectedIds = new Set(roster.rows.map((r: any) => r.employee.id));
+        if (seenUserIds.size !== expectedIds.size || [...seenUserIds].some((id) => !expectedIds.has(id))) {
+          return res.status(400).json({ message: "يجب أن يغطي الحفظ جميع الموظفين الظاهرين في الجدول" });
+        }
         const createdBy = getAuthUserId(req) ?? null;
         const saved = await storage.saveShiftRoster(
           year,
@@ -454,8 +532,16 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
           entries,
           deleteUserIds,
           createdBy,
+          body.roster_revision,
         );
-        res.json({ data: saved, year, month });
+        if (!saved) {
+          return res.status(409).json({
+            message: "تم تغيير جدول الموظفين، يرجى تحديث الصفحة",
+            code: "STALE_ROSTER_REVISION",
+          });
+        }
+        const updatedRoster = await storage.getShiftRoster(year, month);
+        res.json({ data: saved, year, month, roster_revision: updatedRoster.roster_revision, roster: updatedRoster.rows });
       } catch (error) {
         console.error("Error saving shift roster:", error);
         res.status(500).json({ message: "خطأ في حفظ جدول الورديات" });

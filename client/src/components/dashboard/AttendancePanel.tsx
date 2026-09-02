@@ -30,6 +30,13 @@ interface DailyStatus {
   hasEndedLunch?: boolean;
   hasCheckedOut?: boolean;
   currentStatus?: string;
+  shift_assigned?: boolean;
+  assigned_shift?: {
+    name_ar?: string | null;
+    name_en?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+  } | null;
 }
 
 interface WithdrawalsResponse {
@@ -117,8 +124,7 @@ export default function AttendancePanel({
     todayRecords.find((r) => statuses.includes(r.status));
 
   const checkInRecord =
-    todayRecords.find((r) => r.check_in_time) ||
-    pickByStatus(["حاضر"]);
+    todayRecords.find((r) => r.check_in_time) || pickByStatus(["حاضر"]);
   const lunchStartRecord =
     todayRecords.find((r) => r.lunch_start_time) ||
     pickByStatus(["في الاستراحة"]);
@@ -127,16 +133,13 @@ export default function AttendancePanel({
     // "يعمل" is set after ending lunch
     [...todayRecords].reverse().find((r) => r.status === "يعمل");
   const checkOutRecord =
-    todayRecords.find((r) => r.check_out_time) ||
-    pickByStatus(["مغادر"]);
+    todayRecords.find((r) => r.check_out_time) || pickByStatus(["مغادر"]);
 
   // Effective timestamps with `created_at` fallback for historic NULLs.
   const checkInAt =
     checkInRecord?.check_in_time || checkInRecord?.created_at || null;
   const lunchStartAt =
-    lunchStartRecord?.lunch_start_time ||
-    lunchStartRecord?.created_at ||
-    null;
+    lunchStartRecord?.lunch_start_time || lunchStartRecord?.created_at || null;
   const lunchEndAt =
     lunchEndRecord?.lunch_end_time || lunchEndRecord?.created_at || null;
   const checkOutAt =
@@ -148,22 +151,19 @@ export default function AttendancePanel({
   // for the ownership check; it resolves the real current state from
   // the user's full day of rows.
   const activeAttendanceId =
-    [...todayRecords]
-      .sort((a, b) => {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return tb - ta;
-      })[0]?.id ?? null;
+    [...todayRecords].sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tb - ta;
+    })[0]?.id ?? null;
 
   // Withdrawals query
-  const {
-    data: withdrawals,
-    refetch: refetchWithdrawals,
-  } = useQuery<WithdrawalsResponse>({
-    queryKey: ["/api/attendance/withdrawals/today", userId],
-    enabled: !!userId && !!activeAttendanceId,
-    refetchInterval: 60_000,
-  });
+  const { data: withdrawals, refetch: refetchWithdrawals } =
+    useQuery<WithdrawalsResponse>({
+      queryKey: ["/api/attendance/withdrawals/today", userId],
+      enabled: !!userId && !!activeAttendanceId,
+      refetchInterval: 60_000,
+    });
 
   // Anti-fraud watchdog only runs while user is actively working (not on
   // break, not checked out, not absent).
@@ -210,8 +210,7 @@ export default function AttendancePanel({
       return (now.getTime() - new Date(lunchStartAt).getTime()) / 1000;
     }
     if (checkInAt) {
-      const end =
-        isCheckedOut && checkOutAt ? new Date(checkOutAt) : now;
+      const end = isCheckedOut && checkOutAt ? new Date(checkOutAt) : now;
       return (end.getTime() - new Date(checkInAt).getTime()) / 1000;
     }
     return 0;
@@ -241,6 +240,13 @@ export default function AttendancePanel({
   const withdrawnMinutes = withdrawals?.totalMinutes ?? 0;
   const withdrawalCount = withdrawals?.withdrawals?.length ?? 0;
   const hasWithdrawals = withdrawnMinutes > 0 || withdrawalCount > 0;
+  const assignedShift = dailyStatus?.assigned_shift;
+  const assignedShiftName =
+    assignedShift?.name_ar || assignedShift?.name_en || null;
+  const assignedShiftTime =
+    assignedShift?.start_time && assignedShift?.end_time
+      ? `${assignedShift.start_time} – ${assignedShift.end_time}`
+      : null;
 
   // ---- Buttons ----
   const buttons: Array<{
@@ -301,9 +307,7 @@ export default function AttendancePanel({
       timestamp: checkOutAt,
       onClick: () => onAction("مغادر"),
       disabled:
-        !dailyStatus?.hasCheckedIn ||
-        !!dailyStatus?.hasCheckedOut ||
-        isPending,
+        !dailyStatus?.hasCheckedIn || !!dailyStatus?.hasCheckedOut || isPending,
       done: !!dailyStatus?.hasCheckedOut,
       doneLabel: t("userDashboard.attendance.checkedOut"),
     },
@@ -358,6 +362,19 @@ export default function AttendancePanel({
           <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">
             {counterLabel}
           </p>
+          {dailyStatus?.shift_assigned !== undefined && (
+            <p
+              className="mt-1 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400"
+              data-testid="text-assigned-shift"
+            >
+              {assignedShiftName
+                ? `${assignedShiftName}${assignedShiftTime ? ` · ${assignedShiftTime}` : ""}`
+                : t("userDashboard.attendance.unscheduled", {
+                    defaultValue:
+                      "غير مجدول — يرجى مراجعة مسؤول الموارد البشرية",
+                  })}
+            </p>
+          )}
         </div>
 
         {/* Action grid: mobile-first */}
@@ -436,8 +453,8 @@ export default function AttendancePanel({
                 <div className="flex items-center justify-between">
                   <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
                     <AlertOctagon className="h-3.5 w-3.5" />
-                    {t("userDashboard.attendance.withdrawnTime")}
-                    {" "}({withdrawalCount}×)
+                    {t("userDashboard.attendance.withdrawnTime")} (
+                    {withdrawalCount}×)
                   </span>
                   <span className="text-red-700 dark:text-red-300 font-mono font-semibold">
                     -{withdrawnMinutes} {t("userDashboard.attendance.minute")}
@@ -445,17 +462,15 @@ export default function AttendancePanel({
                 </div>
                 {withdrawalCount > 0 && (
                   <ul className="mt-1 ms-4 text-[11px] text-red-600/80 dark:text-red-400/80 space-y-0.5">
-                    {(withdrawals?.withdrawals || [])
-                      .slice(0, 3)
-                      .map((w) => (
-                        <li
-                          key={w.id}
-                          className="flex items-center justify-between font-mono"
-                        >
-                          <span>{formatTime(w.started_at)}</span>
-                          <span>−{w.duration_minutes}m</span>
-                        </li>
-                      ))}
+                    {(withdrawals?.withdrawals || []).slice(0, 3).map((w) => (
+                      <li
+                        key={w.id}
+                        className="flex items-center justify-between font-mono"
+                      >
+                        <span>{formatTime(w.started_at)}</span>
+                        <span>−{w.duration_minutes}m</span>
+                      </li>
+                    ))}
                     {withdrawalCount > 3 && (
                       <li className="text-[10px]">+{withdrawalCount - 3}…</li>
                     )}

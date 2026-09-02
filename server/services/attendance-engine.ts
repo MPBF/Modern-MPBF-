@@ -7,8 +7,10 @@ import {
   computeShiftMetrics,
   getShiftName,
   getShiftWindow,
+  getShiftWindowForSnapshot,
   isShiftType,
   type ShiftType,
+  type ShiftSnapshot,
 } from "@shared/shifts";
 
 export interface RawAttendanceRow {
@@ -26,7 +28,7 @@ export interface RawAttendanceRow {
 }
 
 /** خريطة الوردية لكل شهر: المفتاح "YYYY-M" → نوع الوردية. */
-export type MonthlyShiftMap = Map<string, ShiftType>;
+export type MonthlyShiftMap = Map<string, ShiftType | ShiftSnapshot>;
 
 export interface DailyAttendanceResult {
   date: string;
@@ -138,6 +140,7 @@ export function computeEmployeeAttendance(
   // صفوف لنفس اليوم. لا نحسب دقائق الاستراحة/الانسحاب لكل صف على حدة (لتفادي
   // الاحتساب المزدوج)؛ بل نجمّع الأختام الزمنية عبر صفوف اليوم ثم نحسب مرة واحدة.
   const normalized = rows.map((r) => ({
+    date: String(r.date).slice(0, 10),
     checkIn: toDate(r.check_in_time),
     checkOut: toDate(r.check_out_time),
     lunchStart: toDate(r.lunch_start_time),
@@ -157,7 +160,11 @@ export function computeEmployeeAttendance(
   while (cursor <= to && guard < 400) {
     guard++;
     const [y, m] = cursor.split("-").map(Number);
-    const shift = shiftByMonth.get(monthKey(y, m)) ?? null;
+    const configured = shiftByMonth.get(monthKey(y, m)) ?? null;
+    const snapshot = configured && typeof configured === "object" ? configured : null;
+    const shift = snapshot
+      ? (snapshot.end_time < snapshot.start_time ? "night" : "day")
+      : configured;
 
     if (!shift || !isShiftType(shift)) {
       days.push({
@@ -181,7 +188,7 @@ export function computeEmployeeAttendance(
       continue;
     }
 
-    const { start, end } = getShiftWindow(shift, cursor);
+    const { start, end } = snapshot ? getShiftWindowForSnapshot(snapshot, cursor) : getShiftWindow(shift, cursor);
     // هامش ساعتين لاستيعاب الحضور المبكر/الانصراف المتأخر حول نافذة الوردية.
     const lo = start.getTime() - 2 * 3600000;
     const hi = end.getTime() + 2 * 3600000;
@@ -198,8 +205,10 @@ export function computeEmployeeAttendance(
     let withdrawnMinutes = 0;
 
     for (const row of normalized) {
+      const belongsToSession = row.date === cursor;
       // عضوية اليوم/الوردية: أي ختم زمني للصف يقع داخل النافذة يربطه بهذا اليوم.
       const rowInWindow =
+        belongsToSession ||
         within(row.checkIn) ||
         within(row.checkOut) ||
         within(row.lunchStart) ||
@@ -208,12 +217,13 @@ export function computeEmployeeAttendance(
         within(row.breakEnd);
       if (!rowInWindow) continue;
 
-      if (within(row.checkIn)) earliestIn = minD(earliestIn, row.checkIn);
-      if (within(row.checkOut)) latestOut = maxD(latestOut, row.checkOut);
-      if (within(row.lunchStart)) lunchStart = minD(lunchStart, row.lunchStart);
-      if (within(row.lunchEnd)) lunchEnd = maxD(lunchEnd, row.lunchEnd);
-      if (within(row.breakStart)) breakStart = minD(breakStart, row.breakStart);
-      if (within(row.breakEnd)) breakEnd = maxD(breakEnd, row.breakEnd);
+      const accept = (stamp: Date | null) => belongsToSession || within(stamp);
+      if (accept(row.checkIn)) earliestIn = minD(earliestIn, row.checkIn);
+      if (accept(row.checkOut)) latestOut = maxD(latestOut, row.checkOut);
+      if (accept(row.lunchStart)) lunchStart = minD(lunchStart, row.lunchStart);
+      if (accept(row.lunchEnd)) lunchEnd = maxD(lunchEnd, row.lunchEnd);
+      if (accept(row.breakStart)) breakStart = minD(breakStart, row.breakStart);
+      if (accept(row.breakEnd)) breakEnd = maxD(breakEnd, row.breakEnd);
       // total_withdrawn_minutes قيمة تراكمية إجمالية لليوم → نأخذ الأكبر لا المجموع.
       if (row.withdrawn > withdrawnMinutes) withdrawnMinutes = row.withdrawn;
     }
@@ -230,6 +240,7 @@ export function computeEmployeeAttendance(
       breakMinutes,
       withdrawnMinutes,
       graceMinutes,
+      snapshot: snapshot ?? undefined,
     });
 
     // خصم دقائق الاستئذان المعتمدة لهذا اليوم من التأخير ثم المغادرة
@@ -262,7 +273,7 @@ export function computeEmployeeAttendance(
       date: cursor,
       scheduled: true,
       shift,
-      shiftName: getShiftName(shift, "ar"),
+      shiftName: snapshot?.name_ar ?? getShiftName(shift, "ar"),
       status,
       present: metrics.present,
       complete: metrics.complete,

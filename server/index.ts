@@ -1652,6 +1652,43 @@ function sanitizeResponseForLogging(response: any): any {
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_shift_assignment_user_month
         ON shift_assignments (user_id, year, month)
       `);
+      // Shift template migration is additive and repeatable: old day/night
+      // assignments retain their legacy column while receiving a snapshot.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS shift_templates (
+          id serial PRIMARY KEY,
+          name_ar varchar(100) NOT NULL UNIQUE,
+          name_en varchar(100),
+          start_time varchar(5) NOT NULL,
+          end_time varchar(5) NOT NULL,
+          grace_minutes integer NOT NULL DEFAULT 0,
+          base_work_hours numeric(5,2) NOT NULL DEFAULT '8',
+          active boolean NOT NULL DEFAULT true,
+          created_by integer REFERENCES users(id) ON DELETE SET NULL,
+          created_at timestamp DEFAULT now(), updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        INSERT INTO shift_templates (name_ar, name_en, start_time, end_time)
+        VALUES ('نهارية', 'Day', '07:00', '19:00'),
+               ('ليلية', 'Night', '19:00', '07:00')
+        ON CONFLICT (name_ar) DO NOTHING
+      `);
+      await db.execute(sql`ALTER TABLE shift_assignments ADD COLUMN IF NOT EXISTS shift_template_id integer REFERENCES shift_templates(id) ON DELETE RESTRICT`);
+      await db.execute(sql`ALTER TABLE shift_assignments ADD COLUMN IF NOT EXISTS shift_snapshot jsonb`);
+      await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift_assignment_id integer REFERENCES shift_assignments(id) ON DELETE RESTRICT`);
+      await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift_template_id integer REFERENCES shift_templates(id) ON DELETE RESTRICT`);
+      await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift_snapshot jsonb`);
+      await db.execute(sql`
+        UPDATE shift_assignments a SET
+          shift_template_id = t.id,
+          shift_snapshot = jsonb_build_object('template_id', t.id, 'name_ar', t.name_ar,
+            'name_en', t.name_en, 'start_time', t.start_time, 'end_time', t.end_time,
+            'grace_minutes', t.grace_minutes, 'base_work_hours', t.base_work_hours)
+        FROM shift_templates t
+        WHERE a.shift_snapshot IS NULL
+          AND ((a.shift = 'day' AND t.name_ar = 'نهارية') OR (a.shift = 'night' AND t.name_ar = 'ليلية'))
+      `);
       // مستخدمو النظام الآليون: علم على جدول المستخدمين + جدول إعدادات المحاكاة.
       await db.execute(sql`
         ALTER TABLE users

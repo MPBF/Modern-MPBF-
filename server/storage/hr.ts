@@ -129,6 +129,8 @@ import {
   type InsertAttendanceWithdrawal,
   type ShiftAssignment,
   type InsertShiftAssignment,
+  type ShiftTemplate,
+  type InsertShiftTemplate,
   type Reward,
   type InsertReward,
   type EmployeeCustody,
@@ -309,6 +311,7 @@ import {
 } from "../services/leave-attendance";
 import { toNumericSectionIds } from "./section-ids";
 import { filterAttendanceRecordsByWindow } from "./attendance-session";
+import * as shiftTemplateStore from "./shift-template-store";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
 import { db, pool } from "../db";
@@ -1267,20 +1270,29 @@ export class HrStorage extends MachinesStorage {
     year: number,
     month: number,
   ): Promise<ShiftAssignment[]> {
-    return withDatabaseErrorHandling(
-      async () =>
-        await db
-          .select()
-          .from(shift_assignments)
-          .where(
-            and(
-              eq(shift_assignments.year, year),
-              eq(shift_assignments.month, month),
-            ),
-          ),
-      "getShiftAssignmentsByPeriod",
-      "جلب جدول الورديات الشهري",
-    );
+    return shiftTemplateStore.getShiftAssignmentsByPeriod(year, month);
+  }
+
+  async getShiftTemplates(active?: boolean): Promise<ShiftTemplate[]> {
+    return shiftTemplateStore.getShiftTemplates(active);
+  }
+
+  async getShiftRoster(year: number, month: number): Promise<{ rows: any[]; roster_revision: string }> {
+    return shiftTemplateStore.getShiftRoster(year, month);
+  }
+
+  async createShiftTemplate(
+    data: InsertShiftTemplate, createdBy: number | null,
+  ): Promise<ShiftTemplate> {
+    return shiftTemplateStore.createShiftTemplate(data, createdBy);
+  }
+
+  async updateShiftTemplate(id: number, data: Partial<InsertShiftTemplate>): Promise<ShiftTemplate | null> {
+    return shiftTemplateStore.updateShiftTemplate(id, data);
+  }
+
+  async disableShiftTemplate(id: number): Promise<ShiftTemplate | null> {
+    return shiftTemplateStore.disableShiftTemplate(id);
   }
 
 
@@ -1288,37 +1300,7 @@ export class HrStorage extends MachinesStorage {
     entries: InsertShiftAssignment[],
     createdBy: number | null,
   ): Promise<ShiftAssignment[]> {
-    return withDatabaseErrorHandling(
-      async () => {
-        if (!entries.length) return [];
-        const values = entries.map((e) => ({
-          user_id: e.user_id,
-          year: e.year,
-          month: e.month,
-          shift: e.shift,
-          notes: e.notes ?? null,
-          created_by: createdBy,
-        }));
-        return await db
-          .insert(shift_assignments)
-          .values(values)
-          .onConflictDoUpdate({
-            target: [
-              shift_assignments.user_id,
-              shift_assignments.year,
-              shift_assignments.month,
-            ],
-            set: {
-              shift: sql`excluded.shift`,
-              notes: sql`excluded.notes`,
-              updated_at: sql`now()`,
-            },
-          })
-          .returning();
-      },
-      "upsertShiftAssignments",
-      "حفظ جدول الورديات",
-    );
+    return shiftTemplateStore.upsertShiftAssignments(entries, createdBy);
   }
 
 
@@ -1330,64 +1312,18 @@ export class HrStorage extends MachinesStorage {
     upsertEntries: InsertShiftAssignment[],
     deleteUserIds: number[],
     createdBy: number | null,
-  ): Promise<ShiftAssignment[]> {
+    expectedRevision: string,
+  ): Promise<ShiftAssignment[] | null> {
     return withDatabaseErrorHandling(
-      async () => {
-        return await db.transaction(async (tx) => {
-          // قفل استشاري على مستوى الفترة لمنع تعديلين متزامنين لنفس الشهر.
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(424242, ${year * 100 + month})`,
-          );
-
-          if (deleteUserIds.length) {
-            await tx
-              .delete(shift_assignments)
-              .where(
-                and(
-                  eq(shift_assignments.year, year),
-                  eq(shift_assignments.month, month),
-                  inArray(shift_assignments.user_id, deleteUserIds),
-                ),
-              );
-          }
-
-          if (upsertEntries.length) {
-            const values = upsertEntries.map((e) => ({
-              user_id: e.user_id,
-              year,
-              month,
-              shift: e.shift,
-              notes: e.notes ?? null,
-              created_by: createdBy,
-            }));
-            await tx
-              .insert(shift_assignments)
-              .values(values)
-              .onConflictDoUpdate({
-                target: [
-                  shift_assignments.user_id,
-                  shift_assignments.year,
-                  shift_assignments.month,
-                ],
-                set: {
-                  shift: sql`excluded.shift`,
-                  notes: sql`excluded.notes`,
-                  updated_at: sql`now()`,
-                },
-              });
-          }
-
-          return await tx
-            .select()
-            .from(shift_assignments)
-            .where(
-              and(
-                eq(shift_assignments.year, year),
-                eq(shift_assignments.month, month),
-              ),
-            );
-        });
-      },
+      () =>
+        shiftTemplateStore.saveShiftRoster(
+          year,
+          month,
+          upsertEntries,
+          deleteUserIds,
+          createdBy,
+          expectedRevision,
+        ),
       "saveShiftRoster",
       "حفظ جدول الورديات",
     );

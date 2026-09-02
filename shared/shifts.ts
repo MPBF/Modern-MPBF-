@@ -107,6 +107,86 @@ export interface ShiftWindow {
   end: Date;
 }
 
+/** Immutable template values copied onto a monthly assignment and check-in. */
+export interface ShiftSnapshot {
+  template_id?: number | null;
+  name_ar: string;
+  name_en?: string | null;
+  start_time: string; // HH:mm
+  end_time: string; // HH:mm
+  grace_minutes: number;
+  base_work_hours: number;
+}
+
+export interface ResolvedShift {
+  attendanceDate: string;
+  snapshot: ShiftSnapshot;
+  window: ShiftWindow;
+  assignmentId?: number | null;
+}
+
+function wallTimeParts(value: string): { hour: number; minute: number } {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  if (!match) throw new Error(`Invalid shift wall time: ${value}`);
+  return { hour: Number(match[1]), minute: Number(match[2]) };
+}
+
+/** Builds a window from a persisted snapshot, including arbitrary minutes. */
+export function getShiftWindowForSnapshot(
+  snapshot: ShiftSnapshot,
+  dateStr: string,
+): ShiftWindow {
+  const { y, m, d } = parseDateStr(dateStr);
+  const startParts = wallTimeParts(snapshot.start_time);
+  const endParts = wallTimeParts(snapshot.end_time);
+  const start = factoryWallToInstant(y, m, d, startParts.hour, startParts.minute);
+  const nextDay = snapshot.end_time < snapshot.start_time;
+  const endDate = nextDay ? new Date(Date.UTC(y, m - 1, d + 1)) : new Date(Date.UTC(y, m - 1, d));
+  const end = factoryWallToInstant(
+    endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, endDate.getUTCDate(),
+    endParts.hour, endParts.minute,
+  );
+  return { start, end };
+}
+
+export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
+  if (!isShiftType(shift)) return null;
+  const def = SHIFT_DEFINITIONS[shift];
+  return {
+    name_ar: def.name_ar, name_en: def.name_en,
+    start_time: `${String(def.startHour).padStart(2, "0")}:00`,
+    end_time: `${String(def.endHour).padStart(2, "0")}:00`,
+    grace_minutes: 0, base_work_hours: BASE_WORK_HOURS,
+  };
+}
+
+/**
+ * Resolve today and yesterday deterministically. Yesterday wins only while
+ * its window contains now; otherwise today's assignment remains distinguishable
+ * from an employee with no assignment.
+ */
+export function resolveAssignmentSnapshot(
+  current: { shift_snapshot?: ShiftSnapshot | null; shift?: unknown; id?: number } | null,
+  previous: { shift_snapshot?: ShiftSnapshot | null; shift?: unknown; id?: number } | null,
+  now: Date = new Date(),
+): ResolvedShift | null {
+  const today = factoryNowParts(now);
+  const previousDay = factoryNowParts(new Date(now.getTime() - 86400000));
+  const priorSnapshot = previous?.shift_snapshot ?? legacyShiftSnapshot(previous?.shift);
+  if (priorSnapshot) {
+    const window = getShiftWindowForSnapshot(priorSnapshot, previousDay.dateStr);
+    if (now >= window.start && now < window.end)
+      return { attendanceDate: previousDay.dateStr, snapshot: priorSnapshot, window, assignmentId: previous?.id };
+  }
+  const snapshot = current?.shift_snapshot ?? legacyShiftSnapshot(current?.shift);
+  if (!snapshot) return null;
+  return {
+    attendanceDate: today.dateStr, snapshot,
+    window: getShiftWindowForSnapshot(snapshot, today.dateStr),
+    assignmentId: current?.id,
+  };
+}
+
 export interface ActivePreviousNightShift extends ShiftWindow {
   dateStr: string;
 }
@@ -201,6 +281,9 @@ export interface AttendanceMetricsInput {
   withdrawnMinutes?: number;
   /** فترة السماح بالدقائق. */
   graceMinutes?: number;
+  /** Assignment snapshot base hours; old rows retain the 8-hour default. */
+  baseWorkHours?: number;
+  snapshot?: ShiftSnapshot;
 }
 
 export interface AttendanceMetrics {
@@ -230,10 +313,12 @@ function roundHours(h: number): number {
 export function computeShiftMetrics(
   input: AttendanceMetricsInput,
 ): AttendanceMetrics {
-  const grace = input.graceMinutes ?? DEFAULT_GRACE_MINUTES;
+  const grace = input.graceMinutes ?? input.snapshot?.grace_minutes ?? DEFAULT_GRACE_MINUTES;
   const breakMinutes = Math.max(0, input.breakMinutes ?? 0);
   const withdrawnMinutes = Math.max(0, input.withdrawnMinutes ?? 0);
-  const { start, end } = getShiftWindow(input.shift, input.dateStr);
+  const { start, end } = input.snapshot
+    ? getShiftWindowForSnapshot(input.snapshot, input.dateStr)
+    : getShiftWindow(input.shift, input.dateStr);
 
   const present = !!input.checkIn;
   const complete = !!input.checkIn && !!input.checkOut;
@@ -261,8 +346,8 @@ export function computeShiftMetrics(
   }
 
   const overtimeHours =
-    complete && workedHours > BASE_WORK_HOURS
-      ? workedHours - BASE_WORK_HOURS
+    complete && workedHours > (input.baseWorkHours ?? input.snapshot?.base_work_hours ?? BASE_WORK_HOURS)
+      ? workedHours - (input.baseWorkHours ?? input.snapshot?.base_work_hours ?? BASE_WORK_HOURS)
       : 0;
 
   return {

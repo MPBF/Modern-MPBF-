@@ -15,6 +15,7 @@ import {
   getShiftWindow,
   isShiftType,
   resolveShiftAcrossMonthBoundary,
+  resolveAssignmentSnapshot,
 } from "@shared/shifts";
 
 import { requireAuth, requirePermission } from "../middleware/auth";
@@ -56,6 +57,16 @@ async function getAssignedShiftForInstant(
     now.getTime() < dayStart.getTime(),
     shiftStartCrossesMonth,
   );
+}
+
+async function getResolvedAssignmentForInstant(userId: number, now: Date) {
+  const today = factoryNowParts(now);
+  const yesterday = factoryNowParts(new Date(now.getTime() - 86400000));
+  const [current, previous] = await Promise.all([
+    storage.getShiftAssignmentForUserMonth(userId, today.year, today.month),
+    storage.getShiftAssignmentForUserMonth(userId, yesterday.year, yesterday.month),
+  ]);
+  return resolveAssignmentSnapshot(current as any, previous as any, now);
 }
 
 // Extracted from server/routes/hr.ts (registration order preserved; called
@@ -149,17 +160,30 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         if (isNaN(userId) || userId <= 0) {
           return res.status(400).json({ message: "معرف المستخدم غير صحيح" });
         }
+        const authUserId = getAuthUserId(req);
+        const permissions = (req as any).user?.permissions || [];
+        const canViewOthers = hasPermission(permissions, [
+          "view_attendance",
+          "view_attendance_reports",
+          "manage_attendance",
+          "view_hr",
+          "manage_hr",
+        ]);
+        if (authUserId !== userId && !canViewOthers) {
+          return res.status(403).json({ message: "غير مصرح بعرض حضور مستخدم آخر" });
+        }
         const now = new Date();
         const factoryToday = factoryNowParts(now);
         const requestedDate = (req.query.date as string) || factoryToday.dateStr;
-        const assignedShift = await getAssignedShiftForInstant(userId, now);
+        const resolvedAssignment = await getResolvedAssignmentForInstant(userId, now);
         const date =
-          requestedDate === factoryToday.dateStr && assignedShift
-            ? getAttendanceDateForShift(assignedShift, now)
+          requestedDate === factoryToday.dateStr && resolvedAssignment
+            ? resolvedAssignment.attendanceDate
             : requestedDate;
         const baseNightWindow =
-          assignedShift === "night"
-            ? getShiftWindow("night", date)
+          resolvedAssignment &&
+          resolvedAssignment.snapshot.end_time < resolvedAssignment.snapshot.start_time
+            ? resolvedAssignment.window
             : undefined;
         const currentNightWindow = baseNightWindow
           ? {
@@ -175,7 +199,18 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           date,
           currentNightWindow,
         );
-        res.json(status);
+        res.json({
+          ...status,
+          shift_assigned: !!resolvedAssignment,
+          assigned_shift: resolvedAssignment
+            ? {
+                assignment_id: resolvedAssignment.assignmentId ?? null,
+                template_id: resolvedAssignment.snapshot.template_id ?? null,
+                ...resolvedAssignment.snapshot,
+                attendance_date: resolvedAssignment.attendanceDate,
+              }
+            : null,
+        });
       } catch (error) {
         console.error("Error fetching daily attendance status:", error);
         res.status(500).json({ message: "خطأ في جلب حالة الحضور اليومية" });
@@ -471,16 +506,25 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const status = String(req.body.status || "");
         const action = String(req.body.action || "");
         const factoryToday = factoryNowParts(nowTs);
-        const assignedShift = await getAssignedShiftForInstant(
+        const resolvedAssignment = await getResolvedAssignmentForInstant(
           req.body.user_id,
           nowTs,
         );
+        const assignedShift = resolvedAssignment
+          ? (resolvedAssignment.snapshot.end_time < resolvedAssignment.snapshot.start_time ? "night" : "day")
+          : null;
         const attendanceDate = assignedShift
-          ? getAttendanceDateForShift(assignedShift, nowTs)
+          ? resolvedAssignment!.attendanceDate
           : factoryToday.dateStr;
         const assignedWindow = assignedShift
-          ? getShiftWindow(assignedShift, attendanceDate)
+          ? resolvedAssignment!.window
           : null;
+        if (status === "حاضر" && !resolvedAssignment) {
+          return res.status(400).json({
+            message: "لا توجد وردية مجدولة لك لهذا الشهر. يرجى مراجعة مسؤول الموارد البشرية.",
+            code: "NO_SHIFT_ASSIGNED",
+          });
+        }
         if (
           status === "حاضر" &&
           assignedWindow &&
@@ -488,10 +532,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             nowTs.getTime() >= assignedWindow.end.getTime())
         ) {
           return res.status(400).json({
-            message:
-              assignedShift === "night"
-                ? "يمكن تسجيل حضور الوردية الليلية من 7 مساءً إلى 7 صباحاً"
-                : "يمكن تسجيل حضور الوردية النهارية من 7 صباحاً إلى 7 مساءً",
+            message: `يمكن تسجيل حضور وردية ${resolvedAssignment!.snapshot.name_ar} من ${resolvedAssignment!.snapshot.start_time} إلى ${resolvedAssignment!.snapshot.end_time}`,
             code: "OUTSIDE_ASSIGNED_SHIFT",
           });
         }
@@ -511,15 +552,33 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         if (status === "مغادر" && !req.body.check_out_time) {
           stampOverrides.check_out_time = nowTs;
         }
+        // Actions after check-in belong to the already-open session, not to
+        // today's potentially changed roster. This also covers a night shift
+        // crossing a month/year boundary.
+        const openSession =
+          status !== "حاضر"
+            ? await storage.findOpenCheckIn(req.body.user_id)
+            : null;
+        const openSnapshot = openSession?.shift_snapshot as any;
 
         const attendanceData = {
           ...req.body,
           ...stampOverrides,
           // Attendance action dates are server-authoritative and use the
           // factory's Riyadh calendar, not the browser/UTC calendar.
-          date: attendanceDate,
+          date: openSession?.date ?? attendanceDate,
           ...(assignedShift && {
             shift_type: assignedShift === "night" ? "ليلي" : "صباحي",
+          }),
+          ...(status === "حاضر" && resolvedAssignment && {
+            shift_assignment_id: resolvedAssignment.assignmentId ?? null,
+            shift_template_id: resolvedAssignment.snapshot.template_id ?? null,
+            shift_snapshot: resolvedAssignment.snapshot,
+          }),
+          ...(openSession && {
+            shift_assignment_id: openSession.shift_assignment_id ?? null,
+            shift_template_id: openSession.shift_template_id ?? null,
+            shift_snapshot: openSnapshot ?? null,
           }),
           location_accuracy: accuracy,
           location_lat: lat,

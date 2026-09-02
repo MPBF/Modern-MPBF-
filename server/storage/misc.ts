@@ -347,14 +347,15 @@ export class MiscStorage extends SystemStorage {
   ): Promise<Attendance | null> {
     return withDatabaseErrorHandling(
       async () => {
-        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const conditions = [
           eq(attendance.user_id, userId),
           isNotNull(attendance.check_in_time),
           isNull(attendance.check_out_time),
           window
             ? eq(attendance.date, window.dateStr)
-            : sql`${attendance.check_in_time} >= ${cutoff.toISOString()}`,
+            // An explicit follow-up action must always be attached to its
+            // open check-in, even after a long night/holiday boundary.
+            : sql`TRUE`,
         ];
         if (window) {
           conditions.push(gte(attendance.check_in_time, window.start));
