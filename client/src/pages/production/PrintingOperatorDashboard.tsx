@@ -173,10 +173,9 @@ export default function PrintingOperatorDashboard({
       rollId: number;
       machineId: string;
     }) => {
-      return await apiRequest(`/api/rolls/${rollId}`, {
+      return await apiRequest(`/api/rolls/${rollId}/print`, {
         method: "PATCH",
         body: JSON.stringify({
-          stage: "printing",
           printing_machine_id: machineId,
         }),
       });
