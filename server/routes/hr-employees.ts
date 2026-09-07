@@ -3,7 +3,7 @@ import type { Express } from "express";
 
 import { storage } from "../storage";
 
-import { insertShiftAssignmentSchema, insertShiftTemplateSchema } from "@shared/schema";
+import { insertShiftAssignmentSchema } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
 import { z } from "zod";
 import ExcelJS from "exceljs";
@@ -13,9 +13,24 @@ import { notificationService, addJsonSheet, getAuthUserId } from "./shared";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 
-const shiftTemplateInput = insertShiftTemplateSchema
-  .pick({ name_ar: true, name_en: true, start_time: true, end_time: true, grace_minutes: true, base_work_hours: true, active: true })
-  .partial({ name_en: true, active: true })
+const shiftTemplateInput = z
+  .object({
+    name_ar: z.string().trim().min(1, "اسم القالب مطلوب"),
+    name_en: z
+      .string()
+      .trim()
+      .optional()
+      .nullable()
+      .transform((value) => value || null),
+    start_time: z.string(),
+    end_time: z.string(),
+    grace_minutes: z.coerce.number().int().min(0).max(180),
+    base_work_hours: z.preprocess(
+      (value) => (typeof value === "number" ? String(value) : value),
+      z.string().trim().min(1),
+    ),
+    active: z.boolean().optional(),
+  })
   .superRefine((value, ctx) => {
     const time = /^([01]\d|2[0-3]):[0-5]\d$/;
     if (!time.test(value.start_time)) ctx.addIssue({ code: "custom", path: ["start_time"], message: "وقت البداية يجب أن يكون HH:mm" });

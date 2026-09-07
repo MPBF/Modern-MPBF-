@@ -117,7 +117,17 @@ function getTemplateName(template: Partial<ShiftTemplate>, isRTL: boolean) {
 
 async function responseMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => null);
-  return body && typeof body.message === "string" ? body.message : fallback;
+  if (!body || typeof body !== "object") return fallback;
+  const fieldErrors =
+    "errors" in body && body.errors && typeof body.errors === "object"
+      ? Object.values(body.errors as Record<string, unknown>)
+          .flatMap((value) => (Array.isArray(value) ? value : []))
+          .filter((value): value is string => typeof value === "string")
+      : [];
+  if (fieldErrors.length) return fieldErrors.join("، ");
+  return "message" in body && typeof body.message === "string"
+    ? body.message
+    : fallback;
 }
 
 export default function ShiftRoster() {
@@ -249,7 +259,12 @@ export default function ShiftRoster() {
         : "/api/hr/shift-templates";
       const response = await apiRequest(endpoint, {
         method: editingTemplate ? "PATCH" : "POST",
-        body: JSON.stringify(templateForm),
+        body: JSON.stringify({
+          ...templateForm,
+          name_en: templateForm.name_en.trim() || null,
+          grace_minutes: Number(templateForm.grace_minutes),
+          base_work_hours: String(templateForm.base_work_hours),
+        }),
       });
       if (!response.ok) {
         throw new Error(
