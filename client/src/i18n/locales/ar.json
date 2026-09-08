@@ -540,6 +540,7 @@
       "cutRolls": "تقطيع البكرات",
       "todayProduction": "إنتاج اليوم",
       "todayProductionDesc": "إنتاج آخر 24 ساعة",
+      "operatorFocusMode": "وضع المشغل المبسط",
       "active": "نشط"
     },
     "todayProduction": {

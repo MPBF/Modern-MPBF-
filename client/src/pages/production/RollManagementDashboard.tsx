@@ -119,6 +119,35 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const isAr = i18n.language?.startsWith("ar");
+  const ui = (ar: string, en: string) => (isAr ? ar : en);
+  const localizedName = (
+    nameAr?: string | null,
+    nameEn?: string | null,
+    fallback = "—",
+  ) =>
+    isAr
+      ? nameAr || nameEn || fallback
+      : nameEn && !/[\u0600-\u06FF]/.test(nameEn)
+        ? nameEn
+        : fallback;
+  const safeDynamicText = (value?: string | null, fallback = "—") =>
+    value && (isAr || !/[\u0600-\u06FF]/.test(value)) ? value : fallback;
+  const formatNumber = (value: number, decimals = 2) =>
+    isAr
+      ? formatNumberAr(value, decimals)
+      : new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        }).format(value);
+  const stageLabel = (stage: string) => {
+    const labels: Record<string, [string, string]> = {
+      film: ["فيلم", "Film"],
+      printing: ["طباعة", "Printing"],
+      cutting: ["تقطيع", "Cutting"],
+      done: ["مكتمل", "Completed"],
+    };
+    return labels[stage] ? ui(...labels[stage]) : ui("غير معروف", "Unknown");
+  };
 
   const PAGE_SIZE = 200;
 
@@ -165,8 +194,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
     queryKey: ["/api/production-orders"],
   });
 
-  const machineName = (m: MachineLite) =>
-    (isAr ? m.name_ar || m.name : m.name) || m.id;
+  const machineName = (m: MachineLite) => localizedName(m.name_ar, m.name, m.id);
 
   const machineOptionsFor = (keywords: string[]) => {
     const matches = machines.filter((m) => {
@@ -180,28 +208,26 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
   const productOptions = useMemo(
     () =>
       productionOrders.map((po) => {
-        const customer = isAr
-          ? po.customer_name_ar || po.customer_name
-          : po.customer_name;
+        const customer = localizedName(po.customer_name_ar, po.customer_name, "");
         const parts = [po.production_order_number];
         if (po.size_caption) parts.push(po.size_caption);
         if (customer) parts.push(customer);
         return { value: String(po.id), label: parts.join(" — ") };
       }),
-    [productionOrders, isAr],
+    [productionOrders, isAr, localizedName],
   );
 
   const productName = (r: ManagedRoll) => {
-    const item = isAr ? r.item_name_ar || r.item_name : r.item_name;
+    const item = localizedName(r.item_name_ar, r.item_name, "");
     return [item, r.size_caption].filter(Boolean).join(" - ") || "—";
   };
 
   const customerName = (r: ManagedRoll) =>
-    (isAr ? r.customer_name_ar || r.customer_name : r.customer_name) || "—";
+    localizedName(r.customer_name_ar, r.customer_name);
 
   const stageMachineName = (r: ManagedRoll) => {
     const pick = (ar: string | null, en: string | null) =>
-      (isAr ? ar || en : en) || null;
+      localizedName(ar, en, "") || null;
     switch (r.stage) {
       case "printing":
         return (
@@ -225,18 +251,26 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
   const producerName = (r: ManagedRoll) => {
     switch (r.stage) {
       case "printing":
-        return r.printed_by_name || r.printed_by_username || r.created_by_name || "—";
+        return safeDynamicText(r.printed_by_name) !== "—"
+          ? safeDynamicText(r.printed_by_name)
+          : safeDynamicText(r.printed_by_username) !== "—"
+            ? safeDynamicText(r.printed_by_username)
+            : safeDynamicText(r.created_by_name);
       case "cutting":
       case "done":
         return (
-          r.cut_by_name ||
-          r.cut_by_username ||
-          r.printed_by_name ||
-          r.created_by_name ||
-          "—"
+          safeDynamicText(r.cut_by_name) !== "—"
+            ? safeDynamicText(r.cut_by_name)
+            : safeDynamicText(r.cut_by_username) !== "—"
+              ? safeDynamicText(r.cut_by_username)
+              : safeDynamicText(r.printed_by_name) !== "—"
+                ? safeDynamicText(r.printed_by_name)
+                : safeDynamicText(r.created_by_name)
         );
       default:
-        return r.created_by_name || r.created_by_username || "—";
+        return safeDynamicText(r.created_by_name) !== "—"
+          ? safeDynamicText(r.created_by_name)
+          : safeDynamicText(r.created_by_username);
     }
   };
 
@@ -269,7 +303,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
   };
 
   const content = (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-4" dir={isAr ? "rtl" : "ltr"}>
       {/* شريط البحث والفلترة السريع */}
       <div className="bg-white dark:bg-gray-900 p-3.5 rounded-2xl border shadow-xs flex flex-col sm:flex-row gap-3 items-center">
         <form
@@ -283,7 +317,10 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="ابحث برقم الرول، العميل، أمر الإنتاج، أو المنتج..."
+            placeholder={ui(
+              "ابحث برقم الرول، العميل، أمر الإنتاج، أو المنتج...",
+              "Search by roll number, customer, production order, or product...",
+            )}
             className="pr-9 h-10 text-xs font-bold rounded-xl"
             data-testid="input-roll-search"
           />
@@ -312,7 +349,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
           disabled={isFetching}
           className="h-10 w-10 rounded-xl flex-shrink-0"
           data-testid="button-refresh-rolls"
-          title="تحديث"
+          title={ui("تحديث", "Refresh")}
         >
           <RotateCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
         </Button>
@@ -353,31 +390,31 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
                 </div>
 
                 <Badge className={`${STAGE_VARIANTS[r.stage] || ""} border-0 text-[10px] font-bold`}>
-                  {t(`rollMgmt.stages.${r.stage}`, r.stage)}
+                  {stageLabel(r.stage)}
                 </Badge>
               </div>
 
               <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-800/40 p-2.5 rounded-xl text-xs">
                 <div>
-                  <span className="text-gray-400 block text-[10px]">الماكينة</span>
+                  <span className="text-gray-400 block text-[10px]">{ui("الماكينة", "Machine")}</span>
                   <span className="font-bold text-gray-800 dark:text-gray-200">
                     {stageMachineName(r)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block text-[10px]">الوزن الصافي</span>
+                  <span className="text-gray-400 block text-[10px]">{ui("الوزن الصافي", "Net weight")}</span>
                   <span className="font-black text-emerald-600 dark:text-emerald-400">
-                    {formatNumberAr(Number(r.weight_kg || 0), 2)} كجم
+                    {formatNumber(Number(r.weight_kg || 0), 2)} {ui("كجم", "kg")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block text-[10px]">المنفذ</span>
+                  <span className="text-gray-400 block text-[10px]">{ui("المنفذ", "Produced by")}</span>
                   <span className="font-bold text-gray-600 dark:text-gray-300 truncate block">
                     {producerName(r)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block text-[10px]">التاريخ</span>
+                  <span className="text-gray-400 block text-[10px]">{ui("التاريخ", "Date")}</span>
                   <span className="font-medium text-gray-500 text-[10px] block">
                     {formatDate(stageDate(r))}
                   </span>
@@ -393,7 +430,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
                   data-testid={`button-edit-roll-${r.id}`}
                 >
                   <Pencil className="h-3.5 w-3.5" />
-                  تعديل
+                  {ui("تعديل", "Edit")}
                 </Button>
                 <Button
                   size="sm"
@@ -403,7 +440,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
                   data-testid={`button-history-roll-${r.id}`}
                 >
                   <History className="h-3.5 w-3.5" />
-                  السجل
+                  {ui("السجل", "History")}
                 </Button>
               </div>
             </Card>
@@ -458,13 +495,13 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge className={`${STAGE_VARIANTS[r.stage] || ""} border-0 text-[10px] font-bold`} variant="secondary">
-                          {t(`rollMgmt.stages.${r.stage}`, r.stage)}
+                          {stageLabel(r.stage)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs font-bold">{stageMachineName(r)}</TableCell>
                       <TableCell className="text-xs text-gray-500 font-medium">{producerName(r)}</TableCell>
                       <TableCell className="text-center font-black text-xs text-emerald-600 dark:text-emerald-400">
-                        {formatNumberAr(Number(r.weight_kg || 0), 2)} كجم
+                        {formatNumber(Number(r.weight_kg || 0), 2)} {ui("كجم", "kg")}
                       </TableCell>
                       <TableCell className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
                         {formatDate(stageDate(r))}
@@ -539,6 +576,7 @@ export default function RollManagementDashboard({ hideLayout }: Props) {
           roll={historyRoll}
           onClose={() => setHistoryRoll(null)}
           formatDate={formatDate}
+            isAr={isAr}
         />
       )}
     </div>
@@ -566,8 +604,13 @@ function EditRollDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const isAr = i18n.language?.startsWith("ar");
+  const safeErrorMessage = (message: unknown, fallback: string) =>
+    typeof message === "string" && (isAr || !/[\u0600-\u06FF]/.test(message))
+      ? message
+      : fallback;
 
   const [filmMachine, setFilmMachine] = useState(roll.film_machine_id || "");
   const [printingMachine, setPrintingMachine] = useState(
@@ -610,7 +653,7 @@ function EditRollDialog({
         let message = t("rollMgmt.saveError");
         try {
           const data = await res.json();
-          if (data?.message) message = data.message;
+          if (data?.message) message = safeErrorMessage(data.message, message);
         } catch {
           /* keep default */
         }
@@ -630,7 +673,7 @@ function EditRollDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg rounded-2xl" dir="rtl">
+      <DialogContent className="max-w-lg rounded-2xl" dir={isAr ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle className="text-base font-black">
             {t("rollMgmt.editTitle")} — {roll.roll_number}
@@ -737,12 +780,20 @@ function HistoryDialog({
   roll,
   onClose,
   formatDate,
+  isAr,
 }: {
   roll: ManagedRoll;
   onClose: () => void;
   formatDate: (d: string | null) => string;
+  isAr: boolean | undefined;
 }) {
   const { t } = useTranslation();
+  const safeLogValue = (value: string | null) =>
+    value && (isAr || !/[\u0600-\u06FF]/.test(value))
+      ? value
+      : t("rollMgmt.none");
+  const safeUserName = (value: string | null | undefined) =>
+    value && (isAr || !/[\u0600-\u06FF]/.test(value)) ? value : "—";
 
   const { data: logs = [], isLoading } = useQuery<RollEditLog[]>({
     queryKey: ["/api/management/rolls", roll.id, "history"],
@@ -755,7 +806,7 @@ function HistoryDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl rounded-2xl" dir="rtl">
+      <DialogContent className="max-w-2xl rounded-2xl" dir={isAr ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle className="text-base font-black flex items-center gap-2">
             <History className="h-4 w-4 text-purple-600" />
@@ -784,7 +835,9 @@ function HistoryDialog({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-black text-gray-900 dark:text-white">
-                      {t(`rollMgmt.fields.${log.field}`, log.field)}
+                      {t(`rollMgmt.fields.${log.field}`, {
+                        defaultValue: isAr ? log.field : "Unknown field",
+                      })}
                     </span>
                     <span className="text-[10px] text-gray-400 font-semibold">
                       {formatDate(log.created_at)}
@@ -794,16 +847,16 @@ function HistoryDialog({
                   <div className="text-gray-500 font-medium">
                     {t("rollMgmt.from")}:{" "}
                     <span className="text-rose-600 line-through">
-                      {log.old_label || log.old_value || t("rollMgmt.none")}
+                      {safeLogValue(log.old_label || log.old_value)}
                     </span>{" "}
                     ← {t("rollMgmt.to")}:{" "}
                     <span className="text-emerald-600 font-bold">
-                      {log.new_label || log.new_value || t("rollMgmt.none")}
+                      {safeLogValue(log.new_label || log.new_value)}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t">
-                    <span>بواسطة: {log.changed_by_name || log.changed_by_username || "—"}</span>
+                    <span>{isAr ? "بواسطة" : "By"}: {safeUserName(log.changed_by_name) !== "—" ? safeUserName(log.changed_by_name) : safeUserName(log.changed_by_username)}</span>
                     {log.note && <span className="italic text-gray-500">“{log.note}”</span>}
                   </div>
                 </div>

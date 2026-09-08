@@ -112,7 +112,7 @@ const aggregate = (list: ProductionRecord[]) => {
 export default function TodaysProduction() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
-  const isAr = i18n.language !== "en";
+  const isAr = i18n.language.startsWith("ar");
 
   const [fromDate, setFromDate] = useState<Date | undefined>(undefined);
   const [toDate, setToDate] = useState<Date | undefined>(undefined);
@@ -277,13 +277,11 @@ export default function TodaysProduction() {
     t(`production.stageNames.${stage}`);
 
   const productName = (r: ProductionRecord) =>
-    (isAr ? r.item_name_ar || r.item_name : r.item_name || r.item_name_ar) ||
+    (isAr ? r.item_name_ar || r.item_name : r.item_name) ||
     t("common.notSpecified");
 
   const customerName = (r: ProductionRecord) =>
-    isAr
-      ? r.customer_name_ar || r.customer_name
-      : r.customer_name || r.customer_name_ar;
+    isAr ? r.customer_name_ar || r.customer_name : r.customer_name;
 
   const handlePrint = async (rollId: number) => {
     try {

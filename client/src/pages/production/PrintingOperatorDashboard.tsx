@@ -36,7 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
-import { useLocalizedName } from "../../hooks/use-localized-name";
 import { useAuth } from "../../hooks/use-auth";
 import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 import { useSmartPolling } from "../../hooks/use-smart-polling";
@@ -123,8 +122,22 @@ function PrintColorsRow({
 export default function PrintingOperatorDashboard({
   hideLayout = false,
 }: PrintingOperatorDashboardProps) {
-  const { t } = useTranslation();
-  const ln = useLocalizedName();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.resolvedLanguage?.startsWith("ar") ?? false;
+  const ui = (arabic: string, english: string) =>
+    isArabic ? arabic : english;
+  const localizedName = (
+    arabicName?: string | null,
+    englishName?: string | null,
+    arabicFallback?: string | null,
+  ) => {
+    if (isArabic) return arabicName || englishName || arabicFallback || "—";
+    return englishName?.trim() || "—";
+  };
+  const localizedError = (error: Error, fallback: string) =>
+    !isArabic && /[\u0600-\u06FF]/.test(error.message)
+      ? fallback
+      : error.message || fallback;
   const { user } = useAuth();
   const { toast } = useToast();
   const [processingRollIds, setProcessingRollIds] = useState<Set<number>>(
@@ -193,7 +206,10 @@ export default function PrintingOperatorDashboard({
     onError: (error: Error) => {
       toast({
         title: t("operators.common.error"),
-        description: error.message || t("operators.printing.moveRollFailed"),
+        description: localizedError(
+          error,
+          t("operators.printing.moveRollFailed"),
+        ),
         variant: "destructive",
       });
     },
@@ -267,7 +283,7 @@ export default function PrintingOperatorDashboard({
           <div className="flex items-center gap-1.5">
             <Printer className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             <span className="text-xs font-black text-purple-900 dark:text-purple-200">
-              ماكينة الطباعة المحددة
+              {ui("ماكينة الطباعة المحددة", "Selected printing machine")}
             </span>
           </div>
           {selectedMachine && (
@@ -279,7 +295,7 @@ export default function PrintingOperatorDashboard({
               onClick={() => setIsEditingMachine((editing) => !editing)}
               disabled={!machinePreferenceReady}
             >
-              {isEditingMachine ? "تم" : "تغيير"}
+              {isEditingMachine ? ui("تم", "Done") : ui("تغيير", "Change")}
             </Button>
           )}
         </div>
@@ -302,7 +318,9 @@ export default function PrintingOperatorDashboard({
             <SelectContent>
               {printingMachines.map((machine) => (
                 <SelectItem key={machine.id} value={machine.id}>
-                  {ln(machine.name_ar, machine.name)} ({machine.id})
+                  {isArabic
+                    ? `${machine.name_ar || machine.name} (${machine.id})`
+                    : machine.id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -311,7 +329,7 @@ export default function PrintingOperatorDashboard({
           {selectedMachine && !isEditingMachine && (
             <Badge className="bg-purple-600 text-white whitespace-nowrap h-10 px-3 text-xs font-bold rounded-xl gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              جاهز
+              {ui("جاهز", "Ready")}
             </Badge>
           )}
         </div>
@@ -354,8 +372,11 @@ export default function PrintingOperatorDashboard({
                 new Set(
                   group.items.map(
                     (item) =>
-                      ln(item.product_name_ar, item.product_name_en) ||
-                      item.product_name,
+                      localizedName(
+                        item.product_name_ar,
+                        item.product_name_en,
+                        item.product_name,
+                      ),
                   ),
                 ),
               ).filter(Boolean);
@@ -370,27 +391,30 @@ export default function PrintingOperatorDashboard({
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-black px-2.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200">
-                          طلب: #{group.orderNumber}
+                          {ui("طلب", "Order")}: #{group.orderNumber}
                         </span>
                         <span className="text-xs text-gray-500">
-                          ({group.items.length} أوامر إنتاج)
+                          ({group.items.length} {ui("أوامر إنتاج", "production orders")})
                         </span>
                       </div>
                       <h3 className="text-base font-extrabold text-purple-800 dark:text-purple-400 leading-tight">
-                        {ln(first.customer_name_ar, first.customer_name_en) ||
-                          first.customer_name}
+                        {localizedName(
+                          first.customer_name_ar,
+                          first.customer_name_en,
+                          first.customer_name,
+                        )}
                       </h3>
                     </div>
 
                     <span className="text-xs font-bold text-purple-700 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-xl">
-                      فتح الطلب ◀
+                      {ui("فتح الطلب ◀", "Open order ▶")}
                     </span>
                   </div>
 
                   {/* المنتجات التابعة للطلب */}
                   <div className="space-y-1.5 bg-slate-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-gray-800">
                     <span className="text-[11px] font-bold text-gray-400 block">
-                      المنتجات المطلوبة للطباعة:
+                      {ui("المنتجات المطلوبة للطباعة:", "Products to print:")}
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {uniqueProducts.map((prodName, idx) => (
@@ -408,10 +432,10 @@ export default function PrintingOperatorDashboard({
                   <div className="space-y-1.5 pt-1">
                     <div className="flex justify-between items-center text-xs font-semibold">
                       <span className="text-gray-500">
-                        الرولات المطبوعة ({completedRolls}/{totalRolls})
+                        {ui("الرولات المطبوعة", "Printed rolls")} ({completedRolls}/{totalRolls})
                       </span>
                       <span className="text-gray-700 dark:text-gray-300 font-bold">
-                        {formatNumberAr(totalWeight)} كجم
+                        {formatNumberAr(totalWeight)} {ui("كجم", "kg")}
                       </span>
                     </div>
                     <Progress value={groupProgress} className="h-2 rounded-full" />
@@ -453,20 +477,26 @@ export default function PrintingOperatorDashboard({
                             {order.production_order_number}
                           </span>
                           <span className="text-xs font-semibold text-gray-500">
-                            طلب: #{order.order_number}
+                            {ui("طلب", "Order")}: #{order.order_number}
                           </span>
                         </div>
 
                         {/* اسم المنتج بارز وكبير */}
                         <h2 className="text-xl font-black text-gray-950 dark:text-white leading-tight tracking-tight mt-1">
-                          {ln(order.product_name_ar, order.product_name_en) ||
-                            order.product_name}
+                          {localizedName(
+                            order.product_name_ar,
+                            order.product_name_en,
+                            order.product_name,
+                          )}
                         </h2>
 
                         {/* اسم العميل */}
                         <p className="text-sm font-bold text-purple-700 dark:text-purple-400 mt-1">
-                          {ln(order.customer_name_ar, order.customer_name_en) ||
-                            order.customer_name}
+                          {localizedName(
+                            order.customer_name_ar,
+                            order.customer_name_en,
+                            order.customer_name,
+                          )}
                         </p>
                       </div>
 
@@ -474,7 +504,7 @@ export default function PrintingOperatorDashboard({
                         variant="secondary"
                         className="bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100 font-bold text-xs"
                       >
-                        {order.total_rolls} رول
+                        {order.total_rolls} {ui("رول", "rolls")}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -486,7 +516,7 @@ export default function PrintingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Ruler className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">المقاس</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("المقاس", "Size")}</span>
                           <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                             {order.size_caption || "—"}
                           </span>
@@ -497,7 +527,7 @@ export default function PrintingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Disc className="h-4 w-4 text-indigo-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">السلندر</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("السلندر", "Cylinder")}</span>
                           <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                             {order.printing_cylinder || "—"}
                           </span>
@@ -508,7 +538,7 @@ export default function PrintingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Grid className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">درج الكليشة</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("درج الكليشة", "Plate drawer")}</span>
                           <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
                             {order.plate_drawer_code || "—"}
                           </span>
@@ -519,9 +549,9 @@ export default function PrintingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Layers className="h-4 w-4 text-teal-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">إجمالي الوزن</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("إجمالي الوزن", "Total weight")}</span>
                           <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
-                            {formatNumberAr(order.total_weight)} كجم
+                            {formatNumberAr(order.total_weight)} {ui("كجم", "kg")}
                           </span>
                         </div>
                       </div>
@@ -532,15 +562,15 @@ export default function PrintingOperatorDashboard({
                       (order.back_print_colors && order.back_print_colors.length > 0)) && (
                       <div className="bg-purple-50/50 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/40 space-y-1">
                         <span className="text-[11px] font-black text-purple-900 dark:text-purple-300 block mb-1">
-                          ألوان الطباعة:
+                          {ui("ألوان الطباعة:", "Print colors:")}
                         </span>
                         <PrintColorsRow
-                          label="الوجه الأمامي"
+                          label={ui("الوجه الأمامي", "Front")}
                           colors={order.front_print_colors || []}
                           side="front"
                         />
                         <PrintColorsRow
-                          label="الوجه الخلفي"
+                          label={ui("الوجه الخلفي", "Back")}
                           colors={order.back_print_colors || []}
                           side="back"
                         />
@@ -551,7 +581,7 @@ export default function PrintingOperatorDashboard({
                     <div className="space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30 p-2.5 rounded-xl">
                       <div className="flex justify-between items-center text-xs font-semibold">
                         <span className="text-gray-500">
-                          الرولات المكتملة ({completedRolls}/{order.total_rolls})
+                          {ui("الرولات المكتملة", "Completed rolls")} ({completedRolls}/{order.total_rolls})
                         </span>
                         <span className="text-purple-700 dark:text-purple-300 font-bold">
                           {Math.round(progress)}%
@@ -563,7 +593,7 @@ export default function PrintingOperatorDashboard({
                     {/* قائمة الرولات المتاحة للطباعة */}
                     <div className="space-y-2">
                       <span className="text-xs font-bold text-gray-700 dark:text-gray-200 block">
-                        الرولات الجاهزة للطباعة ({order.rolls.length}):
+                        {ui("الرولات الجاهزة للطباعة", "Rolls ready to print")} ({order.rolls.length}):
                       </span>
 
                       <div className="space-y-2 max-h-56 overflow-y-auto p-0.5">
@@ -583,7 +613,7 @@ export default function PrintingOperatorDashboard({
                                     {roll.roll_number}
                                   </div>
                                   <div className="text-[11px] font-bold text-teal-600 dark:text-teal-400">
-                                    {formatNumberAr(Number(roll.weight_kg))} كجم
+                                    {formatNumberAr(Number(roll.weight_kg))} {ui("كجم", "kg")}
                                   </div>
                                 </div>
                               </div>
@@ -598,7 +628,7 @@ export default function PrintingOperatorDashboard({
                                 ) : (
                                   <>
                                     <Printer className="h-4 w-4 ml-1.5" />
-                                    طباعة
+                                    {ui("طباعة", "Print")}
                                   </>
                                 )}
                               </Button>

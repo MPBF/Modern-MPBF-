@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { formatNumberAr } from "../../../../shared/number-utils";
+import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Progress } from "../ui/progress";
@@ -13,6 +14,12 @@ interface ProductionOrderStatsCardProps {
 export default function ProductionOrderStatsCard({
   productionOrderId,
 }: ProductionOrderStatsCardProps) {
+  const { i18n } = useTranslation();
+  const isArabic = i18n.language === "ar";
+  const localize = (arabic: string, english: string) =>
+    isArabic ? arabic : english;
+  const kilogramUnit = localize("كجم", "kg");
+
   // جلب إحصائيات أمر الإنتاج
   const { data: stats, isLoading } = useQuery<{ data: any }>({
     queryKey: ["/api/production-orders", productionOrderId, "stats"],
@@ -32,7 +39,7 @@ export default function ProductionOrderStatsCard({
     return (
       <Card>
         <CardContent className="p-8 text-center text-gray-500">
-          لا توجد إحصائيات متاحة
+          {localize("لا توجد إحصائيات متاحة", "No statistics available")}
         </CardContent>
       </Card>
     );
@@ -45,7 +52,7 @@ export default function ProductionOrderStatsCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>إحصائيات أمر الإنتاج</span>
+          <span>{localize("إحصائيات أمر الإنتاج", "Production order statistics")}</span>
           <Badge variant="outline">
             {data.production_order?.production_order_number}
           </Badge>
@@ -56,7 +63,9 @@ export default function ProductionOrderStatsCard({
           {/* نسبة الإكمال */}
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-gray-600">نسبة الإكمال</span>
+              <span className="text-gray-600">
+                {localize("نسبة الإكمال", "Completion rate")}
+              </span>
               <span className="font-medium">
                 {formatNumberAr(completionPercentage, 1)}%
               </span>
@@ -67,25 +76,33 @@ export default function ProductionOrderStatsCard({
           {/* الإحصائيات الأساسية */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-gray-50 rounded-lg p-3">
-              <div className="text-xs text-gray-600">إجمالي الرولات</div>
+              <div className="text-xs text-gray-600">
+                {localize("إجمالي الرولات", "Total rolls")}
+              </div>
               <div className="text-xl font-bold">{data.total_rolls}</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
-              <div className="text-xs text-gray-600">الوزن الإجمالي</div>
+              <div className="text-xs text-gray-600">
+                {localize("الوزن الإجمالي", "Total weight")}
+              </div>
               <div className="text-xl font-bold">
-                {data.total_weight} <span className="text-sm">كجم</span>
+                {data.total_weight} <span className="text-sm">{kilogramUnit}</span>
               </div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
-              <div className="text-xs text-gray-600">الكمية المتبقية</div>
+              <div className="text-xs text-gray-600">
+                {localize("الكمية المتبقية", "Remaining quantity")}
+              </div>
               <div className="text-xl font-bold">
-                {data.remaining_quantity} <span className="text-sm">كجم</span>
+                {data.remaining_quantity} <span className="text-sm">{kilogramUnit}</span>
               </div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
-              <div className="text-xs text-gray-600">الهدر</div>
+              <div className="text-xs text-gray-600">
+                {localize("الهدر", "Waste")}
+              </div>
               <div className="text-xl font-bold">
-                {data.total_waste} <span className="text-sm">كجم</span>
+                {data.total_waste} <span className="text-sm">{kilogramUnit}</span>
               </div>
             </div>
           </div>
@@ -93,31 +110,31 @@ export default function ProductionOrderStatsCard({
           {/* توزيع الرولات حسب المرحلة */}
           <div>
             <div className="text-sm font-medium text-gray-700 mb-2">
-              توزيع الرولات حسب المرحلة
+              {localize("توزيع الرولات حسب المرحلة", "Roll distribution by stage")}
             </div>
             <div className="grid grid-cols-4 gap-2">
               <div className="text-center">
                 <div className="bg-blue-100 text-blue-800 rounded-lg p-2">
                   <div className="text-lg font-bold">{data.film_rolls}</div>
-                  <div className="text-xs">فيلم</div>
+                  <div className="text-xs">{localize("فيلم", "Film")}</div>
                 </div>
               </div>
               <div className="text-center">
                 <div className="bg-yellow-100 text-yellow-800 rounded-lg p-2">
                   <div className="text-lg font-bold">{data.printing_rolls}</div>
-                  <div className="text-xs">طباعة</div>
+                  <div className="text-xs">{localize("طباعة", "Printing")}</div>
                 </div>
               </div>
               <div className="text-center">
                 <div className="bg-orange-100 text-orange-800 rounded-lg p-2">
                   <div className="text-lg font-bold">{data.cutting_rolls}</div>
-                  <div className="text-xs">تقطيع</div>
+                  <div className="text-xs">{localize("تقطيع", "Cutting")}</div>
                 </div>
               </div>
               <div className="text-center">
                 <div className="bg-green-100 text-green-800 rounded-lg p-2">
                   <div className="text-lg font-bold">{data.done_rolls}</div>
-                  <div className="text-xs">مكتمل</div>
+                  <div className="text-xs">{localize("مكتمل", "Complete")}</div>
                 </div>
               </div>
             </div>
@@ -127,13 +144,17 @@ export default function ProductionOrderStatsCard({
           {data.production_order?.production_start_time && (
             <div className="border-t pt-4">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">وقت الإنتاج</span>
+                <span className="text-gray-600">
+                  {localize("وقت الإنتاج", "Production time")}
+                </span>
                 <span className="font-medium">
-                  {data.production_time_hours} ساعة
+                  {data.production_time_hours} {localize("ساعة", "hours")}
                 </span>
               </div>
               <div className="flex justify-between text-sm mt-2">
-                <span className="text-gray-600">تاريخ البدء</span>
+                <span className="text-gray-600">
+                  {localize("تاريخ البدء", "Start date")}
+                </span>
                 <span className="font-medium">
                   {new Date(
                     data.production_order.production_start_time,
@@ -142,7 +163,9 @@ export default function ProductionOrderStatsCard({
               </div>
               {data.production_order.production_end_time && (
                 <div className="flex justify-between text-sm mt-2">
-                  <span className="text-gray-600">تاريخ الانتهاء</span>
+                  <span className="text-gray-600">
+                    {localize("تاريخ الانتهاء", "End date")}
+                  </span>
                   <span className="font-medium">
                     {new Date(
                       data.production_order.production_end_time,
@@ -156,19 +179,25 @@ export default function ProductionOrderStatsCard({
           {/* معلومات أمر الإنتاج */}
           <div className="border-t pt-4 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">الكمية المطلوبة</span>
+              <span className="text-gray-600">
+                {localize("الكمية المطلوبة", "Required quantity")}
+              </span>
               <span className="font-medium">
-                {data.production_order?.quantity_kg} كجم
+                {data.production_order?.quantity_kg} {kilogramUnit}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">الكمية النهائية</span>
+              <span className="text-gray-600">
+                {localize("الكمية النهائية", "Final quantity")}
+              </span>
               <span className="font-medium">
-                {data.production_order?.final_quantity_kg} كجم
+                {data.production_order?.final_quantity_kg} {kilogramUnit}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">نسبة الزيادة</span>
+              <span className="text-gray-600">
+                {localize("نسبة الزيادة", "Overrun percentage")}
+              </span>
               <span className="font-medium">
                 {data.production_order?.overrun_percentage}%
               </span>

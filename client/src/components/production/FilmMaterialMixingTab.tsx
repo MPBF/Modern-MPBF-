@@ -15,7 +15,6 @@ import { useTranslation } from "react-i18next";
 import { formatNumberAr } from "../../../../shared/number-utils";
 
 import { useAuth } from "../../hooks/use-auth";
-import { useLocalizedName } from "../../hooks/use-localized-name";
 import { useToast } from "../../hooks/use-toast";
 import { queryClient, apiRequest } from "../../lib/queryClient";
 import { Button } from "../ui/button";
@@ -107,10 +106,30 @@ interface MasterBatchColor {
 }
 
 export default function FilmMaterialMixingTab() {
-  const { t } = useTranslation();
-  const ln = useLocalizedName();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const isAr = i18n.language?.startsWith("ar");
+  const ui = (ar: string, en: string) => (isAr ? ar : en);
+  const formatNumber = (value: number, decimals = 2) =>
+    isAr
+      ? formatNumberAr(value, decimals)
+      : new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        }).format(value);
+  const localizedName = (
+    nameAr?: string | null,
+    nameEn?: string | null,
+    fallback = "—",
+  ) =>
+    isAr
+      ? nameAr || nameEn || fallback
+      : nameEn && !/[\u0600-\u06FF]/.test(nameEn)
+        ? nameEn
+        : fallback;
+  const safeBackendText = (value?: string | null, fallback = "—") =>
+    value && (isAr || !/[\u0600-\u06FF]/.test(value)) ? value : fallback;
 
   const [productionOrderId, setProductionOrderId] = useState("");
   const [machineId, setMachineId] = useState("");
@@ -153,7 +172,9 @@ export default function FilmMaterialMixingTab() {
       }
       return false;
     });
-    return colorData ? colorData.name_ar : code;
+    return colorData
+      ? localizedName(colorData.name_ar, colorData.name, code)
+      : safeBackendText(code, ui("غير معروف", "Unknown"));
   };
 
   const { data: productionOrdersData, isLoading: ordersLoading } =
@@ -447,7 +468,10 @@ export default function FilmMaterialMixingTab() {
     onError: (error: any) => {
       toast({
         title: t("production.mixing.error"),
-        description: error.message || t("production.mixing.batchCreateFailed"),
+        description: safeBackendText(
+          error.message,
+          ui("فشل إنشاء دفعة الخلط", "Failed to create mixing batch"),
+        ),
         variant: "destructive",
       });
     },
@@ -470,7 +494,7 @@ export default function FilmMaterialMixingTab() {
     onSuccess: () => {
       toast({
         title: t("production.mixing.saveSuccess"),
-        description: "تم تحديث عملية الخلط بنجاح",
+        description: ui("تم تحديث عملية الخلط بنجاح", "Mixing batch updated successfully"),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/mixing-batches"] });
       queryClient.invalidateQueries({
@@ -483,7 +507,7 @@ export default function FilmMaterialMixingTab() {
     onError: (error: any) => {
       toast({
         title: t("production.mixing.error"),
-        description: error.message || "فشل تحديث عملية الخلط",
+        description: safeBackendText(error.message, ui("فشل تحديث عملية الخلط", "Failed to update mixing batch")),
         variant: "destructive",
       });
     },
@@ -496,7 +520,7 @@ export default function FilmMaterialMixingTab() {
     onSuccess: () => {
       toast({
         title: t("production.mixing.saveSuccess"),
-        description: "تم حذف عملية الخلط بنجاح",
+        description: ui("تم حذف عملية الخلط بنجاح", "Mixing batch deleted successfully"),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/mixing-batches"] });
       queryClient.invalidateQueries({
@@ -508,7 +532,7 @@ export default function FilmMaterialMixingTab() {
     onError: (error: any) => {
       toast({
         title: t("production.mixing.error"),
-        description: error.message || "فشل حذف عملية الخلط",
+        description: safeBackendText(error.message, ui("فشل حذف عملية الخلط", "Failed to delete mixing batch")),
         variant: "destructive",
       });
     },
@@ -530,7 +554,7 @@ export default function FilmMaterialMixingTab() {
       const response = await fetch(`/api/mixing-batches/${batch.id}`, {
         credentials: "include",
       });
-      if (!response.ok) throw new Error("فشل تحميل بيانات الخلطة");
+      if (!response.ok) throw new Error(ui("فشل تحميل بيانات الخلطة", "Failed to load mixing batch data"));
       const fullBatch: BatchDetail = await response.json();
       setEditingBatch(fullBatch);
       setEditMachineId(fullBatch.machine_id);
@@ -547,7 +571,7 @@ export default function FilmMaterialMixingTab() {
     } catch (e: any) {
       toast({
         title: t("production.mixing.error"),
-        description: e.message || "فشل تحميل بيانات الخلطة",
+        description: safeBackendText(e.message, ui("فشل تحميل بيانات الخلطة", "Failed to load mixing batch data")),
         variant: "destructive",
       });
     } finally {
@@ -707,7 +731,10 @@ export default function FilmMaterialMixingTab() {
     if (isOverLimit) {
       toast({
         title: t("production.mixing.error"),
-        description: "مجموع كميات الخلط يتجاوز الكمية المطلوبة في أمر الإنتاج",
+        description: ui(
+          "مجموع كميات الخلط يتجاوز الكمية المطلوبة في أمر الإنتاج",
+          "The total mixed quantity exceeds the production order quantity",
+        ),
         variant: "destructive",
       });
       return;
@@ -775,17 +802,17 @@ export default function FilmMaterialMixingTab() {
                             {order.production_order_number}
                           </div>
                           <div className="text-xs text-muted-foreground leading-relaxed">
-                            {ln(order.customer_name_ar, order.customer_name)}
+                            {localizedName(order.customer_name_ar, order.customer_name)}
                             {" | "}
-                            {ln(order.item_name_ar, order.item_name)}
-                            {order.raw_material && ` | ${order.raw_material}`}
+                            {localizedName(order.item_name_ar, order.item_name)}
+                            {order.raw_material && ` | ${safeBackendText(order.raw_material, "")}`}
                             {order.master_batch_id &&
                               ` | ${getMasterBatchText(order.master_batch_id)}`}
                             {" | "}
-                            {formatNumberAr(parseFloat(
+                            {formatNumber(parseFloat(
                               order.final_quantity_kg || order.quantity_kg || 0,
                             ), 1)}{" "}
-                            كغ
+                            {ui("كغ", "kg")}
                           </div>
                         </div>
                       </SelectItem>
@@ -809,7 +836,7 @@ export default function FilmMaterialMixingTab() {
                   <SelectContent>
                     {machines.map((machine: any) => (
                       <SelectItem key={machine.id} value={machine.id}>
-                        {machine.name_ar || machine.name}
+                        {localizedName(machine.name_ar, machine.name, machine.id)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -847,32 +874,32 @@ export default function FilmMaterialMixingTab() {
               <CardContent className="pt-4 pb-3 space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground">العميل:</span>
+                    <span className="text-muted-foreground">{ui("العميل:", "Customer:")}</span>
                     <p className="font-semibold">
-                      {ln(
+                      {localizedName(
                         selectedOrder.customer_name_ar,
                         selectedOrder.customer_name,
                       )}
                     </p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">المنتج:</span>
+                    <span className="text-muted-foreground">{ui("المنتج:", "Product:")}</span>
                     <p className="font-semibold">
-                      {ln(
+                      {localizedName(
                         selectedOrder.item_name_ar,
                         selectedOrder.item_name,
                       ) || "-"}
                     </p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">المادة الخام:</span>
+                    <span className="text-muted-foreground">{ui("المادة الخام:", "Raw material:")}</span>
                     <p className="font-semibold">
-                      {selectedOrder.raw_material || "-"}
+                      {safeBackendText(selectedOrder.raw_material, "-")}
                     </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">
-                      لون الماستر باتش:
+                      {ui("لون الماستر باتش:", "Master batch color:")}
                     </span>
                     <p className="font-semibold">
                       {selectedOrder.master_batch_id
@@ -885,49 +912,49 @@ export default function FilmMaterialMixingTab() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <div>
                       <span className="text-muted-foreground">
-                        الكمية الإجمالية:
+                        {ui("الكمية الإجمالية:", "Total quantity:")}
                       </span>
                       <p className="font-bold text-base">
-                        {formatNumberAr(orderQuantity, 2)} كغ
+                        {formatNumber(orderQuantity, 2)} {ui("كغ", "kg")}
                       </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">
-                        المخلوط سابقاً (A+B):
+                        {ui("المخلوط سابقاً (A+B):", "Previously mixed (A+B):")}
                       </span>
                       <p className="font-semibold">
-                        {formatNumberAr(previouslyMixed, 2)} كغ
+                        {formatNumber(previouslyMixed, 2)} {ui("كغ", "kg")}
                         <span className="text-xs text-muted-foreground mr-1">
-                          (A: {formatNumberAr(previouslyMixedA, 1)} | B:{" "}
-                          {formatNumberAr(previouslyMixedB, 1)})
+                           (A: {formatNumber(previouslyMixedA, 1)} | B:{" "}
+                           {formatNumber(previouslyMixedB, 1)})
                         </span>
                       </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">
-                        الخلطة الحالية:
+                        {ui("الخلطة الحالية:", "Current batch:")}
                       </span>
                       <p className="font-semibold">
-                        {formatNumberAr(totalWeight, 2)} كغ
+                        {formatNumber(totalWeight, 2)} {ui("كغ", "kg")}
                       </p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">المتبقي:</span>
+                      <span className="text-muted-foreground">{ui("المتبقي:", "Remaining:")}</span>
                       <p
                         className={`font-bold text-base ${isOverLimit ? "text-red-600" : remainingQuantity <= 0 ? "text-green-600" : ""}`}
                       >
-                        {formatNumberAr(remainingQuantity, 2)} كغ
+                        {formatNumber(remainingQuantity, 2)} {ui("كغ", "kg")}
                       </p>
                     </div>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>نسبة اكتمال الخلط</span>
+                      <span>{ui("نسبة اكتمال الخلط", "Mixing completion")}</span>
                       <span
                         className={isOverLimit ? "text-red-600 font-bold" : ""}
                       >
-                        {formatNumberAr(Math.min(mixingProgress, 100), 1)}%
-                        {isOverLimit && " (تجاوز!)"}
+                        {formatNumber(Math.min(mixingProgress, 100), 1)}%
+                        {isOverLimit && ui(" (تجاوز!)", " (Exceeded!)")}
                       </span>
                     </div>
                     <Progress
@@ -939,8 +966,8 @@ export default function FilmMaterialMixingTab() {
                     <div className="flex items-center gap-2 text-red-600 text-sm font-medium bg-red-50 dark:bg-red-950/50 p-2 rounded">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
                       <span>
-                        مجموع كميات الخلط يتجاوز الكمية المطلوبة بـ{" "}
-                        {formatNumberAr(Math.abs(remainingQuantity), 2)} كغ
+                        {ui("مجموع كميات الخلط يتجاوز الكمية المطلوبة بـ", "The total mixed quantity exceeds the required quantity by")}{" "}
+                        {formatNumber(Math.abs(remainingQuantity), 2)} {ui("كغ", "kg")}
                       </span>
                     </div>
                   )}
@@ -949,7 +976,7 @@ export default function FilmMaterialMixingTab() {
                     previouslyMixed > 0 && (
                       <div className="flex items-center gap-2 text-green-600 text-sm font-medium bg-green-50 dark:bg-green-950/50 p-2 rounded">
                         <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        <span>تم اكتمال خلط كامل الكمية المطلوبة</span>
+                        <span>{ui("تم اكتمال خلط كامل الكمية المطلوبة", "Mixing of the full required quantity is complete")}</span>
                       </div>
                     )}
                 </div>
@@ -1011,7 +1038,7 @@ export default function FilmMaterialMixingTab() {
                           <SelectContent>
                             {rawMaterials.map((item: any) => (
                               <SelectItem key={item.id} value={item.id}>
-                                {item.name_ar || item.name}
+                                {localizedName(item.name_ar, item.name, item.id)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1042,7 +1069,7 @@ export default function FilmMaterialMixingTab() {
                       </Label>
                       <Input
                         type="text"
-                        value={formatNumberAr(material.percentage, 2) + "%"}
+                        value={formatNumber(material.percentage, 2) + "%"}
                         disabled
                         className="bg-gray-100 dark:bg-gray-800"
                         data-testid={`text-percentage-${index}`}
@@ -1070,7 +1097,7 @@ export default function FilmMaterialMixingTab() {
                 <div className="flex justify-between items-center text-lg font-semibold">
                   <span>{t("production.mixing.totalWeight")}:</span>
                   <span data-testid="text-total-weight">
-                    {formatNumberAr(totalWeight, 2)} {t("production.mixing.kg")}
+                    {formatNumber(totalWeight, 2)} {t("production.mixing.kg")}
                   </span>
                 </div>
               </div>
@@ -1106,10 +1133,10 @@ export default function FilmMaterialMixingTab() {
                 const printWindow = window.open("", "_blank");
                 if (!printWindow) return;
                 printWindow.document
-                  .write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>سجل الخلطات</title><style>
+                  .write(`<!DOCTYPE html><html dir="${isAr ? "rtl" : "ltr"}" lang="${isAr ? "ar" : "en"}"><head><meta charset="utf-8"><title>${ui("سجل الخلطات", "Mixing batches log")}</title><style>
                   @page { size: A4 landscape; margin: 10mm; }
                   * { box-sizing: border-box; margin: 0; padding: 0; }
-                  body { font-family: 'Cairo','Segoe UI',Tahoma,sans-serif; direction: rtl; font-size: 11px; color: #000; }
+                  body { font-family: 'Cairo','Segoe UI',Tahoma,sans-serif; direction: ${isAr ? "rtl" : "ltr"}; font-size: 11px; color: #000; }
                   .print-container { width: 277mm; padding: 5mm; }
                   .print-title { text-align: center; font-size: 18px; font-weight: 900; margin-bottom: 8px; }
                   .print-date { text-align: center; font-size: 11px; color: #666; margin-bottom: 12px; }
@@ -1136,7 +1163,7 @@ export default function FilmMaterialMixingTab() {
               }}
             >
               <Printer className="h-4 w-4 ml-2" />
-              طباعة
+              {ui("طباعة", "Print")}
             </Button>
           )}
         </CardHeader>
@@ -1155,10 +1182,10 @@ export default function FilmMaterialMixingTab() {
             <>
               <div id="mixing-batches-print-area" style={{ display: "none" }}>
                 <div className="print-container">
-                  <div className="print-title">سجل الخلطات حسب أوامر الإنتاج</div>
+                  <div className="print-title">{ui("سجل الخلطات حسب أوامر الإنتاج", "Mixing batches by production order")}</div>
                   <div className="print-date">
-                    تاريخ الطباعة:{" "}
-                    {new Date().toLocaleDateString("ar-EG", {
+                    {ui("تاريخ الطباعة:", "Print date:")}{" "}
+                    {new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
@@ -1168,18 +1195,18 @@ export default function FilmMaterialMixingTab() {
                     <div key={group.poId} className="po-section">
                       <div className="po-header">
                         <span className="po-title">
-                          أمر الإنتاج: {group.poNumber}
+                          {ui("أمر الإنتاج:", "Production order:")} {group.poNumber}
                         </span>
                         {group.orderQty > 0 && (
                           <span className="po-meta">
-                            كمية الأمر: {formatNumberAr(group.orderQty, 2)} كغ • المتبقي:{" "}
-                            {formatNumberAr(group.remaining, 2)} كغ
+                            {ui("كمية الأمر:", "Order quantity:")} {formatNumber(group.orderQty, 2)} {ui("كغ", "kg")} • {ui("المتبقي:", "Remaining:")}{" "}
+                            {formatNumber(group.remaining, 2)} {ui("كغ", "kg")}
                           </span>
                         )}
                         <span className="po-meta">
-                          سكرو A: {formatNumberAr(group.totalA, 2)} كغ • سكرو B:{" "}
-                          {formatNumberAr(group.totalB, 2)} كغ • الإجمالي:{" "}
-                          {formatNumberAr(group.total, 2)} كغ
+                          {ui("سكرو A:", "Screw A:")} {formatNumber(group.totalA, 2)} {ui("كغ", "kg")} • {ui("سكرو B:", "Screw B:")}{" "}
+                          {formatNumber(group.totalB, 2)} {ui("كغ", "kg")} • {ui("الإجمالي:", "Total:")}{" "}
+                          {formatNumber(group.total, 2)} {ui("كغ", "kg")}
                         </span>
                       </div>
                       <div className="tables-wrapper">
@@ -1194,17 +1221,17 @@ export default function FilmMaterialMixingTab() {
                           return (
                             <div key={screw} className="screw-section">
                               <div className="screw-title">
-                                سكرو {screw} ({screwBatches.length} خلطة)
+                                {ui(`سكرو ${screw} (${screwBatches.length} خلطة)`, `Screw ${screw} (${screwBatches.length} batches)`)}
                               </div>
                               <table>
                                 <thead>
                                   <tr>
-                                    <th>رقم الخلطة</th>
-                                    <th>الماكينة</th>
-                                    <th>الوزن (كغ)</th>
-                                    <th>التاريخ</th>
-                                    <th>المشغل</th>
-                                    <th>التركيبة</th>
+                                    <th>{ui("رقم الخلطة", "Batch number")}</th>
+                                    <th>{ui("الماكينة", "Machine")}</th>
+                                    <th>{ui("الوزن (كغ)", "Weight (kg)")}</th>
+                                    <th>{ui("التاريخ", "Date")}</th>
+                                    <th>{ui("المشغل", "Operator")}</th>
+                                    <th>{ui("التركيبة", "Composition")}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1217,7 +1244,7 @@ export default function FilmMaterialMixingTab() {
                                           color: "#888",
                                         }}
                                       >
-                                        لا توجد خلطات
+                                        {ui("لا توجد خلطات", "No batches")}
                                       </td>
                                     </tr>
                                   ) : (
@@ -1229,12 +1256,10 @@ export default function FilmMaterialMixingTab() {
                                         <tr key={batch.id}>
                                           <td>{batch.batch_number}</td>
                                           <td>
-                                            {batch.machine_name_ar ||
-                                              batch.machine_name ||
-                                              batch.machine_id}
+                                            {localizedName(batch.machine_name_ar, batch.machine_name, batch.machine_id)}
                                           </td>
                                           <td>
-                                            {formatNumberAr(parseFloat(
+                                            {formatNumber(parseFloat(
                                               batch.total_weight_kg,
                                             ), 2)}
                                           </td>
@@ -1244,9 +1269,7 @@ export default function FilmMaterialMixingTab() {
                                             ).toLocaleDateString("en-US")}
                                           </td>
                                           <td>
-                                            {operator?.display_name_ar ||
-                                              operator?.display_name ||
-                                              "-"}
+                                            {localizedName(operator?.display_name_ar, operator?.display_name, "-")}
                                           </td>
                                           <td>
                                             {batch.composition &&
@@ -1268,10 +1291,9 @@ export default function FilmMaterialMixingTab() {
                                                         key={idx}
                                                         className="comp-item"
                                                       >
-                                                        {comp.material_name_ar ||
-                                                          comp.material_name}{" "}
-                                                        — {formatNumberAr(qty, 2)} كغ (
-                                                        {formatNumberAr(pct, 1)}%)
+                                                        {localizedName(comp.material_name_ar, comp.material_name)}{" "}
+                                                        — {formatNumber(qty, 2)} {ui("كغ", "kg")} (
+                                                        {formatNumber(pct, 1)}%)
                                                       </div>
                                                     );
                                                   },
@@ -1284,8 +1306,8 @@ export default function FilmMaterialMixingTab() {
                                   )}
                                   {screwBatches.length > 0 && (
                                     <tr className="total-row">
-                                      <td colSpan={2}>المجموع</td>
-                                      <td>{formatNumberAr(screwTotal, 2)} كغ</td>
+                                      <td colSpan={2}>{ui("المجموع", "Total")}</td>
+                                      <td>{formatNumber(screwTotal, 2)} {ui("كغ", "kg")}</td>
                                       <td colSpan={3}></td>
                                     </tr>
                                   )}
@@ -1311,27 +1333,27 @@ export default function FilmMaterialMixingTab() {
                     <div className="bg-gradient-to-l from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 border-b-2 border-amber-300 dark:border-amber-700 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-wrap">
                         <span className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded">
-                          أمر إنتاج
+                          {ui("أمر إنتاج", "Production order")}
                         </span>
                         <span className="font-bold text-base text-amber-900 dark:text-amber-100">
                           {group.poNumber}
                         </span>
                         {group.orderQty > 0 && (
                           <span className="text-xs text-muted-foreground">
-                            كمية الأمر: <span className="font-semibold text-foreground">{formatNumberAr(group.orderQty, 2)} كغ</span>
-                            {" • "}المتبقي: <span className="font-semibold text-foreground">{formatNumberAr(group.remaining, 2)} كغ</span>
+                            {ui("كمية الأمر:", "Order quantity:")} <span className="font-semibold text-foreground">{formatNumber(group.orderQty, 2)} {ui("كغ", "kg")}</span>
+                            {" • "}{ui("المتبقي:", "Remaining:")} <span className="font-semibold text-foreground">{formatNumber(group.remaining, 2)} {ui("كغ", "kg")}</span>
                           </span>
                         )}
                       </div>
                       <div className="flex gap-3 text-xs font-semibold flex-wrap">
                         <span className="px-2 py-1 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
-                          سكرو A: {formatNumberAr(group.totalA, 2)} كغ ({formatNumberAr(group.pctA, 1)}%)
+                          {ui("سكرو A:", "Screw A:")} {formatNumber(group.totalA, 2)} {ui("كغ", "kg")} ({formatNumber(group.pctA, 1)}%)
                         </span>
                         <span className="px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
-                          سكرو B: {formatNumberAr(group.totalB, 2)} كغ ({formatNumberAr(group.pctB, 1)}%)
+                          {ui("سكرو B:", "Screw B:")} {formatNumber(group.totalB, 2)} {ui("كغ", "kg")} ({formatNumber(group.pctB, 1)}%)
                         </span>
                         <span className="px-2 py-1 rounded bg-amber-200 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100">
-                          الإجمالي: {formatNumberAr(group.total, 2)} كغ
+                          {ui("الإجمالي:", "Total:")} {formatNumber(group.total, 2)} {ui("كغ", "kg")}
                         </span>
                       </div>
                     </div>
@@ -1340,26 +1362,26 @@ export default function FilmMaterialMixingTab() {
                     {(group.materialRowsA.length > 0 || group.materialRowsB.length > 0) && (
                       <div className="border-b-2 border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 p-3">
                         <div className="text-sm font-bold text-amber-900 dark:text-amber-100 mb-2 flex items-center gap-2">
-                          <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded">ملخص</span>
-                          المواد المخلوطة
+                          <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded">{ui("ملخص", "Summary")}</span>
+                          {ui("المواد المخلوطة", "Mixed materials")}
                         </div>
                         <div className="overflow-x-auto rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900">
                           <Table>
                             <TableHeader>
                               <TableRow className="bg-amber-100 dark:bg-amber-900/40">
-                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2 w-16">السكرو</TableHead>
-                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">المادة</TableHead>
-                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">الكمية (كغ)</TableHead>
-                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">النسبة</TableHead>
-                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">النسبة الكلية</TableHead>
-                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">الكمية الكلية (كغ)</TableHead>
+                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2 w-16">{ui("السكرو", "Screw")}</TableHead>
+                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">{ui("المادة", "Material")}</TableHead>
+                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">{ui("الكمية (كغ)", "Quantity (kg)")}</TableHead>
+                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">{ui("النسبة", "Percentage")}</TableHead>
+                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">{ui("النسبة الكلية", "Total percentage")}</TableHead>
+                                <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">{ui("الكمية الكلية (كغ)", "Total quantity (kg)")}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {group.materialRowsA.length === 0 && group.materialRowsB.length === 0 ? (
                                 <TableRow>
                                   <TableCell colSpan={6} className="text-center text-muted-foreground py-3 text-xs">
-                                    لا توجد مواد
+                                     {ui("لا توجد مواد", "No materials")}
                                   </TableCell>
                                 </TableRow>
                               ) : (
@@ -1370,19 +1392,19 @@ export default function FilmMaterialMixingTab() {
                                         <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold">A</span>
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-medium">
-                                        {row.name_ar || row.name || row.key}
+                                        {localizedName(row.name_ar, row.name, row.key)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-semibold text-blue-700 dark:text-blue-300">
-                                        {formatNumberAr(row.qty, 2)}
+                                        {formatNumber(row.qty, 2)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5">
-                                        {formatNumberAr(row.pctInScrew, 1)}%
+                                        {formatNumber(row.pctInScrew, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {formatNumberAr(row.pctInTotal, 1)}%
+                                        {formatNumber(row.pctInTotal, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {formatNumberAr(row.materialTotalQty, 2)} ({formatNumberAr(row.materialTotalPct, 1)}%)
+                                        {formatNumber(row.materialTotalQty, 2)} ({formatNumber(row.materialTotalPct, 1)}%)
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -1390,16 +1412,16 @@ export default function FilmMaterialMixingTab() {
                                     <TableRow className="bg-blue-50 dark:bg-blue-950/40 border-t border-blue-200 dark:border-blue-800">
                                       <TableCell className="px-2 py-1.5"></TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-blue-800 dark:text-blue-200">
-                                        مجموع سكرو A
+                                        {ui("مجموع سكرو A", "Screw A total")}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-blue-800 dark:text-blue-200">
-                                        {formatNumberAr(group.totalA, 2)}
+                                        {formatNumber(group.totalA, 2)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-blue-800 dark:text-blue-200">
                                         100%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-blue-800 dark:text-blue-200">
-                                        {formatNumberAr(group.pctA, 1)}%
+                                        {formatNumber(group.pctA, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5"></TableCell>
                                     </TableRow>
@@ -1410,19 +1432,19 @@ export default function FilmMaterialMixingTab() {
                                         <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold">B</span>
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-medium">
-                                        {row.name_ar || row.name || row.key}
+                                        {localizedName(row.name_ar, row.name, row.key)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
-                                        {formatNumberAr(row.qty, 2)}
+                                        {formatNumber(row.qty, 2)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5">
-                                        {formatNumberAr(row.pctInScrew, 1)}%
+                                        {formatNumber(row.pctInScrew, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {formatNumberAr(row.pctInTotal, 1)}%
+                                        {formatNumber(row.pctInTotal, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 text-amber-700 dark:text-amber-300 font-medium">
-                                        {formatNumberAr(row.materialTotalQty, 2)} ({formatNumberAr(row.materialTotalPct, 1)}%)
+                                        {formatNumber(row.materialTotalQty, 2)} ({formatNumber(row.materialTotalPct, 1)}%)
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -1430,16 +1452,16 @@ export default function FilmMaterialMixingTab() {
                                     <TableRow className="bg-emerald-50 dark:bg-emerald-950/40 border-t border-emerald-200 dark:border-emerald-800">
                                       <TableCell className="px-2 py-1.5"></TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-emerald-800 dark:text-emerald-200">
-                                        مجموع سكرو B
+                                        {ui("مجموع سكرو B", "Screw B total")}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-emerald-800 dark:text-emerald-200">
-                                        {formatNumberAr(group.totalB, 2)}
+                                        {formatNumber(group.totalB, 2)}
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-emerald-800 dark:text-emerald-200">
                                         100%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5 font-bold text-emerald-800 dark:text-emerald-200">
-                                        {formatNumberAr(group.pctB, 1)}%
+                                        {formatNumber(group.pctB, 1)}%
                                       </TableCell>
                                       <TableCell className="px-2 py-1.5"></TableCell>
                                     </TableRow>
@@ -1447,10 +1469,10 @@ export default function FilmMaterialMixingTab() {
                                   <TableRow className="bg-amber-100 dark:bg-amber-900/40 border-t-2 border-amber-300 dark:border-amber-700">
                                     <TableCell className="px-2 py-2"></TableCell>
                                     <TableCell className="px-2 py-2 font-bold text-amber-900 dark:text-amber-100">
-                                      الإجمالي الكلي
+                                      {ui("الإجمالي الكلي", "Grand total")}
                                     </TableCell>
                                     <TableCell className="px-2 py-2 font-bold text-amber-900 dark:text-amber-100">
-                                      {formatNumberAr(group.total, 2)}
+                                      {formatNumber(group.total, 2)}
                                     </TableCell>
                                     <TableCell className="px-2 py-2"></TableCell>
                                     <TableCell className="px-2 py-2 font-bold text-amber-900 dark:text-amber-100">
@@ -1472,7 +1494,7 @@ export default function FilmMaterialMixingTab() {
                         [
                           {
                             screw: "A" as const,
-                            label: "سكرو A",
+                            label: ui("سكرو A", "Screw A"),
                             borderColor: "border-blue-400 dark:border-blue-600",
                             headerBg: "bg-blue-600 dark:bg-blue-700",
                             headerText: "text-white",
@@ -1481,7 +1503,7 @@ export default function FilmMaterialMixingTab() {
                           },
                           {
                             screw: "B" as const,
-                            label: "سكرو B",
+                            label: ui("سكرو B", "Screw B"),
                             borderColor: "border-emerald-400 dark:border-emerald-600",
                             headerBg: "bg-emerald-600 dark:bg-emerald-700",
                             headerText: "text-white",
@@ -1507,7 +1529,7 @@ export default function FilmMaterialMixingTab() {
                             >
                               {label}
                               <span className="text-xs font-normal mr-2 opacity-90">
-                                ({screwBatches.length} خلطة — {formatNumberAr(screwTotal, 2)} كغ)
+                                ({screwBatches.length} {ui("خلطة", "batches")} — {formatNumber(screwTotal, 2)} {ui("كغ", "kg")})
                               </span>
                             </div>
                             <div className="overflow-x-auto">
@@ -1515,22 +1537,22 @@ export default function FilmMaterialMixingTab() {
                                 <TableHeader>
                                   <TableRow className="bg-gray-50 dark:bg-gray-800/50">
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">
-                                      رقم الخلطة
+                                      {ui("رقم الخلطة", "Batch number")}
                                     </TableHead>
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">
-                                      الماكينة
+                                      {ui("الماكينة", "Machine")}
                                     </TableHead>
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">
-                                      الوزن
+                                      {ui("الوزن", "Weight")}
                                     </TableHead>
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">
-                                      التاريخ
+                                      {ui("التاريخ", "Date")}
                                     </TableHead>
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">
-                                      المشغل
+                                      {ui("المشغل", "Operator")}
                                     </TableHead>
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-2">
-                                      التركيبة
+                                      {ui("التركيبة", "Composition")}
                                     </TableHead>
                                     <TableHead className="text-right text-xs font-bold whitespace-nowrap px-1 w-10"></TableHead>
                                   </TableRow>
@@ -1542,7 +1564,7 @@ export default function FilmMaterialMixingTab() {
                                         colSpan={7}
                                         className="text-center text-muted-foreground py-4 text-xs"
                                       >
-                                        لا توجد خلطات للـ {label}
+                                        {ui(`لا توجد خلطات للـ ${label}`, `No batches for ${label}`)}
                                       </TableCell>
                                     </TableRow>
                                   ) : (
@@ -1561,20 +1583,16 @@ export default function FilmMaterialMixingTab() {
                                               {batch.batch_number}
                                             </TableCell>
                                             <TableCell className="px-2 py-1.5">
-                                              {batch.machine_name_ar ||
-                                                batch.machine_name ||
-                                                batch.machine_id}
+                                              {localizedName(batch.machine_name_ar, batch.machine_name, batch.machine_id)}
                                             </TableCell>
                                             <TableCell className="px-2 py-1.5 font-medium">
-                                              {formatNumberAr(parseFloat(batch.total_weight_kg), 2)}
+                                              {formatNumber(parseFloat(batch.total_weight_kg), 2)}
                                             </TableCell>
                                             <TableCell className="px-2 py-1.5" dir="ltr">
                                               {new Date(batch.created_at).toLocaleDateString("en-US")}
                                             </TableCell>
                                             <TableCell className="px-2 py-1.5">
-                                              {operator?.display_name_ar ||
-                                                operator?.display_name ||
-                                                "-"}
+                                              {localizedName(operator?.display_name_ar, operator?.display_name, "-")}
                                             </TableCell>
                                             <TableCell className="px-2 py-1.5">
                                               <div className="space-y-0.5">
@@ -1585,13 +1603,13 @@ export default function FilmMaterialMixingTab() {
                                                     return (
                                                       <div key={idx} className="text-[10px] leading-tight flex items-center gap-1 flex-wrap">
                                                         <span className="font-medium">
-                                                          {comp.material_name_ar || comp.material_name}
+                                                          {localizedName(comp.material_name_ar, comp.material_name)}
                                                         </span>
                                                         <span className="text-blue-700 dark:text-blue-300 font-semibold">
-                                                          {formatNumberAr(qty, 2)} كغ
+                                                          {formatNumber(qty, 2)} {ui("كغ", "kg")}
                                                         </span>
                                                         <span className="text-muted-foreground">
-                                                          ({formatNumberAr(pct, 1)}%)
+                                                          ({formatNumber(pct, 1)}%)
                                                         </span>
                                                       </div>
                                                     );
@@ -1640,10 +1658,10 @@ export default function FilmMaterialMixingTab() {
                                           colSpan={2}
                                           className="text-right font-bold px-2 py-2"
                                         >
-                                          المجموع
+                                          {ui("المجموع", "Total")}
                                         </TableCell>
                                         <TableCell className="font-bold px-2 py-2">
-                                          {formatNumberAr(screwTotal, 2)} كغ
+                                          {formatNumber(screwTotal, 2)} {ui("كغ", "kg")}
                                         </TableCell>
                                         <TableCell colSpan={4}></TableCell>
                                       </TableRow>
@@ -1665,7 +1683,7 @@ export default function FilmMaterialMixingTab() {
       </Card>
 
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl" dir="rtl">
+        <DialogContent className="max-w-2xl" dir={isAr ? "rtl" : "ltr"}>
           <DialogHeader>
             <DialogTitle>{t("production.mixing.batchDetails")}</DialogTitle>
             <DialogDescription className="sr-only">
@@ -1695,9 +1713,7 @@ export default function FilmMaterialMixingTab() {
                     {t("production.mixing.machine")}
                   </Label>
                   <p className="font-semibold">
-                    {selectedBatch.machine_name_ar ||
-                      selectedBatch.machine_name ||
-                      selectedBatch.machine_id}
+                    {localizedName(selectedBatch.machine_name_ar, selectedBatch.machine_name, selectedBatch.machine_id)}
                   </p>
                 </div>
                 <div>
@@ -1713,7 +1729,7 @@ export default function FilmMaterialMixingTab() {
                     {t("production.mixing.totalWeightLabel")}
                   </Label>
                   <p className="font-semibold">
-                    {formatNumberAr(parseFloat(selectedBatch.total_weight_kg), 2)}{" "}
+                    {formatNumber(parseFloat(selectedBatch.total_weight_kg), 2)}{" "}
                     {t("production.mixing.kg")}
                   </p>
                 </div>
@@ -1751,14 +1767,14 @@ export default function FilmMaterialMixingTab() {
                         {selectedBatch.ingredients.map((ing, idx) => (
                           <TableRow key={idx}>
                             <TableCell>
-                              {ln(ing.item_name_ar, ing.item_name) ||
+                              {localizedName(ing.item_name_ar, ing.item_name, ing.item_id) ||
                                 ing.item_id}
                             </TableCell>
                             <TableCell>
-                              {formatNumberAr(parseFloat(ing.actual_weight_kg), 2)}
+                              {formatNumber(parseFloat(ing.actual_weight_kg), 2)}
                             </TableCell>
                             <TableCell>
-                              {formatNumberAr(parseFloat(ing.percentage), 2)}%
+                              {formatNumber(parseFloat(ing.percentage), 2)}%
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1784,14 +1800,14 @@ export default function FilmMaterialMixingTab() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
-          dir="rtl"
+          dir={isAr ? "rtl" : "ltr"}
         >
           <DialogHeader>
             <DialogTitle>
-              تعديل خلطة {editingBatch?.batch_number || ""}
+              {ui("تعديل خلطة", "Edit batch")} {editingBatch?.batch_number || ""}
             </DialogTitle>
             <DialogDescription>
-              يمكنك تعديل الماكينة، البريمة، المواد، والأوزان
+              {ui("يمكنك تعديل الماكينة، البريمة، المواد، والأوزان", "You can edit the machine, screw, materials, and weights")}
             </DialogDescription>
           </DialogHeader>
           {editLoading && (
@@ -1833,7 +1849,7 @@ export default function FilmMaterialMixingTab() {
                   <SelectContent>
                     {machines.map((m: any) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {ln(m.name_ar, m.name) || m.id}
+                        {localizedName(m.name_ar, m.name, m.id)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1910,7 +1926,7 @@ export default function FilmMaterialMixingTab() {
                           colSpan={4}
                           className="text-center text-muted-foreground py-4"
                         >
-                          لا توجد مواد - أضف مادة للبدء
+                          {ui("لا توجد مواد - أضف مادة للبدء", "No materials — add a material to begin")}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -1935,7 +1951,7 @@ export default function FilmMaterialMixingTab() {
                               <SelectContent>
                                 {rawMaterials.map((item: any) => (
                                   <SelectItem key={item.id} value={item.id}>
-                                    {ln(item.name_ar, item.name) || item.id}
+                                    {localizedName(item.name_ar, item.name, item.id)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1953,7 +1969,7 @@ export default function FilmMaterialMixingTab() {
                               data-testid={`input-edit-weight-${m.id}`}
                             />
                           </TableCell>
-                          <TableCell>{formatNumberAr(m.percentage, 2)}%</TableCell>
+                          <TableCell>{formatNumber(m.percentage, 2)}%</TableCell>
                           <TableCell>
                             <Button
                               type="button"
@@ -1972,7 +1988,7 @@ export default function FilmMaterialMixingTab() {
                   </TableBody>
                 </Table>
                 <div className="mt-2 flex justify-end text-sm font-semibold">
-                  المجموع: {formatNumberAr(editTotalWeight, 2)}{" "}
+                  {ui("المجموع:", "Total:")} {formatNumber(editTotalWeight, 2)}{" "}
                   {t("production.mixing.kg")}
                 </div>
               </div>
@@ -1984,7 +2000,7 @@ export default function FilmMaterialMixingTab() {
               onClick={() => setEditDialogOpen(false)}
               data-testid="button-cancel-edit"
             >
-              {t("common.cancel") || "إلغاء"}
+              {t("common.cancel", { defaultValue: ui("إلغاء", "Cancel") })}
             </Button>
             <Button
               onClick={handleUpdate}
@@ -1992,8 +2008,8 @@ export default function FilmMaterialMixingTab() {
               data-testid="button-save-edit"
             >
               {updateBatchMutation.isPending
-                ? "جارٍ الحفظ..."
-                : "حفظ التعديلات"}
+                ? ui("جارٍ الحفظ...", "Saving...")
+                : ui("حفظ التعديلات", "Save changes")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2004,21 +2020,20 @@ export default function FilmMaterialMixingTab() {
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
       >
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir={isAr ? "rtl" : "ltr"}>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد حذف عملية الخلط</AlertDialogTitle>
+            <AlertDialogTitle>{ui("تأكيد حذف عملية الخلط", "Confirm mixing batch deletion")}</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف الخلطة{" "}
+              {ui("هل أنت متأكد من حذف الخلطة", "Are you sure you want to delete batch")}{" "}
               <span className="font-bold">
                 {batchToDelete?.batch_number}
               </span>
-              ؟ سيتم حذف الخلطة ومكوّناتها نهائيًا ولا يمكن التراجع عن هذه
-              العملية.
+              {ui("؟ سيتم حذف الخلطة ومكوّناتها نهائيًا ولا يمكن التراجع عن هذه العملية.", "? The batch and its ingredients will be permanently deleted and this cannot be undone.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
             <AlertDialogCancel data-testid="button-cancel-delete">
-              إلغاء
+              {ui("إلغاء", "Cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
@@ -2026,7 +2041,7 @@ export default function FilmMaterialMixingTab() {
               className="bg-red-600 hover:bg-red-700"
               data-testid="button-confirm-delete"
             >
-              {deleteBatchMutation.isPending ? "جارٍ الحذف..." : "حذف"}
+              {deleteBatchMutation.isPending ? ui("جارٍ الحذف...", "Deleting...") : ui("حذف", "Delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

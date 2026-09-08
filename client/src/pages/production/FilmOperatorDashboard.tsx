@@ -118,6 +118,31 @@ export default function FilmOperatorDashboard({
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
   const ln = useLocalizedName();
+  const localize = (arabic: string, english: string) =>
+    isArabic ? arabic : english;
+  const kilogramUnit = localize("كجم", "kg");
+  const localizedName = (
+    arabicName: string | undefined,
+    englishName: string | undefined,
+    arabicFallback: string,
+    englishPlaceholder: string,
+  ) => {
+    if (isArabic) {
+      return ln(arabicName, englishName) || arabicFallback;
+    }
+
+    return englishName?.trim() || englishPlaceholder;
+  };
+  const localizedErrorMessage = (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : localize("خطأ غير معروف", "Unknown error");
+
+    return !isArabic && /[\u0600-\u06FF]/.test(message)
+      ? localize("خطأ غير معروف", "Unknown error")
+      : message;
+  };
   const [selectedProductionOrder, setSelectedProductionOrder] =
     useState<ActiveProductionOrderDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -172,7 +197,7 @@ export default function FilmOperatorDashboard({
     } catch (error) {
       console.error("Error printing label:", error);
       alert(
-        `${t("operators.common.printLabelError")}: ${error instanceof Error ? error.message : t("operators.common.unknownError")}`,
+        `${t("operators.common.printLabelError")}: ${localizedErrorMessage(error)}`,
       );
     } finally {
       setPrintingRollId(null);
@@ -262,8 +287,12 @@ export default function FilmOperatorDashboard({
               new Set(
                 group.items.map(
                   (item) =>
-                    ln(item.product_name_ar, item.product_name_en) ||
-                    item.product_name
+                    localizedName(
+                      item.product_name_ar,
+                      item.product_name_en,
+                      item.product_name,
+                      "Untranslated product",
+                    )
                 )
               )
             ).filter(Boolean);
@@ -279,27 +308,32 @@ export default function FilmOperatorDashboard({
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-black px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">
-                        طلب: #{group.orderNumber}
+                        {localize("طلب", "Order")}: #{group.orderNumber}
                       </span>
                       <span className="text-xs text-gray-500">
-                        ({group.items.length} أوامر إنتاج)
+                        ({group.items.length}{" "}
+                        {localize("أوامر إنتاج", "production orders")})
                       </span>
                     </div>
                     <h3 className="text-base font-extrabold text-blue-700 dark:text-blue-400 leading-tight">
-                      {ln(first.customer_name_ar, first.customer_name_en) ||
-                        first.customer_name}
+                      {localizedName(
+                        first.customer_name_ar,
+                        first.customer_name_en,
+                        first.customer_name,
+                        "Untranslated customer",
+                      )}
                     </h3>
                   </div>
 
                   <span className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-xl">
-                    فتح الطلب ◀
+                    {localize("فتح الطلب ◀", "Open order ▶")}
                   </span>
                 </div>
 
                 {/* قائمة أسماء المنتجات التابعة لأوامر الإنتاج */}
                 <div className="space-y-1.5 bg-slate-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-gray-800">
                   <span className="text-[11px] font-bold text-gray-400 block">
-                    المنتجات المطلوبة:
+                    {localize("المنتجات المطلوبة:", "Required products:")}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {uniqueProducts.map((prodName, idx) => (
@@ -317,10 +351,12 @@ export default function FilmOperatorDashboard({
                 <div className="space-y-1.5 pt-1">
                   <div className="flex justify-between items-center text-xs font-semibold">
                     <span className="text-gray-500">
-                      الإنجاز الكلي ({Math.round(groupProgress)}%)
+                      {localize("الإنجاز الكلي", "Overall progress")} (
+                      {Math.round(groupProgress)}%)
                     </span>
                     <span className="text-gray-700 dark:text-gray-300 font-bold">
-                      {formatNumberAr(totalProduced)} / {formatNumberAr(totalRequired)} كجم
+                      {formatNumberAr(totalProduced)} / {formatNumberAr(totalRequired)}{" "}
+                      {kilogramUnit}
                     </span>
                   </div>
                   <Progress value={groupProgress} className="h-2 rounded-full" />
@@ -377,29 +413,39 @@ export default function FilmOperatorDashboard({
                                 {order.production_order_number}
                               </span>
                               <span className="text-xs font-semibold text-gray-500">
-                                طلب: #{order.order_number}
+                                {localize("طلب", "Order")}: #{order.order_number}
                               </span>
                             </div>
 
                             {/* اسم المنتج بخط عريض وواضح جداً */}
                             <h2 className="text-xl font-black text-gray-950 dark:text-white leading-tight tracking-tight mt-1">
-                              {ln(order.product_name_ar, order.product_name_en) || order.product_name}
+                              {localizedName(
+                                order.product_name_ar,
+                                order.product_name_en,
+                                order.product_name,
+                                "Untranslated product",
+                              )}
                             </h2>
 
                             {/* اسم العميل */}
                             <p className="text-sm font-bold text-blue-700 dark:text-blue-400 mt-1">
-                              {ln(order.customer_name_ar, order.customer_name_en) || order.customer_name}
+                              {localizedName(
+                                order.customer_name_ar,
+                                order.customer_name_en,
+                                order.customer_name,
+                                "Untranslated customer",
+                              )}
                             </p>
                           </div>
 
                           {isComplete ? (
                             <Badge className="bg-emerald-600 text-white gap-1 text-xs py-1">
                               <CheckCircle2 className="h-3.5 w-3.5" />
-                              مكتمل
+                              {localize("مكتمل", "Complete")}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="text-xs font-bold text-blue-700 dark:text-blue-300 border-blue-300">
-                              {order.rolls_count} رول
+                              {order.rolls_count} {localize("رول", "rolls")}
                             </Badge>
                           )}
                         </div>
@@ -412,7 +458,9 @@ export default function FilmOperatorDashboard({
                           <div className="flex items-start gap-2">
                             <Ruler className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                             <div>
-                              <span className="text-gray-400 block text-[10px]">المقاس</span>
+                              <span className="text-gray-400 block text-[10px]">
+                                {localize("المقاس", "Size")}
+                              </span>
                               <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                                 {order.size_caption || "—"}
                               </span>
@@ -423,7 +471,9 @@ export default function FilmOperatorDashboard({
                           <div className="flex items-start gap-2">
                             <Layers className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
                             <div>
-                              <span className="text-gray-400 block text-[10px]">نوع الخام</span>
+                              <span className="text-gray-400 block text-[10px]">
+                                {localize("نوع الخام", "Raw material")}
+                              </span>
                               <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                                 {order.raw_material || "—"}
                               </span>
@@ -434,7 +484,9 @@ export default function FilmOperatorDashboard({
                           <div className="flex items-start gap-2">
                             <Gauge className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                             <div>
-                              <span className="text-gray-400 block text-[10px]">السماكة</span>
+                              <span className="text-gray-400 block text-[10px]">
+                                {localize("السماكة", "Thickness")}
+                              </span>
                               <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                                 {order.thickness ? `${parseFloat(String(order.thickness))} µm` : "—"}
                               </span>
@@ -445,7 +497,9 @@ export default function FilmOperatorDashboard({
                           <div className="flex items-center gap-2.5">
                             <Palette className="h-4 w-4 text-rose-600 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <span className="text-gray-400 block text-[10px]">الماستر باتش</span>
+                              <span className="text-gray-400 block text-[10px]">
+                                {localize("الماستر باتش", "Masterbatch")}
+                              </span>
                               <div className="flex items-center gap-2 mt-1">
                                 {order.master_batch_color_hex ? (
                                   <span
@@ -456,11 +510,13 @@ export default function FilmOperatorDashboard({
                                   <span className="inline-block w-6 h-6 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex-shrink-0" />
                                 )}
                                 <span className="font-bold text-gray-900 dark:text-gray-100 text-sm truncate">
-                                  {(isArabic
-                                    ? order.master_batch_name_ar
-                                    : order.master_batch_name_en) ||
+                                  {localizedName(
+                                    order.master_batch_name_ar,
+                                    order.master_batch_name_en,
                                     order.master_batch_name ||
-                                    "بدون لون"}
+                                      localize("بدون لون", "No color"),
+                                    "No color",
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -470,9 +526,12 @@ export default function FilmOperatorDashboard({
                         {/* شريط الإنجاز والكميات */}
                         <div className="space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30 p-2.5 rounded-xl">
                           <div className="flex justify-between items-center text-xs font-semibold">
-                            <span className="text-gray-500">الإنجاز ({Math.round(progress)}%)</span>
+                            <span className="text-gray-500">
+                              {localize("الإنجاز", "Progress")} ({Math.round(progress)}%)
+                            </span>
                             <span className="text-gray-700 dark:text-gray-300">
-                              المطلوب: {formatNumberAr(requiredQty)} كجم
+                              {localize("المطلوب", "Required")}:{" "}
+                              {formatNumberAr(requiredQty)} {kilogramUnit}
                             </span>
                           </div>
 
@@ -480,10 +539,12 @@ export default function FilmOperatorDashboard({
 
                           <div className="flex justify-between items-center text-xs pt-1">
                             <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                              المنتج: {formatNumberAr(producedQty)} كجم
+                              {localize("المنتج", "Produced")}:{" "}
+                              {formatNumberAr(producedQty)} {kilogramUnit}
                             </span>
                             <span className="text-orange-600 dark:text-orange-400 font-bold">
-                              المتبقي: {formatNumberAr(remainingQty)} كجم
+                              {localize("المتبقي", "Remaining")}:{" "}
+                              {formatNumberAr(remainingQty)} {kilogramUnit}
                             </span>
                           </div>
                         </div>
@@ -494,10 +555,14 @@ export default function FilmOperatorDashboard({
                             <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-200">
                               <span className="flex items-center gap-1">
                                 <Disc className="h-4 w-4 text-blue-600 animate-spin-slow" />
-                                الرولات المنتجة ({orderRolls.length})
+                                {localize("الرولات المنتجة", "Produced rolls")} (
+                                {orderRolls.length})
                               </span>
                               <span className="text-[10px] text-gray-400">
-                                اضغط على الرول لطباعة الملصق
+                                {localize(
+                                  "اضغط على الرول لطباعة الملصق",
+                                  "Click a roll to print its label",
+                                )}
                               </span>
                             </div>
 
@@ -511,7 +576,10 @@ export default function FilmOperatorDashboard({
                                     onClick={() => handlePrintLabel(roll)}
                                     disabled={isPrinting}
                                     className="group relative flex items-center gap-2 p-2 pr-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xs hover:border-blue-500 hover:shadow-md active:scale-95 transition-all text-right"
-                                    title="اضغط لطباعة ملصق الرول"
+                                    title={localize(
+                                      "اضغط لطباعة ملصق الرول",
+                                      "Click to print roll label",
+                                    )}
                                   >
                                     {/* شكل أسطوانة الرول الملونة بلون الماسترباتش */}
                                     <div
@@ -534,7 +602,8 @@ export default function FilmOperatorDashboard({
                                         {roll.roll_number}
                                       </span>
                                       <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                                        {formatNumberAr(Number(roll.weight_kg))} كجم
+                                        {formatNumberAr(Number(roll.weight_kg))}{" "}
+                                        {kilogramUnit}
                                       </span>
                                     </div>
 
@@ -574,7 +643,7 @@ export default function FilmOperatorDashboard({
                                 variant="outline"
                                 onClick={() => setBatchOrderId(order.id)}
                                 className="h-12 px-3 rounded-xl border-gray-300 dark:border-gray-700"
-                                title="طباعة ملصق الدفعة"
+                                title={localize("طباعة ملصق الدفعة", "Print batch label")}
                               >
                                 <PackageCheck className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                               </Button>
@@ -585,7 +654,10 @@ export default function FilmOperatorDashboard({
                             <div className="flex items-center gap-2">
                               <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
                               <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200">
-                                تم إكمال مرحلة الفيلم بالكامل
+                                {localize(
+                                  "تم إكمال مرحلة الفيلم بالكامل",
+                                  "Film stage is fully complete",
+                                )}
                               </span>
                             </div>
                             {order.rolls_count > 0 && (
@@ -596,7 +668,7 @@ export default function FilmOperatorDashboard({
                                 className="h-8 text-xs gap-1 border-emerald-300 text-emerald-800"
                               >
                                 <PackageCheck className="h-3.5 w-3.5 ml-1" />
-                                ملصق الدفعة
+                                {localize("ملصق الدفعة", "Batch label")}
                               </Button>
                             )}
                           </div>

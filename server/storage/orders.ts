@@ -1497,7 +1497,7 @@ export class OrdersStorage extends UsersStorage {
         COALESCE(cp.is_printed, false) AS is_printed,
         COALESCE(mb.name_ar, mb.name, cp.master_batch_id) AS master_batch_name,
         COALESCE(mb.name_ar, mb.name, cp.master_batch_id) AS master_batch_name_ar,
-        COALESCE(mb.name, mb.name_ar, cp.master_batch_id) AS master_batch_name_en,
+        COALESCE(mb.name, cp.master_batch_id) AS master_batch_name_en,
         mb.color_hex AS master_batch_color_hex,
         COUNT(r.id) AS rolls_count,
         COALESCE(SUM(r.weight_kg), 0) AS total_weight_produced,

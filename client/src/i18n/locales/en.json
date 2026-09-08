@@ -530,6 +530,7 @@
       "cutRolls": "Cut Rolls",
       "todayProduction": "Today's Production",
       "todayProductionDesc": "Last 24 hours output",
+      "operatorFocusMode": "Simplified operator mode",
       "active": "Active"
     },
     "todayProduction": {

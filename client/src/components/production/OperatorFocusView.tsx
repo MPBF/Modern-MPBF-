@@ -32,16 +32,20 @@ import { formatNumberAr } from "../../../../shared/number-utils";
 const MACHINE_STORAGE_KEY = "operator_focus_machine_id";
 const ORDER_STORAGE_KEY = "operator_focus_order_id";
 const CUSTOMER_STORAGE_KEY = "operator_focus_customer";
+const containsArabic = (value: unknown) =>
+  typeof value === "string" && /[\u0600-\u06FF]/.test(value);
 
 interface Machine {
   id: string;
   name_ar: string;
+  name?: string | null;
   type: string;
   status: string;
 }
 
 interface ActiveOrder {
   id: number;
+  customer_id: string | number | null;
   production_order_number: string;
   status: string;
   film_completed: boolean;
@@ -61,10 +65,15 @@ interface ActiveOrder {
   rolls_count: string | number;
 }
 
+const customerSelectionKey = (order: ActiveOrder) =>
+  order.customer_id != null && order.customer_id !== ""
+    ? `customer:${order.customer_id}`
+    : `production-order:${order.id}`;
+
 export default function OperatorFocusView() {
   const { toast } = useToast();
-  const { i18n } = useTranslation();
-  const isArabic = i18n.language === "ar";
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language.startsWith("ar");
   const dir = isArabic ? "rtl" : "ltr";
   const queryClient = useQueryClient();
   const [selectedMachineId, setSelectedMachineId] = useState<string>(
@@ -121,23 +130,25 @@ export default function OperatorFocusView() {
     const seen = new Set<string>();
     const list: { key: string; label: string }[] = [];
     for (const o of orders) {
-      const label = (isArabic ? o.customer_name_ar : o.customer_name_en) || o.customer_name_ar || "";
-      if (label && !seen.has(label)) {
-        seen.add(label);
-        list.push({ key: label, label });
+      const key = customerSelectionKey(o);
+      const label = isArabic
+        ? o.customer_name_ar || o.customer_name_en || ""
+        : o.customer_name_en || "";
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({ key, label: label || t("common.notSpecified") });
       }
     }
     return list;
-  }, [orders, isArabic]);
+  }, [orders, isArabic, t]);
 
   // Filter orders by selected customer
   const filteredOrders = useMemo(() => {
     if (!selectedCustomerKey) return orders;
     return orders.filter((o) => {
-      const label = (isArabic ? o.customer_name_ar : o.customer_name_en) || o.customer_name_ar || "";
-      return label === selectedCustomerKey;
+      return customerSelectionKey(o) === selectedCustomerKey;
     });
-  }, [orders, selectedCustomerKey, isArabic]);
+  }, [orders, selectedCustomerKey]);
 
   // Resolve the currently selected order from the filtered list (fallback to first)
   const activeOrder = useMemo<ActiveOrder | null>(() => {
@@ -154,16 +165,19 @@ export default function OperatorFocusView() {
     }
   }, [activeOrder, selectedOrderId]);
 
-  // Clear stale customer key if it no longer matches any order
+  // Clear a stale persisted key (including the former localized-label format)
+  // once orders have loaded. This must also clear the selection when no
+  // customers are available.
   useEffect(() => {
-    if (selectedCustomerKey && orders.length > 0 && uniqueCustomers.length > 0) {
-      const stillExists = uniqueCustomers.some((c) => c.key === selectedCustomerKey);
-      if (!stillExists) {
-        setSelectedCustomerKey("");
-        localStorage.removeItem(CUSTOMER_STORAGE_KEY);
-      }
+    if (
+      !isLoading &&
+      selectedCustomerKey &&
+      !uniqueCustomers.some((c) => c.key === selectedCustomerKey)
+    ) {
+      setSelectedCustomerKey("");
+      localStorage.removeItem(CUSTOMER_STORAGE_KEY);
     }
-  }, [uniqueCustomers, selectedCustomerKey, orders.length]);
+  }, [uniqueCustomers, selectedCustomerKey, isLoading]);
 
   // Clear a stale persisted machine ID if it no longer exists (e.g. retired)
   useEffect(() => {
@@ -213,13 +227,16 @@ export default function OperatorFocusView() {
       });
     },
     onError: (error: any) => {
+      const errorMessage = error?.message;
       toast({
         title: isArabic ? "❌ فشل تسجيل اللفة" : "❌ Failed to save roll",
         description:
-          error?.message ||
-          (isArabic
-            ? "تجاوزت الكمية المسموحة لأمر الإنتاج"
-            : "Exceeded the allowed quantity for this production order"),
+          !isArabic && containsArabic(errorMessage)
+            ? t("common.errorOccurred")
+            : errorMessage ||
+              (isArabic
+                ? "تجاوزت الكمية المسموحة لأمر الإنتاج"
+                : "Exceeded the allowed quantity for this production order"),
         variant: "destructive",
       });
     },
@@ -270,7 +287,7 @@ export default function OperatorFocusView() {
             <SelectContent>
               {machines.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  {m.name_ar}
+                  {isArabic ? m.name_ar || m.name || m.id : m.name || m.id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -335,10 +352,9 @@ export default function OperatorFocusView() {
             </SelectTrigger>
             <SelectContent>
               {filteredOrders.map((o) => {
-                const productLabel =
-                  (isArabic ? o.product_name_ar : o.product_name_en) ||
-                  o.product_name_ar ||
-                  "";
+                const productLabel = isArabic
+                  ? o.product_name_ar || o.product_name_en || ""
+                  : o.product_name_en || "";
                 return (
                   <SelectItem key={o.id} value={String(o.id)}>
                     <div className="flex flex-col leading-tight py-0.5">
@@ -403,14 +419,14 @@ export default function OperatorFocusView() {
   const rollsCount = parseInt(String(activeOrder.rolls_count || "0"), 10);
 
   const productName = isArabic
-    ? activeOrder.product_name_ar
-    : activeOrder.product_name_en || activeOrder.product_name_ar;
+    ? activeOrder.product_name_ar || activeOrder.product_name_en
+    : activeOrder.product_name_en;
   const colorName = isArabic
-    ? activeOrder.master_batch_name_ar
-    : activeOrder.master_batch_name_en || activeOrder.master_batch_name_ar;
+    ? activeOrder.master_batch_name_ar || activeOrder.master_batch_name_en
+    : activeOrder.master_batch_name_en;
   const customerName = isArabic
-    ? activeOrder.customer_name_ar
-    : activeOrder.customer_name_en || activeOrder.customer_name_ar;
+    ? activeOrder.customer_name_ar || activeOrder.customer_name_en
+    : activeOrder.customer_name_en;
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 p-2 md:p-4" dir={dir}>
