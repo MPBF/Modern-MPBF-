@@ -38,38 +38,48 @@ describe("order status policy", () => {
     expect(e.code).toBe("CONFLICT");
   });
 
-  it.each(["in_production", "paused", "cancelled", "completed"] as const)(
-    "restores each archived child before parent target %s",
-    (target) => {
+  it.each([
+    ["waiting", ["pending", "pending", "pending", "completed"]],
+    ["in_production", ["active", "active", "active", "completed"]],
+    ["paused", ["pending", "pending", "pending", "completed"]],
+    ["cancelled", ["cancelled", "cancelled", "cancelled", "completed"]],
+  ] as const)(
+    "maps archived incomplete children to parent target %s",
+    (target, expectedStatuses) => {
       const patches = planOrderChildTransition("archived", target, [
         { id: 1, status: "archived", previous_status: "pending" },
         { id: 2, status: "archived", previous_status: "active" },
         { id: 3, status: "archived", previous_status: "cancelled" },
         { id: 4, status: "archived", previous_status: null },
       ]);
-      expect(patches).toEqual([
-        { id: 1, status: "pending", previous_status: null },
-        { id: 2, status: "active", previous_status: null },
-        { id: 3, status: "cancelled", previous_status: null },
-        { id: 4, status: "completed", previous_status: null },
-      ]);
+      expect(patches.map((patch) => patch.status)).toEqual(expectedStatuses);
+      expect(patches.every((patch) => patch.previous_status === null)).toBe(true);
     },
   );
 
   it("plans exact mappings without production_stage writes", () => {
     const patches = [
       ...planOrderChildTransition("waiting", "in_production", [
-        { id: 1, status: "pending" }, { id: 2, status: "completed" },
+        { id: 1, status: "pending" }, { id: 2, status: "cancelled" },
+        { id: 3, status: "completed" },
       ]),
       ...planOrderChildTransition("in_production", "paused", [
-        { id: 3, status: "active" },
+        { id: 4, status: "active" },
       ]),
       ...planOrderChildTransition("paused", "cancelled", [
-        { id: 4, status: "pending" }, { id: 5, status: "active" },
+        { id: 5, status: "pending" }, { id: 6, status: "active" },
       ]),
     ];
-    expect(patches.map((p) => p.status)).toEqual(["active", "pending", "cancelled", "cancelled"]);
+    expect(patches.map((p) => p.status)).toEqual(["active", "active", "pending", "cancelled", "cancelled"]);
     expect(patches.every((p) => !("production_stage" in p))).toBe(true);
+  });
+
+  it("keeps completed children completed for all direct parent mappings", () => {
+    for (const target of ["waiting", "in_production", "paused", "cancelled", "archived"] as const) {
+      expect(planOrderChildTransition("waiting", target, [
+        { id: 1, status: "completed" },
+      ])).toEqual([]);
+    }
   });
 
   it("same archived status is bookkeeping-neutral", () => {
@@ -78,13 +88,29 @@ describe("order status policy", () => {
     ])).toEqual([]);
   });
 
+  it("repairs incomplete children when the parent status is submitted again", () => {
+    expect(planOrderChildTransition("in_production", "in_production", [
+      { id: 1, status: "pending" },
+      { id: 2, status: "cancelled" },
+      { id: 3, status: "completed" },
+    ])).toEqual([
+      { id: 1, status: "active" },
+      { id: 2, status: "active" },
+    ]);
+
+    expect(planOrderChildTransition("waiting", "waiting", [
+      { id: 1, status: "active" },
+      { id: 2, status: "completed" },
+    ])).toEqual([{ id: 1, status: "pending" }]);
+  });
+
   it("guards normal completion but permits archived restoration", () => {
     expect(() => planOrderChildTransition("in_production", "completed", [
       { id: 1, status: "active" },
     ])).toThrow(expect.objectContaining({ code: "COMPLETION_GUARD" }));
-    expect(planOrderChildTransition("archived", "completed", [
+    expect(() => planOrderChildTransition("archived", "completed", [
       { id: 1, status: "archived", previous_status: "active" },
-    ])).toEqual([{ id: 1, status: "active", previous_status: null }]);
+    ])).toThrow(expect.objectContaining({ code: "COMPLETION_GUARD" }));
   });
 
   it("maps domain errors to HTTP status without hiding DB failures", () => {

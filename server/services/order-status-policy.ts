@@ -79,24 +79,45 @@ export function planOrderChildTransition(
   target: ParentOrderStatus,
   children: ChildStatusSnapshot[],
 ): ChildStatusPatch[] {
-  if (current === target) return [];
-  if (target === "completed" && current !== "archived" &&
-      children.some((child) => child.status !== "completed")) {
+  const targetStatus =
+    target === "in_production" ? "active"
+    : ["waiting", "on_hold", "for_production", "paused"].includes(target) ? "pending"
+    : target === "cancelled" ? "cancelled"
+    : target === "archived" ? "archived"
+    : null;
+
+  const effectiveStatus = (child: ChildStatusSnapshot) =>
+    current === "archived" && child.status === "archived"
+      ? child.previous_status || "completed"
+      : child.status;
+
+  if (target === "completed" &&
+      children.some((child) => effectiveStatus(child) !== "completed")) {
     throw new OrderDomainError("COMPLETION_GUARD", "Cannot complete order until every production order is completed");
   }
-  if (current === "archived") {
-    return children.filter((c) => c.status === "archived").map((c) => ({
-      id: c.id, status: c.previous_status || "completed", previous_status: null,
-    }));
+
+  if (current === "archived" && target !== "archived") {
+    return children
+      .filter((child) => child.status === "archived")
+      .map((child) => {
+        const restored = effectiveStatus(child);
+        return {
+          id: child.id,
+          status: targetStatus && restored !== "completed" ? targetStatus : restored,
+          previous_status: null,
+        };
+      });
   }
-  if (target === "in_production")
-    return children.filter((c) => c.status === "pending").map((c) => ({ id: c.id, status: "active" }));
-  if (target === "paused")
-    return children.filter((c) => c.status === "active").map((c) => ({ id: c.id, status: "pending" }));
-  if (target === "cancelled")
-    return children.filter((c) => c.status === "pending" || c.status === "active").map((c) => ({ id: c.id, status: "cancelled" }));
-  if (target === "archived")
-    return children.filter((c) => ["pending", "active", "completed", "cancelled"].includes(c.status))
-      .map((c) => ({ id: c.id, status: "archived", previous_status: c.status }));
+
+  if (targetStatus) {
+    return children
+      .filter((child) => child.status !== "completed" && child.status !== targetStatus)
+      .map((child) => ({
+        id: child.id,
+        status: targetStatus,
+        ...(target === "archived" ? { previous_status: child.status } : {}),
+      }));
+  }
+
   return [];
 }

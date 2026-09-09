@@ -475,9 +475,7 @@ export class OrdersStorage extends UsersStorage {
         if (!current) throw new OrderDomainError("NOT_FOUND", "Order not found");
         assertExpectedOrderStatus(current.status, expectedPreviousStatus);
         const isTransition = current.status !== status;
-        if (!isTransition) {
-          if (Object.keys(updates).length === 0) return current;
-        } else if (!(ORDER_STATUS_GRAPH[current.status as ParentOrderStatus] || []).includes(status as ParentOrderStatus)) {
+        if (isTransition && !(ORDER_STATUS_GRAPH[current.status as ParentOrderStatus] || []).includes(status as ParentOrderStatus)) {
           throw new OrderDomainError("INVALID_TRANSITION", `Invalid order status transition: ${current.status} -> ${status}`);
         }
 
@@ -499,40 +497,29 @@ export class OrdersStorage extends UsersStorage {
         else if (isTransition && current.status === "archived") parentSet.previous_status = null;
         else if (!isTransition) delete parentSet.status;
 
-        const [updated] = await tx.update(orders).set(parentSet)
-          .where(and(eq(orders.id, id), eq(orders.status, current.status)))
-          .returning();
-        if (!updated) throw new OrderDomainError("CONFLICT", "Order changed concurrently");
+        let updated = current;
+        if (Object.keys(parentSet).length > 0) {
+          const [written] = await tx.update(orders).set(parentSet)
+            .where(and(eq(orders.id, id), eq(orders.status, current.status)))
+            .returning();
+          if (!written) throw new OrderDomainError("CONFLICT", "Order changed concurrently");
+          updated = written;
+        }
 
         // Never touch production_stage: status synchronization only changes
         // status and (for archive bookkeeping) previous_status.
-        if (childPlan.length === 0) {
-          return updated;
-        } else if (current.status === "archived") {
-          // Unarchive always restores each child's own saved state first.
-          // The requested parent target must not remap those restored states.
-          await tx.execute(sql`
-            UPDATE production_orders
-            SET status = COALESCE(previous_status, 'completed'),
-                previous_status = NULL
-            WHERE order_id = ${id} AND status = 'archived'
-          `);
-        } else if (status === "in_production") {
-          await tx.update(production_orders).set({ status: "active" })
-            .where(and(eq(production_orders.order_id, id), eq(production_orders.status, "pending")));
-        } else if (status === "paused") {
-          await tx.update(production_orders).set({ status: "pending" })
-            .where(and(eq(production_orders.order_id, id), eq(production_orders.status, "active")));
-        } else if (status === "cancelled") {
-          await tx.update(production_orders).set({ status: "cancelled" })
-            .where(and(eq(production_orders.order_id, id), inArray(production_orders.status, ["pending", "active"])));
-        } else if (status === "archived") {
-          await tx.update(production_orders).set({
-            status: "archived", previous_status: sql`${production_orders.status}`,
-          }).where(and(
-            eq(production_orders.order_id, id),
-            inArray(production_orders.status, ["pending", "active", "completed", "cancelled"]),
-          ));
+        for (const patch of childPlan) {
+          await tx.update(production_orders)
+            .set({
+              status: patch.status,
+              ...(Object.prototype.hasOwnProperty.call(patch, "previous_status")
+                ? { previous_status: patch.previous_status }
+                : {}),
+            })
+            .where(and(
+              eq(production_orders.id, patch.id),
+              eq(production_orders.order_id, id),
+            ));
         }
         return updated;
       });
