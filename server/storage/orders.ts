@@ -514,22 +514,22 @@ export class OrdersStorage extends UsersStorage {
           await tx.execute(sql`
             UPDATE production_orders
             SET status = COALESCE(previous_status, 'completed'),
-                previous_status = NULL, updated_at = NOW()
+                previous_status = NULL
             WHERE order_id = ${id} AND status = 'archived'
           `);
         } else if (status === "in_production") {
-          await tx.update(production_orders).set({ status: "active", updated_at: new Date() } as any)
+          await tx.update(production_orders).set({ status: "active" })
             .where(and(eq(production_orders.order_id, id), eq(production_orders.status, "pending")));
         } else if (status === "paused") {
-          await tx.update(production_orders).set({ status: "pending", updated_at: new Date() } as any)
+          await tx.update(production_orders).set({ status: "pending" })
             .where(and(eq(production_orders.order_id, id), eq(production_orders.status, "active")));
         } else if (status === "cancelled") {
-          await tx.update(production_orders).set({ status: "cancelled", updated_at: new Date() } as any)
+          await tx.update(production_orders).set({ status: "cancelled" })
             .where(and(eq(production_orders.order_id, id), inArray(production_orders.status, ["pending", "active"])));
         } else if (status === "archived") {
           await tx.update(production_orders).set({
-            status: "archived", previous_status: sql`${production_orders.status}`, updated_at: new Date(),
-          } as any).where(and(
+            status: "archived", previous_status: sql`${production_orders.status}`,
+          }).where(and(
             eq(production_orders.order_id, id),
             inArray(production_orders.status, ["pending", "active", "completed", "cancelled"]),
           ));
