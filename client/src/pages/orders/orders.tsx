@@ -1,7 +1,7 @@
 import {
   orderStructureEditDecision,
   validProductionOrderStructure,
-} from "@shared/order-production-structure";
+} from "../../../../shared/order-production-structure";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, FileText, Package } from "lucide-react";
 import { useState, lazy, Suspense } from "react";
