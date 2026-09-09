@@ -102,10 +102,10 @@
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
     "mssql": "^12.6.0",
-    "multer": "^2.0.2",
+    "multer": "^2.3.0",
     "nanoid": "^5.1.16",
     "next-themes": "^0.4.6",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.0.1",
     "openai": "^5.23.2",
     "openid-client": "^6.8.1",
     "p-limit": "^7.2.0",
@@ -140,7 +140,7 @@
     "winston": "^3.19.0",
     "wouter": "^3.3.5",
     "ws": "^8.21.1",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.25.76",
     "zod-validation-error": "^3.5.4"
   },
@@ -202,7 +202,7 @@
     "bufferutil": "^4.0.8"
   },
   "overrides": {
-    "uuid": "14.0.0",
+    "uuid": "14.0.2",
     "@tootallnate/once": "3.0.1",
     "esbuild": "^0.25.12",
     "minimatch@3": {
@@ -217,15 +217,34 @@
     "picomatch": "4.0.5",
     "ip-address": "10.3.1",
     "ajv": {
-      "fast-uri": "4.1.2"
+      "fast-uri": "4.1.4"
     },
-    "hono": "4.13.3",
-    "dompurify": "3.4.14",
+    "hono": "4.13.7",
+    "dompurify": "3.4.15",
+    "@xmldom/xmldom": "0.9.12",
+    "browserslist": "4.28.9",
+    "baseline-browser-mapping": "2.11.21",
+    "qs": "6.16.0",
+    "three-stdlib": {
+      "fflate": "0.6.11"
+    },
+    "@types/three": {
+      "fflate": "0.6.11"
+    },
+    "jspdf": {
+      "fflate": "0.8.3"
+    },
+    "tailwindcss": {
+      "postcss-selector-parser": "6.1.3"
+    },
+    "postcss-nested": {
+      "postcss-selector-parser": "6.1.3"
+    },
     "@eslint/eslintrc": {
-      "js-yaml": "5.3.0"
+      "js-yaml": "5.4.1"
     },
     "@istanbuljs/load-nyc-config": {
-      "js-yaml": "5.3.0"
+      "js-yaml": "5.4.1"
     },
     "postcss": {
       "nanoid": "3.3.18"
