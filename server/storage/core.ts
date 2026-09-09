@@ -600,6 +600,10 @@ export async function withDatabaseErrorHandling<T>(
   try {
     return await operation();
   } catch (error) {
+    // Domain errors are part of the API contract, not database failures.
+    if (error instanceof Error && error.name === "OrderDomainError") {
+      throw error;
+    }
     handleDatabaseError(error, operationName, context);
   }
 }
@@ -679,6 +683,7 @@ export interface IStorage {
   }): Promise<NewOrder[]>;
   createOrder(insertOrder: InsertNewOrder): Promise<NewOrder>;
   updateOrder(id: number, orderUpdates: Partial<NewOrder>): Promise<NewOrder>;
+  transitionOrderStatus(id: number, status: string, updates?: Partial<NewOrder>, expectedPreviousStatus?: string | null): Promise<NewOrder>;
   updateOrderStatus(id: number, status: string): Promise<NewOrder>;
   updateOrderStatusWithPrevious(id: number, status: string, previousStatus: string | null): Promise<NewOrder>;
   getOrderById(id: number): Promise<NewOrder | undefined>;

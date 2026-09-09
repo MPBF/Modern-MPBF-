@@ -440,6 +440,7 @@
     "fetchCategoriesFailed": "Fetch Categories Failed",
     "loginRequired": "Login Required",
     "updateOrderFailed": "Failed to update order",
+    "structureEditBlocked": "Production-order products and quantities cannot be changed from this order dialog. Use production management to preserve linked rolls and receipts.",
     "generateOrderNumberFailed": "Generate Order Number Failed",
     "createOrderFailed": "Create Order Failed",
     "createProductionOrdersFailed": "Create Production Orders Failed",

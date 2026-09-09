@@ -448,6 +448,7 @@
     "fetchCategoriesFailed": "فشل في جلب الفئات",
     "loginRequired": "يجب تسجيل الدخول أولاً",
     "updateOrderFailed": "فشل في تحديث الطلب",
+    "structureEditBlocked": "لا يمكن تغيير أصناف أو كميات أوامر الإنتاج من نافذة تعديل الطلب. استخدم إدارة الإنتاج للحفاظ على الرولات والاستلامات المرتبطة.",
     "generateOrderNumberFailed": "فشل في توليد رقم الطلب",
     "createOrderFailed": "فشل في إنشاء الطلب",
     "createProductionOrdersFailed": "فشل في إنشاء أوامر الإنتاج",

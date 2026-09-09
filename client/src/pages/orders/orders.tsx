@@ -1,3 +1,7 @@
+import {
+  orderStructureEditDecision,
+  validProductionOrderStructure,
+} from "@shared/order-production-structure";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, FileText, Package } from "lucide-react";
 import { useState, lazy, Suspense } from "react";
@@ -344,6 +348,29 @@ export default function Orders() {
 
       // If editing, update the order
       if (editingOrder) {
+        const existingProdOrders = productionOrders.filter(
+          (po: any) => po.order_id === editingOrder.id,
+        );
+        const validProductionOrders = validProductionOrderStructure(
+          productionOrdersData,
+        );
+        const structureDecision = orderStructureEditDecision(
+          editingOrder.status,
+          existingProdOrders,
+          validProductionOrders,
+        );
+        if (structureDecision.blocked) {
+          toast({
+            title: t("messages.error"),
+            description: t("orders.structureEditBlocked", {
+              defaultValue:
+                "لا يمكن تغيير أصناف أو كميات أوامر الإنتاج من نافذة تعديل الطلب. استخدم إدارة الإنتاج للحفاظ على الرولات والاستلامات المرتبطة.",
+            }),
+            variant: "destructive",
+          });
+          return;
+        }
+
         const updateData = {
           order_number: editingOrder.order_number, // Include order number as required by API
           customer_id: data.customer_id,
@@ -366,49 +393,6 @@ export default function Orders() {
           const errorText = await updateResponse.text();
           console.error("خطأ في تحديث الطلب:", errorText);
           throw new Error(`${t("orders.updateOrderFailed")}: ${errorText}`);
-        }
-
-        // Always delete existing production orders for this order
-        // This ensures we recreate the entire set of production orders on save
-        const existingProdOrders = productionOrders.filter(
-          (po: any) => po.order_id === editingOrder.id,
-        );
-
-        for (const po of existingProdOrders) {
-          try {
-            await fetch(`/api/production-orders/${po.id}`, {
-              method: "DELETE",
-            });
-          } catch (error) {
-            console.error("خطأ في حذف أمر إنتاج قديم:", error);
-          }
-        }
-
-        // Create new production orders if any
-        const validProductionOrders = productionOrdersData.filter(
-          (prodOrder) =>
-            prodOrder.customer_product_id &&
-            prodOrder.customer_product_id !== "" &&
-            prodOrder.quantity_kg &&
-            prodOrder.quantity_kg > 0,
-        );
-
-        for (const prodOrder of validProductionOrders) {
-          try {
-            const productionOrderData = {
-              order_id: editingOrder.id,
-              customer_product_id: prodOrder.customer_product_id,
-              quantity_kg: prodOrder.quantity_kg,
-            };
-
-            await fetch("/api/production-orders", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(productionOrderData),
-            });
-          } catch (error) {
-            console.error("خطأ في إنشاء أمر إنتاج:", error);
-          }
         }
 
         // Refresh data
