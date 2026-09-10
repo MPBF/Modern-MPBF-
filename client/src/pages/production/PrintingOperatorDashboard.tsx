@@ -274,6 +274,17 @@ export default function PrintingOperatorDashboard({
   const selectedMachine = printingMachines.find(
     (m) => m.id === selectedMachineId,
   );
+  const handleMachineChange = (machineId: string) => {
+    const machine = printingMachines.find((item) => item.id === machineId);
+    setSelectedMachineId(machineId);
+    setIsEditingMachine(false);
+    toast({
+      title: ui("تم تغيير ماكينة الطباعة", "Printing machine changed"),
+      description: machine
+        ? localizedName(machine.name_ar, machine.name, machine.id)
+        : machineId,
+    });
+  };
 
   const mainContent = (
     <div className="space-y-4 pb-12">
@@ -303,7 +314,7 @@ export default function PrintingOperatorDashboard({
         <div className="flex items-center gap-2">
           <Select
             value={selectedMachineId}
-            onValueChange={setSelectedMachineId}
+            onValueChange={handleMachineChange}
             disabled={
               machinesLoading ||
               !machinePreferenceReady ||
@@ -318,9 +329,11 @@ export default function PrintingOperatorDashboard({
             <SelectContent>
               {printingMachines.map((machine) => (
                 <SelectItem key={machine.id} value={machine.id}>
-                  {isArabic
-                    ? `${machine.name_ar || machine.name} (${machine.id})`
-                    : machine.id}
+                  {localizedName(
+                    machine.name_ar,
+                    machine.name,
+                    machine.name_ar || machine.name || machine.id,
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>
