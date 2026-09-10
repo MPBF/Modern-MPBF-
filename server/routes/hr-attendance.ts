@@ -14,6 +14,7 @@ import {
   getActivePreviousNightShift,
   getShiftWindow,
   getSnapshotShiftType,
+  isCheckInAllowedForShift,
   isShiftType,
   resolveShiftAcrossMonthBoundary,
   resolveAssignmentSnapshot,
@@ -542,8 +543,11 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         if (
           status === "حاضر" &&
           assignedWindow &&
-          (nowTs.getTime() < assignedWindow.start.getTime() ||
-            nowTs.getTime() >= assignedWindow.end.getTime())
+          !isCheckInAllowedForShift(
+            assignedWindow,
+            resolvedAssignment!.snapshot,
+            nowTs,
+          )
         ) {
           return res.status(400).json({
             message: `يمكن تسجيل حضور وردية ${resolvedAssignment!.snapshot.name_ar} من ${resolvedAssignment!.snapshot.start_time} إلى ${resolvedAssignment!.snapshot.end_time}`,

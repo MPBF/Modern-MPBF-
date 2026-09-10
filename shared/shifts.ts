@@ -166,6 +166,27 @@ export function getShiftWindowForSnapshot(
   return { start, end };
 }
 
+/**
+ * Check-in may start before a fixed shift by its configured grace period.
+ * The shift window itself is not widened, so paid work still starts at the
+ * official shift start. Flexible shifts have no meaningful early boundary.
+ */
+export function isCheckInAllowedForShift(
+  window: ShiftWindow,
+  snapshot: ShiftSnapshot,
+  now: Date,
+): boolean {
+  const graceMs =
+    getSnapshotShiftType(snapshot) === "flexible"
+      ? 0
+      : Math.max(0, snapshot.grace_minutes) * 60_000;
+  const nowMs = now.getTime();
+  return (
+    nowMs >= window.start.getTime() - graceMs &&
+    nowMs < window.end.getTime()
+  );
+}
+
 export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
   if (!isShiftType(shift)) return null;
   const def = SHIFT_DEFINITIONS[shift];

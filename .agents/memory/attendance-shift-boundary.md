@@ -9,6 +9,8 @@ description: Rules for carrying previous-day attendance into the current day wit
 (base 07:00–15:00, overtime afterward). Night is 19:00–07:00 next day
 (base 19:00–03:00, overtime afterward). Flexible work is grouped by each
 calendar day 00:00–24:00 and cross-midnight sessions are split between days.
+For fixed shifts, `grace_minutes` also admits check-in before the scheduled
+start, but paid work remains clipped to the official shift start.
 
 Previous-day night attendance stays attached to its 19:00 start date. Its open
 session must remain available for checkout the following morning even after
@@ -21,7 +23,8 @@ session. Before 07:00 at a month boundary, use the prior shift-start month's
 assignment exclusively, not the new month's future roster.
 
 **Why:** The user confirmed these fixed schedules and requested a third
-calendar-day flexible shift. Self-attendance stores actions as separate rows, so a check-in row
+calendar-day flexible shift. They also confirmed that a 30-minute grace on a
+19:00 shift must admit check-in from 18:30. Self-attendance stores actions as separate rows, so a check-in row
 retains a null checkout even after a later checkout row is inserted. Treating
 any such row from the last 24 hours as open caused yesterday's day session to
 block today's 07:00 check-in and could surface yesterday's final status.

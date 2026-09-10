@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   getShiftWindowForSnapshot,
+  isCheckInAllowedForShift,
   resolveAssignmentSnapshot,
   type ShiftSnapshot,
   computeShiftMetrics,
@@ -53,6 +54,43 @@ describe("snapshot shift resolver", () => {
     expect(metrics.lateMinutes).toBe(0);
     // 8 hours exceeds this template's 7.5 base hours.
     expect(metrics.overtimeHours).toBe(0.5);
+  });
+
+  it("admits check-in during the pre-shift grace without widening paid work", () => {
+    const snapshot: ShiftSnapshot = {
+      name_ar: "ليلية",
+      name_en: "Night",
+      start_time: "19:00",
+      end_time: "07:00",
+      grace_minutes: 30,
+      base_work_hours: 8,
+      kind: "night",
+    };
+    const window = getShiftWindowForSnapshot(snapshot, "2026-09-01");
+
+    expect(
+      isCheckInAllowedForShift(
+        window,
+        snapshot,
+        instant("2026-09-01T18:30:00"),
+      ),
+    ).toBe(true);
+    expect(
+      isCheckInAllowedForShift(
+        window,
+        snapshot,
+        instant("2026-09-01T18:29:00"),
+      ),
+    ).toBe(false);
+
+    const metrics = computeShiftMetrics({
+      shift: "night",
+      dateStr: "2026-09-01",
+      snapshot,
+      checkIn: instant("2026-09-01T18:30:00"),
+      checkOut: instant("2026-09-02T03:00:00"),
+    });
+    expect(metrics.workedHours).toBe(8);
   });
 
   it("counts fixed day overtime only after 15:00", () => {
