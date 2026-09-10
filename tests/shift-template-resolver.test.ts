@@ -16,6 +16,10 @@ const night: ShiftSnapshot = {
   name_ar: "ليل", start_time: "20:15", end_time: "05:45",
   grace_minutes: 0, base_work_hours: 8,
 };
+const flexible: ShiftSnapshot = {
+  name_ar: "حرة", start_time: "00:00", end_time: "00:00",
+  grace_minutes: 0, base_work_hours: 8, kind: "flexible",
+};
 
 describe("snapshot shift resolver", () => {
   it("uses arbitrary-minute template windows and exclusive end", () => {
@@ -49,5 +53,87 @@ describe("snapshot shift resolver", () => {
     expect(metrics.lateMinutes).toBe(0);
     // 8 hours exceeds this template's 7.5 base hours.
     expect(metrics.overtimeHours).toBe(0.5);
+  });
+
+  it("counts fixed day overtime only after 15:00", () => {
+    const metrics = computeShiftMetrics({
+      shift: "day",
+      dateStr: "2026-09-01",
+      checkIn: instant("2026-09-01T08:00:00"),
+      checkOut: instant("2026-09-01T16:00:00"),
+    });
+    expect(metrics.workedHours).toBe(8);
+    expect(metrics.overtimeHours).toBe(1);
+    expect(metrics.earlyLeaveMinutes).toBe(0);
+  });
+
+  it("counts fixed night overtime from 03:00 until 07:00", () => {
+    const metrics = computeShiftMetrics({
+      shift: "night",
+      dateStr: "2026-09-01",
+      checkIn: instant("2026-09-01T19:00:00"),
+      checkOut: instant("2026-09-02T06:00:00"),
+    });
+    expect(metrics.workedHours).toBe(11);
+    expect(metrics.overtimeHours).toBe(3);
+    expect(metrics.earlyLeaveMinutes).toBe(0);
+  });
+
+  it("deducts breaks that occur during the overtime window", () => {
+    const metrics = computeShiftMetrics({
+      shift: "day",
+      dateStr: "2026-09-01",
+      checkIn: instant("2026-09-01T07:00:00"),
+      checkOut: instant("2026-09-01T19:00:00"),
+      breakMinutes: 60,
+      overtimeBreakMinutes: 60,
+    });
+    expect(metrics.workedHours).toBe(11);
+    expect(metrics.overtimeHours).toBe(3);
+  });
+
+  it("deducts withdrawals from fixed-shift overtime before base hours", () => {
+    const metrics = computeShiftMetrics({
+      shift: "day",
+      dateStr: "2026-09-01",
+      checkIn: instant("2026-09-01T07:00:00"),
+      checkOut: instant("2026-09-01T19:00:00"),
+      withdrawnMinutes: 60,
+      overtimeWithdrawnMinutes: 60,
+    });
+    expect(metrics.workedHours).toBe(11);
+    expect(metrics.overtimeHours).toBe(3);
+  });
+
+  it("splits flexible work at the calendar-day boundary", () => {
+    const firstDay = computeShiftMetrics({
+      shift: "flexible",
+      dateStr: "2026-09-01",
+      snapshot: flexible,
+      checkIn: instant("2026-09-01T23:00:00"),
+      checkOut: instant("2026-09-02T02:00:00"),
+    });
+    const secondDay = computeShiftMetrics({
+      shift: "flexible",
+      dateStr: "2026-09-02",
+      snapshot: flexible,
+      checkIn: instant("2026-09-01T23:00:00"),
+      checkOut: instant("2026-09-02T02:00:00"),
+    });
+    expect(firstDay.workedHours).toBe(1);
+    expect(secondDay.workedHours).toBe(2);
+    expect(firstDay.lateMinutes).toBe(0);
+    expect(secondDay.earlyLeaveMinutes).toBe(0);
+  });
+
+  it("resolves a flexible assignment as one calendar day", () => {
+    const result = resolveAssignmentSnapshot(
+      { id: 3, shift_snapshot: flexible },
+      null,
+      instant("2026-09-01T23:59:59"),
+    );
+    expect(result?.attendanceDate).toBe("2026-09-01");
+    expect(result?.window.start).toEqual(instant("2026-09-01T00:00:00"));
+    expect(result?.window.end).toEqual(instant("2026-09-02T00:00:00"));
   });
 });

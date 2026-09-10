@@ -13,6 +13,30 @@ import { notificationService, addJsonSheet, getAuthUserId } from "./shared";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 
+const FIXED_SHIFT_SCHEDULES = {
+  day: { start: "07:00", end: "19:00" },
+  night: { start: "19:00", end: "07:00" },
+  flexible: { start: "00:00", end: "00:00" },
+} as const;
+
+function isCanonicalShiftTemplate(template: {
+  kind: string;
+  start_time: string;
+  end_time: string;
+  base_work_hours: string | number;
+}) {
+  const schedule =
+    FIXED_SHIFT_SCHEDULES[
+      template.kind as keyof typeof FIXED_SHIFT_SCHEDULES
+    ];
+  return (
+    !!schedule &&
+    template.start_time === schedule.start &&
+    template.end_time === schedule.end &&
+    Number(template.base_work_hours) === 8
+  );
+}
+
 const shiftTemplateInput = z
   .object({
     name_ar: z.string().trim().min(1, "اسم القالب مطلوب"),
@@ -22,6 +46,7 @@ const shiftTemplateInput = z
       .optional()
       .nullable()
       .transform((value) => value || null),
+    kind: z.enum(["day", "night", "flexible"]),
     start_time: z.string(),
     end_time: z.string(),
     grace_minutes: z.coerce.number().int().min(0).max(180),
@@ -35,15 +60,20 @@ const shiftTemplateInput = z
     const time = /^([01]\d|2[0-3]):[0-5]\d$/;
     if (!time.test(value.start_time)) ctx.addIssue({ code: "custom", path: ["start_time"], message: "وقت البداية يجب أن يكون HH:mm" });
     if (!time.test(value.end_time)) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية يجب أن يكون HH:mm" });
-    if (value.start_time === value.end_time) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية لا يساوي البداية" });
+    if (value.kind !== "flexible" && value.start_time === value.end_time) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية لا يساوي البداية" });
     const graceMinutes = value.grace_minutes ?? 0;
     if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 180) ctx.addIssue({ code: "custom", path: ["grace_minutes"], message: "فترة السماح من 0 إلى 180" });
     const hours = Number(value.base_work_hours);
     const [sh, sm] = value.start_time.split(":").map(Number);
     const [eh, em] = value.end_time.split(":").map(Number);
-    const duration = ((eh * 60 + em - sh * 60 - sm + 1440) % 1440) / 60;
+    const duration = value.kind === "flexible"
+      ? 24
+      : ((eh * 60 + em - sh * 60 - sm + 1440) % 1440) / 60;
     if (!(hours > 0) || hours > duration || Math.round(hours * 4) !== hours * 4)
       ctx.addIssue({ code: "custom", path: ["base_work_hours"], message: "الساعات الأساسية يجب أن تكون أرباع ساعة ضمن مدة الوردية" });
+    if (!isCanonicalShiftTemplate(value)) {
+      ctx.addIssue({ code: "custom", path: ["kind"], message: "يجب استخدام أحد تعريفات الورديات الثابتة" });
+    }
   });
 
 function parseSectionIdsQuery(
@@ -482,8 +512,11 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
         const entries = [];
         const deleteUserIds: number[] = [];
         const seenUserIds = new Set<number>();
+        const allTemplates = await storage.getShiftTemplates();
         const activeTemplates = new Map(
-          (await storage.getShiftTemplates(true)).map((template: any) => [template.id, template]),
+          allTemplates
+            .filter((template: any) => template.active)
+            .map((template: any) => [template.id, template]),
         );
         for (const e of rawEntries) {
           const userId = parseInt(String(e.user_id), 10);
@@ -507,8 +540,21 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
           if (e.shift_template_id != null && !template) {
             return res.status(400).json({ message: "القالب المحدد غير موجود أو معطل", user_id: userId });
           }
+          const existingAssignment = roster.rows.find(
+            (row: any) => row.employee.id === userId,
+          )?.assignment;
+          if (
+            template &&
+            !isCanonicalShiftTemplate(template) &&
+            existingAssignment?.shift_template_id !== template.id
+          ) {
+            return res.status(400).json({
+              message: "لا يمكن تعيين قالب قديم؛ اختر النهارية أو الليلية أو الحرة",
+              user_id: userId,
+            });
+          }
           const legacyShift = template
-            ? (template.end_time < template.start_time ? "night" : "day")
+            ? template.kind
             : e.shift;
           if (!isShiftType(legacyShift)) {
             return res
@@ -522,7 +568,8 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
             shift: legacyShift,
             shift_template_id: template?.id ?? null,
             shift_snapshot: template ? {
-              template_id: template.id, name_ar: template.name_ar, name_en: template.name_en,
+                template_id: template.id, name_ar: template.name_ar, name_en: template.name_en,
+                kind: template.kind,
               start_time: template.start_time, end_time: template.end_time,
               grace_minutes: template.grace_minutes, base_work_hours: Number(template.base_work_hours),
             } : undefined,

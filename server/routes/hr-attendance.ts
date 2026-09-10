@@ -13,6 +13,7 @@ import {
   getAttendanceDateForShift,
   getActivePreviousNightShift,
   getShiftWindow,
+  getSnapshotShiftType,
   isShiftType,
   resolveShiftAcrossMonthBoundary,
   resolveAssignmentSnapshot,
@@ -25,7 +26,7 @@ import { notificationService, notificationManagerHolder, getAuthUserId, parseRou
 async function getAssignedShiftForInstant(
   userId: number,
   now: Date,
-): Promise<"day" | "night" | null> {
+): Promise<import("@shared/shifts").ShiftType | null> {
   const today = factoryNowParts(now);
   const currentAssignment = await storage.getShiftAssignmentForUserMonth(
     userId,
@@ -176,8 +177,14 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const factoryToday = factoryNowParts(now);
         const requestedDate = (req.query.date as string) || factoryToday.dateStr;
         const resolvedAssignment = await getResolvedAssignmentForInstant(userId, now);
-        const date =
-          requestedDate === factoryToday.dateStr && resolvedAssignment
+        const openSession =
+          requestedDate === factoryToday.dateStr
+            ? await storage.findOpenCheckIn(userId)
+            : null;
+        const openSnapshot = openSession?.shift_snapshot as any;
+        const date = openSession
+          ? String(openSession.date).slice(0, 10)
+          : requestedDate === factoryToday.dateStr && resolvedAssignment
             ? resolvedAssignment.attendanceDate
             : requestedDate;
         const baseNightWindow =
@@ -197,17 +204,24 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const status = await storage.getDailyAttendanceStatus(
           userId,
           date,
-          currentNightWindow,
+          openSession ? undefined : currentNightWindow,
         );
+        const displayedSnapshot = openSnapshot ?? resolvedAssignment?.snapshot;
         res.json({
           ...status,
           shift_assigned: !!resolvedAssignment,
-          assigned_shift: resolvedAssignment
+          assigned_shift: displayedSnapshot
             ? {
-                assignment_id: resolvedAssignment.assignmentId ?? null,
-                template_id: resolvedAssignment.snapshot.template_id ?? null,
-                ...resolvedAssignment.snapshot,
-                attendance_date: resolvedAssignment.attendanceDate,
+                assignment_id:
+                  openSession?.shift_assignment_id ??
+                  resolvedAssignment?.assignmentId ??
+                  null,
+                template_id:
+                  openSession?.shift_template_id ??
+                  displayedSnapshot.template_id ??
+                  null,
+                ...displayedSnapshot,
+                attendance_date: date,
               }
             : null,
         });
@@ -511,7 +525,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           nowTs,
         );
         const assignedShift = resolvedAssignment
-          ? (resolvedAssignment.snapshot.end_time < resolvedAssignment.snapshot.start_time ? "night" : "day")
+          ? getSnapshotShiftType(resolvedAssignment.snapshot)
           : null;
         const attendanceDate = assignedShift
           ? resolvedAssignment!.attendanceDate
@@ -568,7 +582,12 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           // factory's Riyadh calendar, not the browser/UTC calendar.
           date: openSession?.date ?? attendanceDate,
           ...(assignedShift && {
-            shift_type: assignedShift === "night" ? "ليلي" : "صباحي",
+            shift_type:
+              assignedShift === "night"
+                ? "ليلي"
+                : assignedShift === "flexible"
+                  ? "حر"
+                  : "صباحي",
           }),
           ...(status === "حاضر" && resolvedAssignment && {
             shift_assignment_id: resolvedAssignment.assignmentId ?? null,

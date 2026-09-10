@@ -9,6 +9,7 @@ import {
   getShiftWindow,
   getShiftWindowForSnapshot,
   isShiftType,
+  getSnapshotShiftType,
   type ShiftType,
   type ShiftSnapshot,
 } from "@shared/shifts";
@@ -25,6 +26,7 @@ export interface RawAttendanceRow {
   break_end_time: Date | string | null;
   total_withdrawn_minutes: number | null;
   date: string;
+  shift_snapshot?: ShiftSnapshot | null;
 }
 
 /** خريطة الوردية لكل شهر: المفتاح "YYYY-M" → نوع الوردية. */
@@ -101,6 +103,53 @@ function addDays(dateStr: string, days: number): string {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+function overlapMinutes(
+  start: Date,
+  end: Date,
+  windowStart: Date,
+  windowEnd: Date,
+): number {
+  return Math.max(
+    0,
+    (Math.min(end.getTime(), windowEnd.getTime()) -
+      Math.max(start.getTime(), windowStart.getTime())) /
+      60000,
+  );
+}
+
+function pairTimestampIntervals(
+  starts: Date[],
+  ends: Date[],
+): Array<{ start: Date; end: Date | null; capAt: Date | null }> {
+  const sortedStarts = [...starts].sort((a, b) => a.getTime() - b.getTime());
+  const sortedEnds = [...ends].sort((a, b) => a.getTime() - b.getTime());
+  const intervals: Array<{
+    start: Date;
+    end: Date | null;
+    capAt: Date | null;
+  }> = [];
+  let endIndex = 0;
+  for (let index = 0; index < sortedStarts.length; index++) {
+    const start = sortedStarts[index];
+    const nextStart = sortedStarts[index + 1];
+    while (
+      endIndex < sortedEnds.length &&
+      sortedEnds[endIndex].getTime() < start.getTime()
+    ) {
+      endIndex++;
+    }
+    const candidate = sortedEnds[endIndex];
+    const end =
+      candidate &&
+      (!nextStart || candidate.getTime() <= nextStart.getTime())
+        ? candidate
+        : null;
+    if (end) endIndex++;
+    intervals.push({ start, end, capAt: end ?? nextStart ?? null });
+  }
+  return intervals;
+}
+
 /**
  * يحسب نتيجة الحضور لموظف واحد عبر مدى تواريخ.
  * @param rows سجلات الحضور الخام للموظف ضمن المدى (مع يوم هامش قبل/بعد).
@@ -114,6 +163,8 @@ export interface AttendanceComputeOptions {
    * التأخير ثم المغادرة المبكرة ثم الانسحاب لذلك اليوم (لا تُحتسب خصماً).
    */
   permissionMinutesByDate?: Map<string, number>;
+  /** فترات الانسحاب الفعلية لتقسيمها بدقة عند عبور منتصف الليل. */
+  withdrawalIntervals?: Array<{ start: Date; end: Date }>;
 }
 
 export function computeEmployeeAttendance(
@@ -134,6 +185,7 @@ export function computeEmployeeAttendance(
     }
   }
   const permissionByDate = options.permissionMinutesByDate;
+  const withdrawalIntervals = options.withdrawalIntervals ?? [];
 
   // طبّع صفوف الحضور إلى لحظاتها الخام مرة واحدة. ملاحظة مهمة: لوحة الموظف
   // تُنشئ صفاً منفصلاً لكل إجراء (حضور/استراحة/عودة/انصراف)، لذا قد توجد عدة
@@ -148,7 +200,49 @@ export function computeEmployeeAttendance(
     breakStart: toDate(r.break_start_time),
     breakEnd: toDate(r.break_end_time),
     withdrawn: r.total_withdrawn_minutes || 0,
+    snapshot: r.shift_snapshot ?? null,
   }));
+  const workSessions = pairTimestampIntervals(
+    normalized.flatMap((row) => (row.checkIn ? [row.checkIn] : [])),
+    normalized.flatMap((row) => (row.checkOut ? [row.checkOut] : [])),
+  ).map((session) => ({
+    ...session,
+    ...(() => {
+      const source = normalized.find(
+        (row) =>
+          row.checkIn?.getTime() === session.start.getTime(),
+      );
+      return {
+        snapshot: source?.snapshot ?? null,
+        attendanceDate: source?.date ?? null,
+        capAt:
+          session.end ??
+          (source?.date
+            ? new Date(
+                Math.min(
+                  session.capAt?.getTime() ?? Number.POSITIVE_INFINITY,
+                  getShiftWindow("flexible", source.date).end.getTime(),
+                ),
+              )
+            : session.capAt),
+      };
+    })(),
+  }));
+  const breakIntervals = [
+    ...pairTimestampIntervals(
+      normalized.flatMap((row) => (row.lunchStart ? [row.lunchStart] : [])),
+      normalized.flatMap((row) => (row.lunchEnd ? [row.lunchEnd] : [])),
+    ),
+    ...pairTimestampIntervals(
+      normalized.flatMap((row) => (row.breakStart ? [row.breakStart] : [])),
+      normalized.flatMap((row) => (row.breakEnd ? [row.breakEnd] : [])),
+    ),
+  ].filter(
+    (
+      interval,
+    ): interval is { start: Date; end: Date; capAt: Date | null } =>
+      interval.end != null,
+  );
 
   const minD = (cur: Date | null, cand: Date | null): Date | null =>
     cand && (!cur || cand.getTime() < cur.getTime()) ? cand : cur;
@@ -161,9 +255,25 @@ export function computeEmployeeAttendance(
     guard++;
     const [y, m] = cursor.split("-").map(Number);
     const configured = shiftByMonth.get(monthKey(y, m)) ?? null;
-    const snapshot = configured && typeof configured === "object" ? configured : null;
+    const calendarWindow = getShiftWindow("flexible", cursor);
+    const historicalFlexibleSnapshot =
+      workSessions.find(
+        (session) =>
+          session.snapshot &&
+          getSnapshotShiftType(session.snapshot) === "flexible" &&
+          session.start.getTime() < calendarWindow.end.getTime() &&
+          (session.end?.getTime() ??
+            session.capAt?.getTime() ??
+            (session.attendanceDate === cursor
+              ? calendarWindow.end.getTime()
+              : Number.NEGATIVE_INFINITY)) >
+            calendarWindow.start.getTime(),
+      )?.snapshot ?? null;
+    const snapshot =
+      historicalFlexibleSnapshot ??
+      (configured && typeof configured === "object" ? configured : null);
     const shift = snapshot
-      ? (snapshot.end_time < snapshot.start_time ? "night" : "day")
+      ? getSnapshotShiftType(snapshot)
       : configured;
 
     if (!shift || !isShiftType(shift)) {
@@ -203,45 +313,206 @@ export function computeEmployeeAttendance(
     let breakStart: Date | null = null;
     let breakEnd: Date | null = null;
     let withdrawnMinutes = 0;
+    let metrics;
+    if (shift === "flexible") {
+      const configuredIsFlexible =
+        configured === "flexible" ||
+        (configured &&
+          typeof configured === "object" &&
+          getSnapshotShiftType(configured) === "flexible");
+      const sessions = workSessions.filter(
+        (session) =>
+          (session.snapshot
+            ? getSnapshotShiftType(session.snapshot) === "flexible"
+            : configuredIsFlexible) &&
+          session.start.getTime() < end.getTime() &&
+          (session.end?.getTime() ??
+            session.capAt?.getTime() ??
+            (session.attendanceDate === cursor
+              ? end.getTime()
+              : Number.NEGATIVE_INFINITY)) >
+            start.getTime(),
+      );
+      earliestIn = sessions.length
+        ? new Date(
+            Math.max(
+              start.getTime(),
+              Math.min(...sessions.map((session) => session.start.getTime())),
+            ),
+          )
+        : null;
+      const completed = sessions.filter(
+        (session): session is typeof session & { end: Date } =>
+          session.end != null,
+      );
+      latestOut = completed.length
+        ? new Date(
+            Math.min(
+              end.getTime(),
+              Math.max(...completed.map((session) => session.end.getTime())),
+            ),
+          )
+        : null;
+      const grossMinutes = completed.reduce(
+        (sum, session) =>
+          sum + overlapMinutes(session.start, session.end, start, end),
+        0,
+      );
+      const breakMinutes = breakIntervals.reduce(
+        (sum, interval) =>
+          sum +
+          completed.reduce(
+            (sessionSum, session) =>
+              sessionSum +
+              overlapMinutes(
+                interval.start,
+                interval.end,
+                new Date(Math.max(start.getTime(), session.start.getTime())),
+                new Date(Math.min(end.getTime(), session.end.getTime())),
+              ),
+            0,
+          ),
+        0,
+      );
+      withdrawnMinutes = withdrawalIntervals.length
+        ? withdrawalIntervals.reduce(
+            (sum, interval) =>
+              sum +
+              completed.reduce(
+                (sessionSum, session) =>
+                  sessionSum +
+                  overlapMinutes(
+                    interval.start,
+                    interval.end,
+                    new Date(Math.max(start.getTime(), session.start.getTime())),
+                    new Date(Math.min(end.getTime(), session.end.getTime())),
+                  ),
+                0,
+              ),
+            0,
+          )
+        : normalized
+            .filter((row) => row.date === cursor)
+            .reduce((max, row) => Math.max(max, row.withdrawn), 0);
+      const workedHours = Math.max(
+        0,
+        (grossMinutes - breakMinutes - withdrawnMinutes) / 60,
+      );
+      const baseHours = snapshot?.base_work_hours ?? 8;
+      metrics = {
+        present: sessions.length > 0,
+        complete:
+          sessions.length > 0 &&
+          sessions.every((session) => session.end != null),
+        lateMinutes: 0,
+        earlyLeaveMinutes: 0,
+        workedHours: round2(workedHours),
+        overtimeHours: round2(Math.max(0, workedHours - baseHours)),
+      };
+    } else {
+      for (const row of normalized) {
+        const belongsToSession = row.date === cursor;
+        const rowInWindow =
+          belongsToSession ||
+          within(row.checkIn) ||
+          within(row.checkOut) ||
+          within(row.lunchStart) ||
+          within(row.lunchEnd) ||
+          within(row.breakStart) ||
+          within(row.breakEnd);
+        if (!rowInWindow) continue;
 
-    for (const row of normalized) {
-      const belongsToSession = row.date === cursor;
-      // عضوية اليوم/الوردية: أي ختم زمني للصف يقع داخل النافذة يربطه بهذا اليوم.
-      const rowInWindow =
-        belongsToSession ||
-        within(row.checkIn) ||
-        within(row.checkOut) ||
-        within(row.lunchStart) ||
-        within(row.lunchEnd) ||
-        within(row.breakStart) ||
-        within(row.breakEnd);
-      if (!rowInWindow) continue;
+        const accept = (stamp: Date | null) => belongsToSession || within(stamp);
+        if (accept(row.checkIn)) earliestIn = minD(earliestIn, row.checkIn);
+        if (accept(row.checkOut)) latestOut = maxD(latestOut, row.checkOut);
+        if (accept(row.lunchStart)) lunchStart = minD(lunchStart, row.lunchStart);
+        if (accept(row.lunchEnd)) lunchEnd = maxD(lunchEnd, row.lunchEnd);
+        if (accept(row.breakStart)) breakStart = minD(breakStart, row.breakStart);
+        if (accept(row.breakEnd)) breakEnd = maxD(breakEnd, row.breakEnd);
+        if (row.withdrawn > withdrawnMinutes) withdrawnMinutes = row.withdrawn;
+      }
 
-      const accept = (stamp: Date | null) => belongsToSession || within(stamp);
-      if (accept(row.checkIn)) earliestIn = minD(earliestIn, row.checkIn);
-      if (accept(row.checkOut)) latestOut = maxD(latestOut, row.checkOut);
-      if (accept(row.lunchStart)) lunchStart = minD(lunchStart, row.lunchStart);
-      if (accept(row.lunchEnd)) lunchEnd = maxD(lunchEnd, row.lunchEnd);
-      if (accept(row.breakStart)) breakStart = minD(breakStart, row.breakStart);
-      if (accept(row.breakEnd)) breakEnd = maxD(breakEnd, row.breakEnd);
-      // total_withdrawn_minutes قيمة تراكمية إجمالية لليوم → نأخذ الأكبر لا المجموع.
-      if (row.withdrawn > withdrawnMinutes) withdrawnMinutes = row.withdrawn;
+      const breakMinutes =
+        pairMinutes(lunchStart, lunchEnd) + pairMinutes(breakStart, breakEnd);
+      const baseEnd = new Date(
+        start.getTime() + (snapshot?.base_work_hours ?? 8) * 3600000,
+      );
+      if (withdrawalIntervals.length) {
+        withdrawnMinutes = withdrawalIntervals.reduce(
+          (sum, interval) =>
+            sum +
+            overlapMinutes(
+              interval.start,
+              interval.end,
+              earliestIn ?? start,
+              latestOut ?? end,
+            ),
+          0,
+        );
+      }
+      const overtimeBreakMinutes = breakIntervals.reduce(
+        (sum, interval) =>
+          sum +
+          overlapMinutes(
+            interval.start,
+            interval.end,
+            new Date(
+              Math.max(baseEnd.getTime(), earliestIn?.getTime() ?? baseEnd.getTime()),
+            ),
+            new Date(
+              Math.min(end.getTime(), latestOut?.getTime() ?? end.getTime()),
+            ),
+          ),
+        0,
+      );
+      const overtimeWithdrawnMinutes = withdrawalIntervals.length
+        ? withdrawalIntervals.reduce(
+            (sum, interval) =>
+              sum +
+              overlapMinutes(
+                interval.start,
+                interval.end,
+                new Date(
+                  Math.max(
+                    baseEnd.getTime(),
+                    earliestIn?.getTime() ?? baseEnd.getTime(),
+                  ),
+                ),
+                new Date(
+                  Math.min(end.getTime(), latestOut?.getTime() ?? end.getTime()),
+                ),
+              ),
+            0,
+          )
+        : Math.min(
+            withdrawnMinutes,
+            Math.max(
+              0,
+              (Math.min(
+                latestOut?.getTime() ?? start.getTime(),
+                end.getTime(),
+              ) -
+                Math.max(
+                  earliestIn?.getTime() ?? end.getTime(),
+                  baseEnd.getTime(),
+                )) /
+                60000 -
+                overtimeBreakMinutes,
+            ),
+          );
+      metrics = computeShiftMetrics({
+        shift,
+        dateStr: cursor,
+        checkIn: earliestIn,
+        checkOut: latestOut,
+        breakMinutes,
+        overtimeBreakMinutes,
+        overtimeWithdrawnMinutes,
+        withdrawnMinutes,
+        graceMinutes,
+        snapshot: snapshot ?? undefined,
+      });
     }
-
-    // احسب دقائق الاستراحة مرة واحدة من القيم المجمّعة (يمنع الاحتساب المزدوج).
-    const breakMinutes =
-      pairMinutes(lunchStart, lunchEnd) + pairMinutes(breakStart, breakEnd);
-
-    const metrics = computeShiftMetrics({
-      shift,
-      dateStr: cursor,
-      checkIn: earliestIn,
-      checkOut: latestOut,
-      breakMinutes,
-      withdrawnMinutes,
-      graceMinutes,
-      snapshot: snapshot ?? undefined,
-    });
 
     // خصم دقائق الاستئذان المعتمدة لهذا اليوم من التأخير ثم المغادرة
     // المبكرة ثم الانسحاب (الدقائق المعتمدة لا تُحتسب خصماً).

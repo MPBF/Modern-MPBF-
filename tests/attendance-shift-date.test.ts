@@ -50,6 +50,15 @@ describe("night-shift attendance date boundaries", () => {
     ).toBe("2026-09-01");
   });
 
+  it("uses the calendar date for flexible attendance", () => {
+    expect(
+      getAttendanceDateForShift("flexible", instant("2026-09-01T00:00:00")),
+    ).toBe("2026-09-01");
+    expect(
+      getAttendanceDateForShift("flexible", instant("2026-09-01T23:59:59")),
+    ).toBe("2026-09-01");
+  });
+
   it("excludes a morning checkout from the new 19:00 night session", () => {
     const window = getShiftWindow("night", "2026-09-01");
     const records = [

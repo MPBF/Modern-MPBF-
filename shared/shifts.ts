@@ -9,7 +9,7 @@
 // نقارنها مباشرة بطوابع الحضور (check_in/check_out) كلحظات. الفروق الزمنية
 // بين اللحظات مستقلة عن المنطقة الزمنية، فالحساب صحيح بغض النظر عن منطقة الخادم.
 
-export type ShiftType = "day" | "night";
+export type ShiftType = "day" | "night" | "flexible";
 
 export const FACTORY_UTC_OFFSET_HOURS = 3; // آسيا/الرياض
 
@@ -31,6 +31,8 @@ export interface ShiftDefinition {
   crossesMidnight: boolean;
   /** إجمالي مدة الوردية بالساعات. */
   totalHours: number;
+  /** نهاية ساعات العمل الأساسية، وما بعدها إضافي. */
+  baseEndHour: number;
 }
 
 export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
@@ -42,6 +44,7 @@ export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
     endHour: 19,
     crossesMidnight: false,
     totalHours: 12,
+    baseEndHour: 15,
   },
   night: {
     type: "night",
@@ -51,11 +54,22 @@ export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
     endHour: 7,
     crossesMidnight: true,
     totalHours: 12,
+    baseEndHour: 3,
+  },
+  flexible: {
+    type: "flexible",
+    name_ar: "حرة",
+    name_en: "Flexible",
+    startHour: 0,
+    endHour: 0,
+    crossesMidnight: false,
+    totalHours: 24,
+    baseEndHour: 8,
   },
 };
 
 export function isShiftType(value: unknown): value is ShiftType {
-  return value === "day" || value === "night";
+  return value === "day" || value === "night" || value === "flexible";
 }
 
 export function getShiftName(shift: ShiftType, lang: "ar" | "en" = "ar"): string {
@@ -116,6 +130,7 @@ export interface ShiftSnapshot {
   end_time: string; // HH:mm
   grace_minutes: number;
   base_work_hours: number;
+  kind?: ShiftType;
 }
 
 export interface ResolvedShift {
@@ -140,7 +155,9 @@ export function getShiftWindowForSnapshot(
   const startParts = wallTimeParts(snapshot.start_time);
   const endParts = wallTimeParts(snapshot.end_time);
   const start = factoryWallToInstant(y, m, d, startParts.hour, startParts.minute);
-  const nextDay = snapshot.end_time < snapshot.start_time;
+  const nextDay =
+    snapshot.kind === "flexible" ||
+    snapshot.end_time < snapshot.start_time;
   const endDate = nextDay ? new Date(Date.UTC(y, m - 1, d + 1)) : new Date(Date.UTC(y, m - 1, d));
   const end = factoryWallToInstant(
     endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, endDate.getUTCDate(),
@@ -156,8 +173,13 @@ export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
     name_ar: def.name_ar, name_en: def.name_en,
     start_time: `${String(def.startHour).padStart(2, "0")}:00`,
     end_time: `${String(def.endHour).padStart(2, "0")}:00`,
-    grace_minutes: 0, base_work_hours: BASE_WORK_HOURS,
+    grace_minutes: 0, base_work_hours: BASE_WORK_HOURS, kind: shift,
   };
+}
+
+export function getSnapshotShiftType(snapshot: ShiftSnapshot): ShiftType {
+  if (snapshot.kind && isShiftType(snapshot.kind)) return snapshot.kind;
+  return snapshot.end_time < snapshot.start_time ? "night" : "day";
 }
 
 /**
@@ -200,7 +222,7 @@ export function getShiftWindow(shift: ShiftType, dateStr: string): ShiftWindow {
   const { y, m, d } = parseDateStr(dateStr);
   const start = factoryWallToInstant(y, m, d, def.startHour, 0);
   let end: Date;
-  if (def.crossesMidnight) {
+  if (def.crossesMidnight || shift === "flexible") {
     // النهاية في اليوم التالي
     const next = new Date(Date.UTC(y, m - 1, d + 1));
     end = factoryWallToInstant(
@@ -277,6 +299,10 @@ export interface AttendanceMetricsInput {
   checkOut: Date | null;
   /** مجموع دقائق الاستراحة. */
   breakMinutes?: number;
+  /** جزء الاستراحة الواقع داخل نافذة الإضافي. */
+  overtimeBreakMinutes?: number;
+  /** دقائق الانسحاب المخصومة من نافذة الإضافي أولاً عند غياب تفصيل زمني. */
+  overtimeWithdrawnMinutes?: number;
   /** مجموع دقائق الانسحاب من نطاق المصنع (تُخصم من العمل). */
   withdrawnMinutes?: number;
   /** فترة السماح بالدقائق. */
@@ -301,6 +327,24 @@ export interface AttendanceMetrics {
   overtimeHours: number;
 }
 
+function getBaseEnd(
+  shift: ShiftType,
+  dateStr: string,
+  snapshot?: ShiftSnapshot,
+): Date {
+  const { y, m, d } = parseDateStr(dateStr);
+  if (snapshot && getSnapshotShiftType(snapshot) === "flexible") {
+    return getShiftWindowForSnapshot(snapshot, dateStr).end;
+  }
+  const type = snapshot ? getSnapshotShiftType(snapshot) : shift;
+  const startParts = snapshot
+    ? wallTimeParts(snapshot.start_time)
+    : { hour: SHIFT_DEFINITIONS[type].startHour, minute: 0 };
+  const baseHours = snapshot?.base_work_hours ?? BASE_WORK_HOURS;
+  const start = factoryWallToInstant(y, m, d, startParts.hour, startParts.minute);
+  return new Date(start.getTime() + baseHours * 3600000);
+}
+
 function roundHours(h: number): number {
   return Math.round(h * 100) / 100;
 }
@@ -323,32 +367,50 @@ export function computeShiftMetrics(
   const present = !!input.checkIn;
   const complete = !!input.checkIn && !!input.checkOut;
 
+  const effectiveShift = input.snapshot
+    ? getSnapshotShiftType(input.snapshot)
+    : input.shift;
+  const baseEnd = getBaseEnd(effectiveShift, input.dateStr, input.snapshot);
+
   let lateMinutes = 0;
-  if (input.checkIn) {
+  if (input.checkIn && effectiveShift !== "flexible") {
     const diffMin = (input.checkIn.getTime() - start.getTime()) / 60000;
     lateMinutes = Math.max(0, Math.round(diffMin - grace));
   }
 
   let earlyLeaveMinutes = 0;
-  if (input.checkOut) {
-    const diffMin = (end.getTime() - input.checkOut.getTime()) / 60000;
+  if (input.checkOut && effectiveShift !== "flexible") {
+    const diffMin = (baseEnd.getTime() - input.checkOut.getTime()) / 60000;
     earlyLeaveMinutes = Math.max(0, Math.round(diffMin - grace));
   }
 
   let workedHours = 0;
+  let overtimeHours = 0;
   if (input.checkIn && input.checkOut) {
-    const grossHours =
-      (input.checkOut.getTime() - input.checkIn.getTime()) / 3600000;
+    const boundedIn = Math.max(input.checkIn.getTime(), start.getTime());
+    const boundedOut = Math.min(input.checkOut.getTime(), end.getTime());
+    const grossHours = Math.max(0, boundedOut - boundedIn) / 3600000;
     workedHours = Math.max(
       0,
       grossHours - breakMinutes / 60 - withdrawnMinutes / 60,
     );
+    if (effectiveShift === "flexible") {
+      overtimeHours = Math.max(
+        0,
+        workedHours -
+          (input.baseWorkHours ??
+            input.snapshot?.base_work_hours ??
+            BASE_WORK_HOURS),
+      );
+    } else {
+      const overtimeStart = Math.max(boundedIn, baseEnd.getTime());
+      const overtimeGross =
+        Math.max(0, boundedOut - overtimeStart) / 3600000 -
+        Math.max(0, input.overtimeBreakMinutes ?? 0) / 60 -
+        Math.max(0, input.overtimeWithdrawnMinutes ?? 0) / 60;
+      overtimeHours = Math.min(workedHours, Math.max(0, overtimeGross));
+    }
   }
-
-  const overtimeHours =
-    complete && workedHours > (input.baseWorkHours ?? input.snapshot?.base_work_hours ?? BASE_WORK_HOURS)
-      ? workedHours - (input.baseWorkHours ?? input.snapshot?.base_work_hours ?? BASE_WORK_HOURS)
-      : 0;
 
   return {
     present,
@@ -356,6 +418,6 @@ export function computeShiftMetrics(
     lateMinutes,
     earlyLeaveMinutes,
     workedHours: roundHours(workedHours),
-    overtimeHours: roundHours(overtimeHours),
+    overtimeHours: complete ? roundHours(overtimeHours) : 0,
   };
 }

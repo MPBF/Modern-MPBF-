@@ -1513,15 +1513,29 @@ export class HrStorage extends MachinesStorage {
       async () => {
         const fetchFrom = this.addDaysStr(from, -1);
         const fetchTo = this.addDaysStr(to, 1);
-        const rows = await db
-          .select()
-          .from(attendance)
-          .where(
-            and(
-              eq(attendance.user_id, userId),
-              sql`${attendance.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+        const [rows, withdrawalRows] = await Promise.all([
+          db
+            .select()
+            .from(attendance)
+            .where(
+              and(
+                eq(attendance.user_id, userId),
+                sql`${attendance.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+              ),
             ),
-          );
+          db
+            .select({
+              started_at: attendance_withdrawals.started_at,
+              ended_at: attendance_withdrawals.ended_at,
+            })
+            .from(attendance_withdrawals)
+            .where(
+              and(
+                eq(attendance_withdrawals.user_id, userId),
+                sql`${attendance_withdrawals.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+              ),
+            ),
+        ]);
         const assignments = await this.getShiftAssignmentsForUser(userId);
         const shiftMap = this.buildShiftMap(assignments);
         const permByUser = await this.getApprovedPermissionMinutes(
@@ -1531,6 +1545,10 @@ export class HrStorage extends MachinesStorage {
         );
         return computeEmployeeAttendance(rows as any, shiftMap, from, to, 0, {
           permissionMinutesByDate: permByUser.get(userId),
+          withdrawalIntervals: withdrawalRows.map((row) => ({
+            start: new Date(row.started_at),
+            end: row.ended_at ? new Date(row.ended_at) : new Date(),
+          })),
         });
       },
       "getComputedAttendance",
@@ -1580,6 +1598,31 @@ export class HrStorage extends MachinesStorage {
               sql`${attendance.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
             ),
           );
+        const withdrawalRows = await db
+          .select({
+            user_id: attendance_withdrawals.user_id,
+            started_at: attendance_withdrawals.started_at,
+            ended_at: attendance_withdrawals.ended_at,
+          })
+          .from(attendance_withdrawals)
+          .where(
+            and(
+              inArray(attendance_withdrawals.user_id, userIds),
+              sql`${attendance_withdrawals.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+            ),
+          );
+        const withdrawalsByUser = new Map<
+          number,
+          Array<{ start: Date; end: Date }>
+        >();
+        for (const row of withdrawalRows) {
+          const list = withdrawalsByUser.get(row.user_id) ?? [];
+          list.push({
+            start: new Date(row.started_at),
+            end: row.ended_at ? new Date(row.ended_at) : new Date(),
+          });
+          withdrawalsByUser.set(row.user_id, list);
+        }
         const rowsByUser = new Map<number, any[]>();
         for (const r of attRows as any[]) {
           const list = rowsByUser.get(r.user_id) ?? [];
@@ -1612,7 +1655,10 @@ export class HrStorage extends MachinesStorage {
             from,
             to,
             0,
-            { permissionMinutesByDate: permByUser.get(emp.id) },
+            {
+              permissionMinutesByDate: permByUser.get(emp.id),
+              withdrawalIntervals: withdrawalsByUser.get(emp.id),
+            },
           );
           const sec =
             emp.section_id != null

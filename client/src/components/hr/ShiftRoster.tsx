@@ -38,6 +38,7 @@ interface ShiftTemplate {
   id: number;
   name_ar: string;
   name_en: string | null;
+  kind: "day" | "night" | "flexible";
   start_time: string;
   end_time: string;
   grace_minutes: number;
@@ -73,6 +74,7 @@ interface ShiftRosterResponse {
 interface TemplateForm {
   name_ar: string;
   name_en: string;
+  kind: "day" | "night" | "flexible";
   start_time: string;
   end_time: string;
   grace_minutes: number;
@@ -83,6 +85,7 @@ interface TemplateForm {
 const newTemplate = (): TemplateForm => ({
   name_ar: "",
   name_en: "",
+  kind: "day",
   start_time: "07:00",
   end_time: "19:00",
   grace_minutes: 0,
@@ -104,6 +107,22 @@ function factoryMonthValue() {
 function timeToMinutes(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   return hour * 60 + minute;
+}
+
+const FIXED_SHIFT_TIMES = {
+  day: { start: "07:00", end: "19:00" },
+  night: { start: "19:00", end: "07:00" },
+  flexible: { start: "00:00", end: "00:00" },
+} as const;
+
+function isCanonicalTemplate(template: Partial<ShiftTemplate>) {
+  if (!template.kind) return false;
+  const times = FIXED_SHIFT_TIMES[template.kind];
+  return (
+    template.start_time === times.start &&
+    template.end_time === times.end &&
+    Number(template.base_work_hours) === 8
+  );
 }
 
 function getTemplateName(template: Partial<ShiftTemplate>, isRTL: boolean) {
@@ -206,10 +225,12 @@ export default function ShiftRoster() {
   const templateMutation = useMutation({
     mutationFn: async () => {
       const duration =
-        (timeToMinutes(templateForm.end_time) -
-          timeToMinutes(templateForm.start_time) +
-          1440) %
-        1440;
+        templateForm.kind === "flexible"
+          ? 1440
+          : (timeToMinutes(templateForm.end_time) -
+              timeToMinutes(templateForm.start_time) +
+              1440) %
+            1440;
 
       if (!templateForm.name_ar.trim()) {
         throw new Error(L("الاسم العربي مطلوب", "Arabic name is required"));
@@ -356,6 +377,7 @@ export default function ShiftRoster() {
         ? {
             name_ar: template.name_ar,
             name_en: template.name_en ?? "",
+            kind: template.kind,
             start_time: template.start_time,
             end_time: template.end_time,
             grace_minutes: template.grace_minutes,
@@ -536,7 +558,9 @@ export default function ShiftRoster() {
                   templates.find((template) => template.id === selectedId) ??
                   assignment?.shift_snapshot;
                 const selectableTemplates = templates.filter(
-                  (template) => template.active || template.id === selectedId,
+                  (template) =>
+                    (template.active && isCanonicalTemplate(template)) ||
+                    template.id === selectedId,
                 );
                 return (
                   <div
@@ -609,6 +633,37 @@ export default function ShiftRoster() {
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label>{L("نوع الوردية", "Shift type")}</Label>
+              <Select
+                value={templateForm.kind}
+                onValueChange={(value: "day" | "night" | "flexible") => {
+                  const times = FIXED_SHIFT_TIMES[value];
+                  setTemplateForm((form) => ({
+                    ...form,
+                    kind: value,
+                    start_time: times.start,
+                    end_time: times.end,
+                    base_work_hours: 8,
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">
+                    {L("نهارية: أساسي 07:00–15:00، إضافي حتى 19:00", "Day: base 07:00–15:00, overtime to 19:00")}
+                  </SelectItem>
+                  <SelectItem value="night">
+                    {L("ليلية: أساسي 19:00–03:00، إضافي حتى 07:00", "Night: base 19:00–03:00, overtime to 07:00")}
+                  </SelectItem>
+                  <SelectItem value="flexible">
+                    {L("حرة: احتساب اليوم من 00:00 إلى 23:59", "Flexible: calendar day 00:00–23:59")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>{L("الاسم العربي", "Arabic name")}</Label>
               <Input
@@ -640,6 +695,7 @@ export default function ShiftRoster() {
               <Input
                 type="time"
                 value={templateForm.start_time}
+                disabled
                 onChange={(event) =>
                   setTemplateForm((form) => ({
                     ...form,
@@ -653,6 +709,7 @@ export default function ShiftRoster() {
               <Input
                 type="time"
                 value={templateForm.end_time}
+                disabled
                 onChange={(event) =>
                   setTemplateForm((form) => ({
                     ...form,
@@ -685,6 +742,7 @@ export default function ShiftRoster() {
                 min="0.25"
                 step="0.25"
                 value={templateForm.base_work_hours}
+                disabled
                 onChange={(event) =>
                   setTemplateForm((form) => ({
                     ...form,

@@ -1393,6 +1393,7 @@ export const shift_templates = pgTable(
     id: serial("id").primaryKey(),
     name_ar: varchar("name_ar", { length: 100 }).notNull(),
     name_en: varchar("name_en", { length: 100 }),
+    kind: varchar("kind", { length: 16 }).notNull().default("day"),
     start_time: varchar("start_time", { length: 5 }).notNull(),
     end_time: varchar("end_time", { length: 5 }).notNull(),
     grace_minutes: integer("grace_minutes").notNull().default(0),
@@ -1419,7 +1420,7 @@ export const shift_assignments = pgTable(
       .references(() => users.id),
     year: integer("year").notNull(),
     month: integer("month").notNull(), // 1-12
-    shift: varchar("shift", { length: 10 }).notNull(), // 'day' | 'night'
+    shift: varchar("shift", { length: 10 }).notNull(), // 'day' | 'night' | 'flexible'
     shift_template_id: integer("shift_template_id").references(
       () => shift_templates.id,
       { onDelete: "restrict" },

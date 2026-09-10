@@ -1659,6 +1659,7 @@ function sanitizeResponseForLogging(response: any): any {
           id serial PRIMARY KEY,
           name_ar varchar(100) NOT NULL UNIQUE,
           name_en varchar(100),
+          kind varchar(16) NOT NULL DEFAULT 'day',
           start_time varchar(5) NOT NULL,
           end_time varchar(5) NOT NULL,
           grace_minutes integer NOT NULL DEFAULT 0,
@@ -1669,10 +1670,48 @@ function sanitizeResponseForLogging(response: any): any {
         )
       `);
       await db.execute(sql`
-        INSERT INTO shift_templates (name_ar, name_en, start_time, end_time)
-        VALUES ('نهارية', 'Day', '07:00', '19:00'),
-               ('ليلية', 'Night', '19:00', '07:00')
-        ON CONFLICT (name_ar) DO NOTHING
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'shift_templates' AND column_name = 'kind'
+          ) THEN
+            ALTER TABLE shift_templates ADD COLUMN kind varchar(16);
+            UPDATE shift_templates
+            SET kind = CASE
+              WHEN end_time < start_time THEN 'night'
+              WHEN start_time = end_time THEN 'flexible'
+              ELSE 'day'
+            END;
+            UPDATE shift_templates SET
+              kind = 'day', start_time = '07:00', end_time = '19:00',
+              base_work_hours = '8'
+            WHERE name_ar = 'نهارية';
+            UPDATE shift_templates SET
+              kind = 'night', start_time = '19:00', end_time = '07:00',
+              base_work_hours = '8'
+            WHERE name_ar = 'ليلية';
+            UPDATE shift_templates SET
+              kind = 'flexible', start_time = '00:00', end_time = '00:00',
+              base_work_hours = '8'
+            WHERE name_ar = 'حرة';
+            ALTER TABLE shift_templates ALTER COLUMN kind SET DEFAULT 'day';
+            ALTER TABLE shift_templates ALTER COLUMN kind SET NOT NULL;
+          END IF;
+        END $$;
+      `);
+      await db.execute(sql`
+        INSERT INTO shift_templates (name_ar, name_en, kind, start_time, end_time, base_work_hours)
+        VALUES ('نهارية', 'Day', 'day', '07:00', '19:00', '8'),
+               ('ليلية', 'Night', 'night', '19:00', '07:00', '8'),
+               ('حرة', 'Flexible', 'flexible', '00:00', '00:00', '8')
+        ON CONFLICT (name_ar) DO UPDATE SET
+          name_en = excluded.name_en,
+          kind = excluded.kind,
+          start_time = excluded.start_time,
+          end_time = excluded.end_time,
+          base_work_hours = excluded.base_work_hours,
+          updated_at = now()
       `);
       await db.execute(sql`ALTER TABLE shift_assignments ADD COLUMN IF NOT EXISTS shift_template_id integer REFERENCES shift_templates(id) ON DELETE RESTRICT`);
       await db.execute(sql`ALTER TABLE shift_assignments ADD COLUMN IF NOT EXISTS shift_snapshot jsonb`);
@@ -1683,7 +1722,7 @@ function sanitizeResponseForLogging(response: any): any {
         UPDATE shift_assignments a SET
           shift_template_id = t.id,
           shift_snapshot = jsonb_build_object('template_id', t.id, 'name_ar', t.name_ar,
-            'name_en', t.name_en, 'start_time', t.start_time, 'end_time', t.end_time,
+            'name_en', t.name_en, 'kind', t.kind, 'start_time', t.start_time, 'end_time', t.end_time,
             'grace_minutes', t.grace_minutes, 'base_work_hours', t.base_work_hours)
         FROM shift_templates t
         WHERE a.shift_snapshot IS NULL
