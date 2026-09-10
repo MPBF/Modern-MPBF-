@@ -351,9 +351,11 @@ export default function CuttingOperatorDashboard({
             <SelectContent>
               {cuttingMachines.map((machine) => (
                 <SelectItem key={machine.id} value={machine.id}>
-                  {isArabic
-                    ? `${machine.name_ar || machine.name} (${machine.id})`
-                    : machine.id}
+                  {localizedName(
+                    machine.name_ar,
+                    machine.name,
+                    machine.name_ar || machine.name || machine.id,
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>

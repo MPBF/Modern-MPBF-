@@ -287,7 +287,9 @@ export default function OperatorFocusView() {
             <SelectContent>
               {machines.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  {isArabic ? m.name_ar || m.name || m.id : m.name || m.id}
+                  {isArabic
+                    ? m.name_ar || m.name || m.id
+                    : m.name || m.name_ar || m.id}
                 </SelectItem>
               ))}
             </SelectContent>
