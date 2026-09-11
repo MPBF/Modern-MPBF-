@@ -22,6 +22,8 @@ import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import BatchLabelDialog from "../../components/production/BatchLabelDialog";
 import ProductionOrderStatsCard from "../../components/production/ProductionOrderStatsCard";
 import { Badge } from "../../components/ui/badge";
@@ -50,7 +52,6 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { formatNumberAr } from "../../../../shared/number-utils";
 import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useAuth } from "../../hooks/use-auth";
 import { useLocalizedName } from "../../hooks/use-localized-name";
@@ -73,10 +74,7 @@ const STAGE_CARD_BORDERS: Record<StageKey, string> = {
 };
 
 function formatKg(value: number): string {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatNumberAr(value, 2);
 }
 
 export default function ProductionOrdersManagement() {
@@ -291,7 +289,7 @@ export default function ProductionOrdersManagement() {
                 {t("production.totalQuantity")}
               </span>
               <p className="text-xl font-black text-purple-600 truncate">
-                {stats.totalQuantity.toLocaleString("en-US")} {t("production.kg")}
+                {formatNumberAr(stats.totalQuantity, 3)} {t("production.kg")}
               </p>
             </div>
           </div>
@@ -831,7 +829,7 @@ function PrintProductionOrderWrapper({
 
             <div class="progress-bar">
               <div class="progress-fill" style="width: ${progress}%"></div>
-              <div class="progress-text">${progress.toFixed(1)}% (${formatNumberAr(totalWeight, 2)} / ${formatNumberAr(targetWeight, 2)} ${t("production.kg")})</div>
+              <div class="progress-text">${formatNumberAr(progress, 1)}% (${formatNumberAr(totalWeight, 2)} / ${formatNumberAr(targetWeight, 2)} ${t("production.kg")})</div>
             </div>
 
             ${

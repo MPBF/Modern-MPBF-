@@ -277,7 +277,7 @@ export default function AttendanceStats({ userId }: AttendanceStatsProps) {
               {formatHours(stats.totalWorkHours)}
             </p>
             <p className="text-xs text-green-600 dark:text-green-400">
-              {stats.totalWorkHours.toFixed(1)} {t("dashboard.attendance.hour")}
+              {formatNumber(stats.totalWorkHours, 1)} {t("dashboard.attendance.hour")}
             </p>
           </div>
 
@@ -292,7 +292,7 @@ export default function AttendanceStats({ userId }: AttendanceStatsProps) {
               {formatHours(stats.totalOvertimeHours)}
             </p>
             <p className="text-xs text-orange-600 dark:text-orange-400">
-              {stats.totalOvertimeHours.toFixed(1)}{" "}
+              {formatNumber(stats.totalOvertimeHours, 1)}{" "}
               {t("dashboard.attendance.hour")}
             </p>
           </div>

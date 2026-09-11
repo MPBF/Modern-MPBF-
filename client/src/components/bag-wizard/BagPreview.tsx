@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import {
   BAG_COLORS,
   MATERIALS,
@@ -499,7 +500,7 @@ export function BagPreview({
           return (
             <div className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg inline-block mt-1">
               ≈ {bpk.toLocaleString("ar-EG")} كيس/كجم · وزن الكيس{" "}
-              {wg.toFixed(2)} غم
+              {formatNumberAr(wg, 2)} غم
             </div>
           );
         })()}

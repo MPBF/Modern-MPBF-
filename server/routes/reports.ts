@@ -1835,9 +1835,29 @@ Input: ${text}`;
       }
 
       res.json({ translatedText });
-    } catch (error) {
-      console.error("Translation error:", error);
-      res.status(500).json({
+    } catch (error: any) {
+      const providerUnavailable =
+        error?.status === 429 ||
+        error?.code === "insufficient_quota" ||
+        error?.code === "rate_limit_exceeded";
+
+      if (providerUnavailable) {
+        logger.warn("Translation provider unavailable", {
+          status: error?.status,
+          code: error?.code,
+        });
+        return res.status(503).json({
+          message: "خدمة الترجمة غير متاحة مؤقتاً، يرجى المحاولة لاحقاً",
+          error: "translation_provider_unavailable",
+        });
+      }
+
+      logger.error("Translation error", {
+        status: error?.status,
+        code: error?.code,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+      return res.status(500).json({
         message: "خطأ في الترجمة",
         error: "خطأ داخلي",
       });

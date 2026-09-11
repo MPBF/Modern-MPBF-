@@ -1283,22 +1283,13 @@ export function createMcpServer(authContext: McpAuthContext) {
     },
     async ({ id, status }) => {
       try {
-        const [existing] = await db
-          .select({ status: orders.status })
-          .from(orders)
-          .where(eq(orders.id, id))
-          .limit(1);
+        const [existing] = await db.select({ status: orders.status })
+          .from(orders).where(eq(orders.id, id)).limit(1);
         if (!existing) {
           return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  success: false,
-                  error: "Order not found",
-                }),
-              },
-            ],
+            content: [{ type: "text" as const, text: JSON.stringify({
+              success: false, error: "Order not found",
+            }) }],
             isError: true,
           };
         }

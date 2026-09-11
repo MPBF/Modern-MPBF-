@@ -8,6 +8,7 @@ import {
 } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { formatNumber } from "../../lib/formatNumber";
 
 interface InteractivePieChartProps {
   data: any[];
@@ -52,7 +53,7 @@ const CustomTooltip = ({ active, payload, formatValue }: any) => {
         </p>
         {data.payload.percentage && (
           <p className="text-sm text-gray-600">
-            {`النسبة: ${data.payload.percentage.toFixed(1)}%`}
+            {`النسبة: ${formatNumber(data.payload.percentage, 1)}%`}
           </p>
         )}
       </div>

@@ -47,7 +47,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
-import { useLocalizedName } from "../../hooks/use-localized-name";
 import { useAuth } from "../../hooks/use-auth";
 import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 import { useSmartPolling } from "../../hooks/use-smart-polling";
@@ -106,8 +105,35 @@ interface CuttingOperatorDashboardProps {
 export default function CuttingOperatorDashboard({
   hideLayout = false,
 }: CuttingOperatorDashboardProps) {
-  const { t } = useTranslation();
-  const ln = useLocalizedName();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.resolvedLanguage?.startsWith("ar") ?? false;
+  const ui = (arabic: string, english: string) =>
+    isArabic ? arabic : english;
+  const localizedName = (
+    arabicName?: string | null,
+    englishName?: string | null,
+    arabicFallback?: string | null,
+  ) => {
+    if (isArabic) return arabicName || englishName || arabicFallback || "—";
+    return englishName?.trim() || "—";
+  };
+  const localizedError = (error: Error, fallback: string) =>
+    !isArabic && /[\u0600-\u06FF]/.test(error.message)
+      ? fallback
+      : error.message || fallback;
+  const localizedPunching = (punching?: string) => {
+    if (!punching) return ui("بدون", "None");
+    if (isArabic) return punching;
+
+    const translations: Record<string, string> = {
+      "بدون": "None",
+      علاقي: "Hook",
+      "علاقي هوك": "Hook",
+      بنانة: "Banana",
+      "بنانة 6سم": "Banana 6 cm",
+    };
+    return translations[punching.trim()] ?? "—";
+  };
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedRoll, setSelectedRoll] = useState<RollDetails | null>(null);
@@ -183,7 +209,7 @@ export default function CuttingOperatorDashboard({
     onError: (error: any) => {
       toast({
         title: t("operators.common.error"),
-        description: error.message || t("operators.cutting.cuttingFailed"),
+        description: localizedError(error, t("operators.cutting.cuttingFailed")),
         variant: "destructive",
       });
     },
@@ -290,7 +316,7 @@ export default function CuttingOperatorDashboard({
           <div className="flex items-center gap-1.5">
             <Scissors className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <span className="text-xs font-black text-emerald-900 dark:text-emerald-200">
-              ماكينة التقطيع المحددة
+              {ui("ماكينة التقطيع المحددة", "Selected cutting machine")}
             </span>
           </div>
           {selectedMachine && (
@@ -302,7 +328,7 @@ export default function CuttingOperatorDashboard({
               onClick={() => setIsEditingMachine((editing) => !editing)}
               disabled={!machinePreferenceReady}
             >
-              {isEditingMachine ? "تم" : "تغيير"}
+              {isEditingMachine ? ui("تم", "Done") : ui("تغيير", "Change")}
             </Button>
           )}
         </div>
@@ -325,7 +351,11 @@ export default function CuttingOperatorDashboard({
             <SelectContent>
               {cuttingMachines.map((machine) => (
                 <SelectItem key={machine.id} value={machine.id}>
-                  {ln(machine.name_ar, machine.name)} ({machine.id})
+                  {localizedName(
+                    machine.name_ar,
+                    machine.name,
+                    machine.name_ar || machine.name || machine.id,
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -334,7 +364,7 @@ export default function CuttingOperatorDashboard({
           {selectedMachine && !isEditingMachine && (
             <Badge className="bg-emerald-600 text-white whitespace-nowrap h-10 px-3 text-xs font-bold rounded-xl gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              جاهز
+              {ui("جاهز", "Ready")}
             </Badge>
           )}
         </div>
@@ -378,8 +408,11 @@ export default function CuttingOperatorDashboard({
                 new Set(
                   group.items.map(
                     (item) =>
-                      ln(item.product_name_ar, item.product_name_en) ||
-                      item.product_name,
+                      localizedName(
+                        item.product_name_ar,
+                        item.product_name_en,
+                        item.product_name,
+                      ),
                   ),
                 ),
               ).filter(Boolean);
@@ -394,27 +427,30 @@ export default function CuttingOperatorDashboard({
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-black px-2.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
-                          طلب: #{group.orderNumber}
+                          {ui("طلب", "Order")}: #{group.orderNumber}
                         </span>
                         <span className="text-xs text-gray-500">
-                          ({group.items.length} أوامر إنتاج)
+                          ({group.items.length} {ui("أوامر إنتاج", "production orders")})
                         </span>
                       </div>
                       <h3 className="text-base font-extrabold text-emerald-800 dark:text-emerald-400 leading-tight">
-                        {ln(first.customer_name_ar, first.customer_name_en) ||
-                          first.customer_name}
+                        {localizedName(
+                          first.customer_name_ar,
+                          first.customer_name_en,
+                          first.customer_name,
+                        )}
                       </h3>
                     </div>
 
                     <span className="text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl">
-                      فتح الطلب ◀
+                      {ui("فتح الطلب ◀", "Open order ▶")}
                     </span>
                   </div>
 
                   {/* المنتجات التابعة للطلب */}
                   <div className="space-y-1.5 bg-slate-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-gray-800">
                     <span className="text-[11px] font-bold text-gray-400 block">
-                      المنتجات المطلوبة للتقطيع:
+                      {ui("المنتجات المطلوبة للتقطيع:", "Products to cut:")}
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {uniqueProducts.map((prodName, idx) => (
@@ -432,10 +468,10 @@ export default function CuttingOperatorDashboard({
                   <div className="space-y-1.5 pt-1">
                     <div className="flex justify-between items-center text-xs font-semibold">
                       <span className="text-gray-500">
-                        الرولات المقصوصة ({completedRolls}/{totalRolls})
+                        {ui("الرولات المقصوصة", "Cut rolls")} ({completedRolls}/{totalRolls})
                       </span>
                       <span className="text-gray-700 dark:text-gray-300 font-bold">
-                        {formatNumberAr(totalWeight)} كجم
+                        {formatNumberAr(totalWeight)} {ui("كجم", "kg")}
                       </span>
                     </div>
                     <Progress value={groupProgress} className="h-2 rounded-full" />
@@ -477,20 +513,26 @@ export default function CuttingOperatorDashboard({
                             {order.production_order_number}
                           </span>
                           <span className="text-xs font-semibold text-gray-500">
-                            طلب: #{order.order_number}
+                            {ui("طلب", "Order")}: #{order.order_number}
                           </span>
                         </div>
 
                         {/* اسم المنتج بارز وكبير */}
                         <h2 className="text-xl font-black text-gray-950 dark:text-white leading-tight tracking-tight mt-1">
-                          {ln(order.product_name_ar, order.product_name_en) ||
-                            order.product_name}
+                          {localizedName(
+                            order.product_name_ar,
+                            order.product_name_en,
+                            order.product_name,
+                          )}
                         </h2>
 
                         {/* اسم العميل */}
                         <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                          {ln(order.customer_name_ar, order.customer_name_en) ||
-                            order.customer_name}
+                          {localizedName(
+                            order.customer_name_ar,
+                            order.customer_name_en,
+                            order.customer_name,
+                          )}
                         </p>
                       </div>
 
@@ -503,17 +545,17 @@ export default function CuttingOperatorDashboard({
                               setBatchOrderId(order.production_order_id)
                             }
                             className="h-8 px-2.5 text-xs rounded-xl border-emerald-300 text-emerald-800 dark:text-emerald-200"
-                            title="طباعة ملصق الدفعة"
+                            title={ui("طباعة ملصق الدفعة", "Print batch label")}
                           >
                             <PackageCheck className="h-4 w-4 ml-1" />
-                            ملصق الدفعة
+                            {ui("ملصق الدفعة", "Batch label")}
                           </Button>
                         )}
                         <Badge
                           variant="secondary"
                           className="bg-emerald-100 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 font-bold text-xs"
                         >
-                          {order.total_rolls} رول
+                          {order.total_rolls} {ui("رول", "rolls")}
                         </Badge>
                       </div>
                     </div>
@@ -526,7 +568,7 @@ export default function CuttingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Ruler className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">المقاس</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("المقاس", "Size")}</span>
                           <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                             {order.size_caption || "—"}
                           </span>
@@ -537,9 +579,11 @@ export default function CuttingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Scissors className="h-4 w-4 text-indigo-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">طول القطع</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("طول القطع", "Cut length")}</span>
                           <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
-                            {order.cutting_length_cm ? `${order.cutting_length_cm} سم` : "—"}
+                            {order.cutting_length_cm
+                              ? `${order.cutting_length_cm} ${ui("سم", "cm")}`
+                              : "—"}
                           </span>
                         </div>
                       </div>
@@ -548,9 +592,9 @@ export default function CuttingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Sparkles className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">التخريم / اليد</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("التخريم / اليد", "Punching / handle")}</span>
                           <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
-                            {order.punching || "بدون"}
+                            {localizedPunching(order.punching)}
                           </span>
                         </div>
                       </div>
@@ -559,9 +603,9 @@ export default function CuttingOperatorDashboard({
                       <div className="flex items-start gap-2">
                         <Layers className="h-4 w-4 text-teal-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-gray-400 block text-[10px]">إجمالي الوزن</span>
+                          <span className="text-gray-400 block text-[10px]">{ui("إجمالي الوزن", "Total weight")}</span>
                           <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
-                            {formatNumberAr(order.total_weight)} كجم
+                            {formatNumberAr(order.total_weight)} {ui("كجم", "kg")}
                           </span>
                         </div>
                       </div>
@@ -571,7 +615,7 @@ export default function CuttingOperatorDashboard({
                     <div className="space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30 p-2.5 rounded-xl">
                       <div className="flex justify-between items-center text-xs font-semibold">
                         <span className="text-gray-500">
-                          الرولات المنجزة ({completedRolls}/{order.total_rolls})
+                          {ui("الرولات المنجزة", "Completed rolls")} ({completedRolls}/{order.total_rolls})
                         </span>
                         <span className="text-emerald-700 dark:text-emerald-300 font-bold">
                           {Math.round(progress)}%
@@ -583,7 +627,7 @@ export default function CuttingOperatorDashboard({
                     {/* قائمة الرولات المتاحة للتقطيع */}
                     <div className="space-y-2">
                       <span className="text-xs font-bold text-gray-700 dark:text-gray-200 block">
-                        الرولات الجاهزة للقص ({order.rolls.length}):
+                        {ui("الرولات الجاهزة للقص", "Rolls ready to cut")} ({order.rolls.length}):
                       </span>
 
                       <div className="space-y-2 max-h-56 overflow-y-auto p-0.5">
@@ -601,7 +645,7 @@ export default function CuttingOperatorDashboard({
                                   {roll.roll_number}
                                 </div>
                                 <div className="text-[11px] font-bold text-teal-600 dark:text-teal-400">
-                                  الوزن: {formatNumberAr(Number(roll.weight_kg))} كجم
+                                  {ui("الوزن", "Weight")}: {formatNumberAr(Number(roll.weight_kg))} {ui("كجم", "kg")}
                                 </div>
                               </div>
                             </div>
@@ -612,7 +656,7 @@ export default function CuttingOperatorDashboard({
                               className="h-10 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs active:scale-95 transition-all"
                             >
                               <Scissors className="h-4 w-4 ml-1.5" />
-                              قص
+                              {ui("قص", "Cut")}
                             </Button>
                           </div>
                         ))}
@@ -632,10 +676,13 @@ export default function CuttingOperatorDashboard({
           <DialogHeader className="text-right">
             <DialogTitle className="flex items-center gap-2 text-base font-black text-gray-900 dark:text-white">
               <Scissors className="h-5 w-5 text-emerald-600" />
-              تأكيد قص الرول والوزن الصافي
+              {ui("تأكيد قص الرول والوزن الصافي", "Confirm roll cutting and net weight")}
             </DialogTitle>
             <DialogDescription className="text-xs text-gray-500">
-              أدخل الوزن الصافي للرول بعد التقطيع لحساب نسبة الهالك
+              {ui(
+                "أدخل الوزن الصافي للرول بعد التقطيع لحساب نسبة الهالك",
+                "Enter the roll's net weight after cutting to calculate waste.",
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -643,22 +690,22 @@ export default function CuttingOperatorDashboard({
             <div className="space-y-3 py-2">
               <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border text-xs">
                 <div>
-                  <span className="text-gray-400 block text-[10px]">رقم الرول</span>
+                  <span className="text-gray-400 block text-[10px]">{ui("رقم الرول", "Roll number")}</span>
                   <span className="font-black text-gray-900 dark:text-gray-100 text-sm">
                     {selectedRoll.roll_number}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block text-[10px]">الوزن القائم (قبل القص)</span>
+                  <span className="text-gray-400 block text-[10px]">{ui("الوزن القائم (قبل القص)", "Gross weight (before cutting)")}</span>
                   <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                    {formatNumberAr(Number(selectedRoll.weight_kg))} كجم
+                    {formatNumberAr(Number(selectedRoll.weight_kg))} {ui("كجم", "kg")}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="netWeight" className="text-xs font-bold text-gray-700 dark:text-gray-200">
-                  الوزن الصافي (كجم):
+                  {ui("الوزن الصافي (كجم):", "Net weight (kg):")}
                 </Label>
                 <Input
                   id="netWeight"
@@ -678,7 +725,7 @@ export default function CuttingOperatorDashboard({
               {/* حساب الهالك المتوقع بشكل فوري */}
               <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 p-2.5 rounded-xl flex items-center justify-between text-xs">
                 <span className="font-bold text-amber-800 dark:text-amber-300">
-                  الهالك المتوقع (الفرق):
+                  {ui("الهالك المتوقع (الفرق):", "Expected waste (difference):")}
                 </span>
                 <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
                   {formatNumberAr(
@@ -687,7 +734,7 @@ export default function CuttingOperatorDashboard({
                       Number(selectedRoll.weight_kg) - Number(netWeight || 0),
                     ),
                   )}{" "}
-                  كجم
+                  {ui("كجم", "kg")}
                 </span>
               </div>
             </div>
@@ -700,7 +747,7 @@ export default function CuttingOperatorDashboard({
               disabled={completeCuttingMutation.isPending}
               className="flex-1 h-12 rounded-xl text-xs font-bold border-gray-300"
             >
-              إلغاء
+              {ui("إلغاء", "Cancel")}
             </Button>
             <Button
               onClick={handleCompleteCutting}
@@ -715,12 +762,12 @@ export default function CuttingOperatorDashboard({
               {completeCuttingMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin ml-1.5" />
-                  جاري الحفظ...
+                  {ui("جاري الحفظ...", "Saving...")}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4 ml-1.5" />
-                  تأكيد القص
+                  {ui("تأكيد القص", "Confirm cut")}
                 </>
               )}
             </Button>

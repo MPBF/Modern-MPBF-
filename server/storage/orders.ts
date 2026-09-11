@@ -335,6 +335,12 @@ import {
   type NotificationManager,
 } from "./core";
 import { UsersStorage } from "./users";
+import {
+  ORDER_STATUS_GRAPH, CHILD_STATUS_BY_PARENT, CHILD_CREATION_REJECTED,
+  OrderDomainError, planOrderChildTransition, type ParentOrderStatus,
+  sanitizeOrderAncillaryUpdates,
+  assertExpectedOrderStatus,
+} from "../services/order-status-policy";
 
 export class OrdersStorage extends UsersStorage {
 
@@ -413,6 +419,10 @@ export class OrdersStorage extends UsersStorage {
     id: number,
     orderUpdates: Partial<NewOrder>,
   ): Promise<NewOrder> {
+    if (Object.prototype.hasOwnProperty.call(orderUpdates, "status")) {
+      const { status, ...otherUpdates } = orderUpdates as any;
+      return this.transitionOrderStatus(id, String(status), otherUpdates);
+    }
     return withDatabaseErrorHandling(
       async () => {
         const [updatedOrder] = await db
@@ -429,18 +439,7 @@ export class OrdersStorage extends UsersStorage {
 
 
   async updateOrderStatus(id: number, status: string): Promise<NewOrder> {
-    return withDatabaseErrorHandling(
-      async () => {
-        const [updatedOrder] = await db
-          .update(orders)
-          .set({ status })
-          .where(eq(orders.id, id))
-          .returning();
-        return updatedOrder;
-      },
-      "updateOrderStatus",
-      `تحديث حالة الطلب ${id}`,
-    );
+    return this.transitionOrderStatus(id, status);
   }
 
 
@@ -449,18 +448,84 @@ export class OrdersStorage extends UsersStorage {
     status: string,
     previousStatus: string | null,
   ): Promise<NewOrder> {
-    return withDatabaseErrorHandling(
-      async () => {
-        const [updatedOrder] = await db
-          .update(orders)
-          .set({ status, previous_status: previousStatus })
-          .where(eq(orders.id, id))
-          .returning();
-        return updatedOrder;
-      },
-      "updateOrderStatusWithPrevious",
-      `تحديث حالة الطلب ${id} مع حفظ الحالة السابقة`,
-    );
+    // The previous status argument is retained for compatibility with older
+    // callers; transitionOrderStatus always derives it while holding the row
+    // lock, so stale callers cannot overwrite it.
+    return this.transitionOrderStatus(id, status, {}, previousStatus);
+  }
+
+  /**
+   * Atomically transition an order and synchronize all of its production
+   * orders.  This is intentionally the only status-writing primitive: the
+   * parent row lock serializes competing transitions and all child writes are
+   * in the same transaction.
+   */
+  async transitionOrderStatus(
+    id: number,
+    status: string,
+    updates: Partial<NewOrder> = {},
+    expectedPreviousStatus?: string | null,
+  ): Promise<NewOrder> {
+    if (!(status in ORDER_STATUS_GRAPH)) throw new OrderDomainError("INVALID_STATUS", "Invalid order status");
+
+    return withDatabaseErrorHandling(async () => {
+      const result = await db.transaction(async (tx) => {
+        const [current] = await tx.select().from(orders)
+          .where(eq(orders.id, id)).for("update");
+        if (!current) throw new OrderDomainError("NOT_FOUND", "Order not found");
+        assertExpectedOrderStatus(current.status, expectedPreviousStatus);
+        const isTransition = current.status !== status;
+        if (isTransition && !(ORDER_STATUS_GRAPH[current.status as ParentOrderStatus] || []).includes(status as ParentOrderStatus)) {
+          throw new OrderDomainError("INVALID_TRANSITION", `Invalid order status transition: ${current.status} -> ${status}`);
+        }
+
+        const children = await tx.select().from(production_orders)
+          .where(eq(production_orders.order_id, id)).for("update");
+        const childPlan = planOrderChildTransition(
+          current.status as ParentOrderStatus,
+          status as ParentOrderStatus,
+          children,
+        );
+
+        // Only allow the ordinary editable order fields here. In particular,
+        // previous_status is service-owned and cannot be mass-assigned.
+        const parentSet: any = {
+          ...sanitizeOrderAncillaryUpdates(updates as Record<string, unknown>),
+          status,
+        };
+        if (isTransition && status === "archived") parentSet.previous_status = current.status;
+        else if (isTransition && current.status === "archived") parentSet.previous_status = null;
+        else if (!isTransition) delete parentSet.status;
+
+        let updated = current;
+        if (Object.keys(parentSet).length > 0) {
+          const [written] = await tx.update(orders).set(parentSet)
+            .where(and(eq(orders.id, id), eq(orders.status, current.status)))
+            .returning();
+          if (!written) throw new OrderDomainError("CONFLICT", "Order changed concurrently");
+          updated = written;
+        }
+
+        // Never touch production_stage: status synchronization only changes
+        // status and (for archive bookkeeping) previous_status.
+        for (const patch of childPlan) {
+          await tx.update(production_orders)
+            .set({
+              status: patch.status,
+              ...(Object.prototype.hasOwnProperty.call(patch, "previous_status")
+                ? { previous_status: patch.previous_status }
+                : {}),
+            })
+            .where(and(
+              eq(production_orders.id, patch.id),
+              eq(production_orders.order_id, id),
+            ));
+        }
+        return updated;
+      });
+      invalidateProductionCache();
+      return result;
+    }, "transitionOrderStatus", `تغيير حالة الطلب ${id}`);
   }
 
 
@@ -723,6 +788,15 @@ export class OrdersStorage extends UsersStorage {
         }
 
         const newPo = await db.transaction(async (tx) => {
+          // Lock the parent first, matching transitionOrderStatus lock order.
+          // This prevents a child being inserted between a parent transition
+          // and its synchronization.
+          const [parent] = await tx.select({ status: orders.status })
+            .from(orders).where(eq(orders.id, po.order_id)).for("update");
+          if (!parent) throw new OrderDomainError("NOT_FOUND", "Order not found");
+          if (CHILD_CREATION_REJECTED.has(parent.status as ParentOrderStatus)) {
+            throw new OrderDomainError("TERMINAL_PARENT", "Cannot create production order under terminal parent");
+          }
           await tx.execute(sql`SELECT pg_advisory_xact_lock(1001)`);
 
           const result = await tx.execute(
@@ -741,6 +815,10 @@ export class OrdersStorage extends UsersStorage {
           if (extra?.final_quantity_kg !== undefined) {
             insertValues.final_quantity_kg = extra.final_quantity_kg.toString();
           }
+          // New children inherit the parent's synchronized status. Legacy
+          // waiting/for_production/on_hold parents retain caller defaults.
+          insertValues.status = CHILD_STATUS_BY_PARENT[parent.status as ParentOrderStatus] || "pending";
+          delete insertValues.previous_status;
 
           const [created] = await tx
             .insert(production_orders)
@@ -772,6 +850,17 @@ export class OrdersStorage extends UsersStorage {
 
         try {
           const created = await db.transaction(async (tx) => {
+            const parentIds = [...new Set(batch.map((po) => po.order_id))].sort((a, b) => a - b);
+            const parentStatuses = new Map<number, string>();
+            for (const parentId of parentIds) {
+              const [parent] = await tx.select({ status: orders.status })
+                .from(orders).where(eq(orders.id, parentId)).for("update");
+              if (!parent) throw new OrderDomainError("NOT_FOUND", `Order not found: ${parentId}`);
+              if (CHILD_CREATION_REJECTED.has(parent.status as ParentOrderStatus)) {
+                throw new OrderDomainError("TERMINAL_PARENT", "Cannot create production order under terminal parent");
+              }
+              parentStatuses.set(parentId, parent.status);
+            }
             await tx.execute(sql`SELECT pg_advisory_xact_lock(1001)`);
 
             const maxResult = await tx.execute(
@@ -783,7 +872,11 @@ export class OrdersStorage extends UsersStorage {
 
             const valuesToInsert = batch.map((po) => {
               const poNumber = `PO${(nextNum++).toString().padStart(3, "0")}`;
-              return { ...po, production_order_number: poNumber };
+              const parentStatus = parentStatuses.get(po.order_id);
+              const status = CHILD_STATUS_BY_PARENT[parentStatus as ParentOrderStatus] || "pending";
+              return { ...po, status,
+                previous_status: null,
+                production_order_number: poNumber };
             });
 
             return await tx
@@ -827,6 +920,17 @@ export class OrdersStorage extends UsersStorage {
 
         try {
           const created = await db.transaction(async (tx) => {
+            const parentIds = [...new Set(batch.map(({ data }) => data.order_id))].sort((a, b) => a - b);
+            const parentStatuses = new Map<number, string>();
+            for (const parentId of parentIds) {
+              const [parent] = await tx.select({ status: orders.status })
+                .from(orders).where(eq(orders.id, parentId)).for("update");
+              if (!parent) throw new OrderDomainError("NOT_FOUND", `Order not found: ${parentId}`);
+              if (CHILD_CREATION_REJECTED.has(parent.status as ParentOrderStatus)) {
+                throw new OrderDomainError("TERMINAL_PARENT", "Cannot create production order under terminal parent");
+              }
+              parentStatuses.set(parentId, parent.status);
+            }
             await tx.execute(sql`SELECT pg_advisory_xact_lock(1001)`);
 
             const maxResult = await tx.execute(
@@ -838,8 +942,12 @@ export class OrdersStorage extends UsersStorage {
 
             const valuesToInsert = batch.map(({ data, finalQuantityKg }) => {
               const poNumber = `PO${(nextNum++).toString().padStart(3, "0")}`;
+              const parentStatus = parentStatuses.get(data.order_id);
+              const status = CHILD_STATUS_BY_PARENT[parentStatus as ParentOrderStatus] || "pending";
               return {
                 ...data,
+                status,
+                previous_status: null,
                 production_order_number: poNumber,
                 final_quantity_kg: finalQuantityKg.toString(),
               };
@@ -1497,7 +1605,7 @@ export class OrdersStorage extends UsersStorage {
         COALESCE(cp.is_printed, false) AS is_printed,
         COALESCE(mb.name_ar, mb.name, cp.master_batch_id) AS master_batch_name,
         COALESCE(mb.name_ar, mb.name, cp.master_batch_id) AS master_batch_name_ar,
-        COALESCE(mb.name, mb.name_ar, cp.master_batch_id) AS master_batch_name_en,
+        COALESCE(mb.name, cp.master_batch_id) AS master_batch_name_en,
         mb.color_hex AS master_batch_color_hex,
         COUNT(r.id) AS rolls_count,
         COALESCE(SUM(r.weight_kg), 0) AS total_weight_produced,

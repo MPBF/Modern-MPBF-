@@ -3,6 +3,8 @@ import { Loader2, Printer, Tag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -126,7 +128,7 @@ export default function BatchLabelDialog({
                   {t("batch.netQuantity")}
                 </span>
                 <span className="font-medium">
-                  {parseFloat(String(data.net_quantity_kg ?? "0")).toFixed(2)}{" "}
+                  {formatNumberAr(parseFloat(String(data.net_quantity_kg ?? "0")), 2)}{" "}
                   {t("batch.kg")}
                 </span>
               </div>
@@ -153,7 +155,7 @@ export default function BatchLabelDialog({
                       {packagingUnits.map((u) => (
                         <SelectItem key={u.id} value={String(u.id)}>
                           {u.name} (
-                          {parseFloat(String(u.unit_weight_kg)).toFixed(2)}{" "}
+                          {formatNumberAr(parseFloat(String(u.unit_weight_kg)), 2)}{" "}
                           {t("batch.kg")})
                         </SelectItem>
                       ))}

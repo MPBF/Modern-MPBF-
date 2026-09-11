@@ -236,6 +236,11 @@ export const attendance = pgTable(
     break_end_time: timestamp("break_end_time"), // وقت نهاية الاستراحة
     work_hours: doublePrecision("work_hours"), // ساعات العمل الفعلية (محسوبة تلقائياً)
     overtime_hours: doublePrecision("overtime_hours"), // ساعات العمل الإضافي
+    // Snapshot captured at check-in.  It deliberately does not follow later
+    // changes to the monthly roster or its source template.
+    shift_assignment_id: integer("shift_assignment_id"),
+    shift_template_id: integer("shift_template_id"),
+    shift_snapshot: jsonb("shift_snapshot"),
     shift_type: varchar("shift_type", { length: 20 }).default("صباحي"), // نوع الوردية: صباحي / مسائي / ليلي
     late_minutes: integer("late_minutes").default(0), // دقائق التأخير
     early_leave_minutes: integer("early_leave_minutes").default(0), // دقائق المغادرة المبكرة
@@ -1381,7 +1386,31 @@ export const attendance_withdrawals = pgTable(
   ],
 );
 
-// 📋 جدول جدولة الورديات الشهرية (تعيين كل موظف لوردية نهارية/ليلية لكل شهر)
+// Reusable factory shift templates. Wall-clock times are always Riyadh times.
+export const shift_templates = pgTable(
+  "shift_templates",
+  {
+    id: serial("id").primaryKey(),
+    name_ar: varchar("name_ar", { length: 100 }).notNull(),
+    name_en: varchar("name_en", { length: 100 }),
+    kind: varchar("kind", { length: 16 }).notNull().default("day"),
+    start_time: varchar("start_time", { length: 5 }).notNull(),
+    end_time: varchar("end_time", { length: 5 }).notNull(),
+    grace_minutes: integer("grace_minutes").notNull().default(0),
+    base_work_hours: decimal("base_work_hours", { precision: 5, scale: 2 })
+      .notNull()
+      .default("8"),
+    active: boolean("active").notNull().default(true),
+    created_by: integer("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [uniqueIndex("uniq_shift_templates_name_ar").on(table.name_ar)],
+);
+
+// 📋 جدول جدولة الورديات الشهرية (legacy shift remains for compatibility)
 export const shift_assignments = pgTable(
   "shift_assignments",
   {
@@ -1391,7 +1420,12 @@ export const shift_assignments = pgTable(
       .references(() => users.id),
     year: integer("year").notNull(),
     month: integer("month").notNull(), // 1-12
-    shift: varchar("shift", { length: 10 }).notNull(), // 'day' | 'night'
+    shift: varchar("shift", { length: 10 }).notNull(), // 'day' | 'night' | 'flexible'
+    shift_template_id: integer("shift_template_id").references(
+      () => shift_templates.id,
+      { onDelete: "restrict" },
+    ),
+    shift_snapshot: jsonb("shift_snapshot"),
     notes: text("notes"),
     created_by: integer("created_by").references(() => users.id),
     created_at: timestamp("created_at").defaultNow(),
@@ -3664,6 +3698,15 @@ export type ShiftAssignment = typeof shift_assignments.$inferSelect;
 export type InsertShiftAssignment = z.infer<
   typeof insertShiftAssignmentSchema
 >;
+
+export const insertShiftTemplateSchema = createInsertSchema(shift_templates).omit({
+  id: true,
+  created_by: true,
+  created_at: true,
+  updated_at: true,
+});
+export type ShiftTemplate = typeof shift_templates.$inferSelect;
+export type InsertShiftTemplate = z.infer<typeof insertShiftTemplateSchema>;
 
 // Maintenance Actions Schemas
 export const insertMaintenanceActionSchema = createInsertSchema(

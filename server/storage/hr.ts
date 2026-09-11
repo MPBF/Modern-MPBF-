@@ -129,6 +129,8 @@ import {
   type InsertAttendanceWithdrawal,
   type ShiftAssignment,
   type InsertShiftAssignment,
+  type ShiftTemplate,
+  type InsertShiftTemplate,
   type Reward,
   type InsertReward,
   type EmployeeCustody,
@@ -308,6 +310,8 @@ import {
   getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
 } from "../services/leave-attendance";
 import { toNumericSectionIds } from "./section-ids";
+import { filterAttendanceRecordsByWindow } from "./attendance-session";
+import * as shiftTemplateStore from "./shift-template-store";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
 import { db, pool } from "../db";
@@ -686,14 +690,13 @@ export class HrStorage extends MachinesStorage {
     }
     return results;
   }
-
-
-  async getDailyAttendanceStatus(userId: number, date: string): Promise<any> {
-    const records = await db
+  async getDailyAttendanceStatus(userId: number, date: string, window?: { start: Date; end: Date; checkoutEnd?: Date }): Promise<any> {
+    const dateRecords = await db
       .select()
       .from(attendance)
       .where(and(eq(attendance.user_id, userId), eq(attendance.date, date)))
       .orderBy(desc(attendance.created_at));
+    const records = filterAttendanceRecordsByWindow(dateRecords, window);
 
     if (records.length === 0) {
       // Only the active 19:00–07:00 night shift may cross the date boundary.
@@ -701,7 +704,7 @@ export class HrStorage extends MachinesStorage {
       const previousNightWindow = getActivePreviousNightShift(now);
       const openRecord =
         date === factoryNowParts(now).dateStr && previousNightWindow
-          ? await this.findOpenCheckIn(userId)
+          ? await this.findOpenCheckIn(userId, previousNightWindow)
           : null;
       const openCheckInMs = openRecord?.check_in_time
         ? new Date(openRecord.check_in_time).getTime()
@@ -1267,20 +1270,29 @@ export class HrStorage extends MachinesStorage {
     year: number,
     month: number,
   ): Promise<ShiftAssignment[]> {
-    return withDatabaseErrorHandling(
-      async () =>
-        await db
-          .select()
-          .from(shift_assignments)
-          .where(
-            and(
-              eq(shift_assignments.year, year),
-              eq(shift_assignments.month, month),
-            ),
-          ),
-      "getShiftAssignmentsByPeriod",
-      "جلب جدول الورديات الشهري",
-    );
+    return shiftTemplateStore.getShiftAssignmentsByPeriod(year, month);
+  }
+
+  async getShiftTemplates(active?: boolean): Promise<ShiftTemplate[]> {
+    return shiftTemplateStore.getShiftTemplates(active);
+  }
+
+  async getShiftRoster(year: number, month: number): Promise<{ rows: any[]; roster_revision: string }> {
+    return shiftTemplateStore.getShiftRoster(year, month);
+  }
+
+  async createShiftTemplate(
+    data: InsertShiftTemplate, createdBy: number | null,
+  ): Promise<ShiftTemplate> {
+    return shiftTemplateStore.createShiftTemplate(data, createdBy);
+  }
+
+  async updateShiftTemplate(id: number, data: Partial<InsertShiftTemplate>): Promise<ShiftTemplate | null> {
+    return shiftTemplateStore.updateShiftTemplate(id, data);
+  }
+
+  async disableShiftTemplate(id: number): Promise<ShiftTemplate | null> {
+    return shiftTemplateStore.disableShiftTemplate(id);
   }
 
 
@@ -1288,37 +1300,7 @@ export class HrStorage extends MachinesStorage {
     entries: InsertShiftAssignment[],
     createdBy: number | null,
   ): Promise<ShiftAssignment[]> {
-    return withDatabaseErrorHandling(
-      async () => {
-        if (!entries.length) return [];
-        const values = entries.map((e) => ({
-          user_id: e.user_id,
-          year: e.year,
-          month: e.month,
-          shift: e.shift,
-          notes: e.notes ?? null,
-          created_by: createdBy,
-        }));
-        return await db
-          .insert(shift_assignments)
-          .values(values)
-          .onConflictDoUpdate({
-            target: [
-              shift_assignments.user_id,
-              shift_assignments.year,
-              shift_assignments.month,
-            ],
-            set: {
-              shift: sql`excluded.shift`,
-              notes: sql`excluded.notes`,
-              updated_at: sql`now()`,
-            },
-          })
-          .returning();
-      },
-      "upsertShiftAssignments",
-      "حفظ جدول الورديات",
-    );
+    return shiftTemplateStore.upsertShiftAssignments(entries, createdBy);
   }
 
 
@@ -1330,64 +1312,18 @@ export class HrStorage extends MachinesStorage {
     upsertEntries: InsertShiftAssignment[],
     deleteUserIds: number[],
     createdBy: number | null,
-  ): Promise<ShiftAssignment[]> {
+    expectedRevision: string,
+  ): Promise<ShiftAssignment[] | null> {
     return withDatabaseErrorHandling(
-      async () => {
-        return await db.transaction(async (tx) => {
-          // قفل استشاري على مستوى الفترة لمنع تعديلين متزامنين لنفس الشهر.
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(424242, ${year * 100 + month})`,
-          );
-
-          if (deleteUserIds.length) {
-            await tx
-              .delete(shift_assignments)
-              .where(
-                and(
-                  eq(shift_assignments.year, year),
-                  eq(shift_assignments.month, month),
-                  inArray(shift_assignments.user_id, deleteUserIds),
-                ),
-              );
-          }
-
-          if (upsertEntries.length) {
-            const values = upsertEntries.map((e) => ({
-              user_id: e.user_id,
-              year,
-              month,
-              shift: e.shift,
-              notes: e.notes ?? null,
-              created_by: createdBy,
-            }));
-            await tx
-              .insert(shift_assignments)
-              .values(values)
-              .onConflictDoUpdate({
-                target: [
-                  shift_assignments.user_id,
-                  shift_assignments.year,
-                  shift_assignments.month,
-                ],
-                set: {
-                  shift: sql`excluded.shift`,
-                  notes: sql`excluded.notes`,
-                  updated_at: sql`now()`,
-                },
-              });
-          }
-
-          return await tx
-            .select()
-            .from(shift_assignments)
-            .where(
-              and(
-                eq(shift_assignments.year, year),
-                eq(shift_assignments.month, month),
-              ),
-            );
-        });
-      },
+      () =>
+        shiftTemplateStore.saveShiftRoster(
+          year,
+          month,
+          upsertEntries,
+          deleteUserIds,
+          createdBy,
+          expectedRevision,
+        ),
       "saveShiftRoster",
       "حفظ جدول الورديات",
     );
@@ -1577,15 +1513,29 @@ export class HrStorage extends MachinesStorage {
       async () => {
         const fetchFrom = this.addDaysStr(from, -1);
         const fetchTo = this.addDaysStr(to, 1);
-        const rows = await db
-          .select()
-          .from(attendance)
-          .where(
-            and(
-              eq(attendance.user_id, userId),
-              sql`${attendance.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+        const [rows, withdrawalRows] = await Promise.all([
+          db
+            .select()
+            .from(attendance)
+            .where(
+              and(
+                eq(attendance.user_id, userId),
+                sql`${attendance.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+              ),
             ),
-          );
+          db
+            .select({
+              started_at: attendance_withdrawals.started_at,
+              ended_at: attendance_withdrawals.ended_at,
+            })
+            .from(attendance_withdrawals)
+            .where(
+              and(
+                eq(attendance_withdrawals.user_id, userId),
+                sql`${attendance_withdrawals.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+              ),
+            ),
+        ]);
         const assignments = await this.getShiftAssignmentsForUser(userId);
         const shiftMap = this.buildShiftMap(assignments);
         const permByUser = await this.getApprovedPermissionMinutes(
@@ -1595,6 +1545,10 @@ export class HrStorage extends MachinesStorage {
         );
         return computeEmployeeAttendance(rows as any, shiftMap, from, to, 0, {
           permissionMinutesByDate: permByUser.get(userId),
+          withdrawalIntervals: withdrawalRows.map((row) => ({
+            start: new Date(row.started_at),
+            end: row.ended_at ? new Date(row.ended_at) : new Date(),
+          })),
         });
       },
       "getComputedAttendance",
@@ -1644,6 +1598,31 @@ export class HrStorage extends MachinesStorage {
               sql`${attendance.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
             ),
           );
+        const withdrawalRows = await db
+          .select({
+            user_id: attendance_withdrawals.user_id,
+            started_at: attendance_withdrawals.started_at,
+            ended_at: attendance_withdrawals.ended_at,
+          })
+          .from(attendance_withdrawals)
+          .where(
+            and(
+              inArray(attendance_withdrawals.user_id, userIds),
+              sql`${attendance_withdrawals.date} BETWEEN ${fetchFrom} AND ${fetchTo}`,
+            ),
+          );
+        const withdrawalsByUser = new Map<
+          number,
+          Array<{ start: Date; end: Date }>
+        >();
+        for (const row of withdrawalRows) {
+          const list = withdrawalsByUser.get(row.user_id) ?? [];
+          list.push({
+            start: new Date(row.started_at),
+            end: row.ended_at ? new Date(row.ended_at) : new Date(),
+          });
+          withdrawalsByUser.set(row.user_id, list);
+        }
         const rowsByUser = new Map<number, any[]>();
         for (const r of attRows as any[]) {
           const list = rowsByUser.get(r.user_id) ?? [];
@@ -1676,7 +1655,10 @@ export class HrStorage extends MachinesStorage {
             from,
             to,
             0,
-            { permissionMinutesByDate: permByUser.get(emp.id) },
+            {
+              permissionMinutesByDate: permByUser.get(emp.id),
+              withdrawalIntervals: withdrawalsByUser.get(emp.id),
+            },
           );
           const sec =
             emp.section_id != null

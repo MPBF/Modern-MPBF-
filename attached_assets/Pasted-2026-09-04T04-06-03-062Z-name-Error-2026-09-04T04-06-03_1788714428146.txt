@@ -1,0 +1,600 @@
+2026-09-04T04:06:03.062Z   "name": "Error",
+2026-09-04T04:06:03.062Z [2026-09-04T04:06:03.062Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T04:06:35.677Z   "name": "Error",
+2026-09-04T04:06:35.677Z [2026-09-04T04:06:35.677Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T04:06:35.677Z   "message": "(#100) Invalid parameter",
+2026-09-04T07:10:54.223Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T07:10:54.230Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:54.232Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:54.249Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:54.323Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:54.335Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:54.458Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:54.714Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:55.469Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:55.988Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:57.328Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:10:58.877Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:11:00.007Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:11:00.931Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T07:11:01.807Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T09:30:39.743Z [2026-09-04T09:30:39.743Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T09:30:39.743Z   "name": "Error",
+2026-09-04T10:00:42.998Z   "name": "Error",
+2026-09-04T10:00:42.998Z [2026-09-04T10:00:42.997Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T10:16:19.113Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-04T10:16:19.113Z [2026-09-04T10:16:19.112Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T10:16:19.113Z   "name": "Error",
+2026-09-04T10:16:19.113Z }
+2026-09-04T10:16:19.113Z   "message": "(#100) Invalid parameter",
+2026-09-04T10:24:01.374Z [2026-09-04T10:24:01.374Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T10:24:01.374Z   "name": "Error",
+2026-09-04T10:30:17.612Z ⚠️ Transient DB pool error (will reconnect): terminating connection due to administrator command
+2026-09-04T11:04:23.274Z }
+2026-09-04T11:04:23.274Z   "message": "(#100) Invalid parameter",
+2026-09-04T11:04:23.274Z [2026-09-04T11:04:23.273Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T11:04:23.274Z   "name": "Error",
+2026-09-04T11:04:23.274Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-04T12:00:48.964Z   "message": "(#100) Invalid parameter",
+2026-09-04T12:00:48.964Z }
+2026-09-04T12:00:48.964Z   "name": "Error",
+2026-09-04T12:00:48.964Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-04T12:00:48.964Z [2026-09-04T12:00:48.964Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T12:02:10.246Z   "message": "(#100) Invalid parameter",
+2026-09-04T12:02:10.246Z }
+2026-09-04T12:02:10.246Z   "name": "Error",
+2026-09-04T12:02:10.246Z [2026-09-04T12:02:10.246Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T12:54:59.301Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T12:54:59.311Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:54:59.321Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:54:59.329Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:54:59.358Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:54:59.477Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:54:59.753Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:54:59.893Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:55:00.918Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:55:02.895Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:55:04.449Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:55:04.650Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:55:04.773Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T12:55:05.964Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:02:29.755Z command finished with error [npm run start]: signal: terminated
+2026-09-04T14:07:03.823Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T14:07:03.835Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:03.845Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:03.859Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:03.881Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:04.011Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:04.049Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:04.476Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:05.485Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:06.569Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T14:07:08.524Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T16:00:29.898Z [2026-09-04T16:00:29.898Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T16:00:29.898Z   "name": "Error",
+2026-09-04T16:00:29.898Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-04T16:00:29.898Z   "message": "(#100) Invalid parameter",
+2026-09-04T16:04:58.126Z [2026-09-04T16:04:58.126Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T16:04:58.126Z   "name": "Error",
+2026-09-04T17:07:49.536Z [2026-09-04T17:07:49.535Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T17:07:49.536Z   "name": "Error",
+2026-09-04T17:07:49.536Z }
+2026-09-04T17:07:49.536Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-04T18:00:39.890Z   "message": "(#100) Invalid parameter",
+2026-09-04T18:00:39.890Z [2026-09-04T18:00:39.890Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T18:00:39.890Z   "name": "Error",
+2026-09-04T18:16:47.030Z [2026-09-04T18:16:47.029Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T18:16:47.030Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-04T18:16:47.030Z   "name": "Error",
+2026-09-04T18:16:47.030Z   "message": "(#100) Invalid parameter",
+2026-09-04T18:35:15.169Z [2026-09-04T18:35:15.169Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-04T18:35:15.169Z   "message": "(#100) Invalid parameter",
+2026-09-04T18:35:15.169Z   "name": "Error",
+2026-09-04T20:08:47.875Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T20:08:47.877Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:47.884Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:47.918Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:47.999Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:48.009Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:48.295Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:48.896Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:50.082Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:50.781Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:50.796Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:51.854Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:53.268Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:53.353Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T20:08:53.755Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:27:29.879Z command finished with error [npm run start]: signal: terminated
+2026-09-04T21:42:49.486Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T21:42:49.496Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:49.504Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:49.529Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:49.553Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:49.665Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:49.679Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:50.273Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:50.332Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:51.272Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:51.866Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:52.433Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T21:42:53.577Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:27:39.905Z command finished with error [npm run start]: signal: terminated
+2026-09-04T22:31:56.852Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T22:31:56.854Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:56.859Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:56.879Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:56.901Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:56.903Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:57.190Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:57.768Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:58.206Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:31:58.529Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:32:00.441Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T22:52:49.912Z command finished with error [npm run start]: signal: terminated
+2026-09-04T23:25:43.221Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-04T23:25:43.224Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:43.227Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:43.232Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:43.273Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:43.334Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:43.632Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:44.205Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:44.916Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:46.112Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:46.147Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:46.701Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:47.357Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:47.886Z healthcheck failed error=healthcheck / returned status 500
+2026-09-04T23:25:49.887Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:38:30.038Z command finished with error [npm run start]: signal: terminated
+2026-09-05T00:42:18.887Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T00:42:18.890Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:18.895Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:18.933Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:19.000Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:19.018Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:19.202Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:19.423Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:20.559Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:21.406Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:22.836Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:24.186Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:24.611Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:25.638Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T00:42:27.048Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.036Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T01:21:24.041Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.058Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.095Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.144Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.196Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.305Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:24.873Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:25.190Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:26.568Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:28.420Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:30.215Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:31.949Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:32.318Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:33.380Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:35.368Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:37.169Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:37.423Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:39.114Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T01:21:40.477Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T02:53:55.167Z command finished with error [npm run start]: signal: terminated
+2026-09-05T03:11:49.026Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T03:11:49.034Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.040Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.069Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.103Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.192Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.457Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.724Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:49.739Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:50.190Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:52.184Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:54.032Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:55.267Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T03:11:57.134Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T04:00:04.873Z   "name": "Error",
+2026-09-05T04:00:04.873Z   "message": "(#100) Invalid parameter",
+2026-09-05T04:00:04.873Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T04:00:34.106Z   "name": "Error",
+2026-09-05T04:00:34.106Z }
+2026-09-05T04:00:34.106Z   "message": "(#100) Invalid parameter",
+2026-09-05T04:00:34.106Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T04:00:34.106Z [2026-09-05T04:00:34.105Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T04:02:04.196Z [2026-09-05T04:02:04.195Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T04:02:04.196Z   "name": "Error",
+2026-09-05T04:02:04.196Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T04:02:29.516Z   "name": "Error",
+2026-09-05T04:04:44.038Z ⚠️ [WARNING] GET /assets/index-DOKA8cLG.js took 506ms
+2026-09-05T04:04:49.271Z }
+2026-09-05T04:04:49.271Z   "message": "(#100) Invalid parameter",
+2026-09-05T04:04:49.271Z   "name": "Error",
+2026-09-05T04:04:49.271Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T04:04:49.271Z [2026-09-05T04:04:49.270Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T04:05:19.552Z   "message": "(#100) Invalid parameter",
+2026-09-05T04:05:19.552Z [2026-09-05T04:05:19.552Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T04:05:19.552Z   "name": "Error",
+2026-09-05T04:05:58.270Z ⚠️ [CRITICAL] GET /api/notifications/stream took 74755ms
+2026-09-05T04:24:35.642Z   "name": "Error",
+2026-09-05T04:24:35.642Z [2026-09-05T04:24:35.642Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T04:24:35.642Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T04:24:35.642Z   "message": "(#100) Invalid parameter",
+2026-09-05T05:41:29.196Z ⚠️ [WARNING] GET /assets/searchable-select-BCsM4XkN.js took 1500ms
+2026-09-05T05:41:29.209Z ⚠️ [WARNING] GET /assets/CuttingOperatorDashboard-ZIRT36aR.js took 1544ms
+2026-09-05T06:06:38.251Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T06:06:38.257Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:38.260Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:38.285Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:38.296Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:38.299Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:38.461Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:39.054Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:39.112Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:40.280Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:41.849Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:43.333Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:43.869Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:44.200Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:45.251Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:47.133Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:06:47.171Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:18:04.745Z command finished with error [npm run start]: signal: terminated
+2026-09-05T06:21:18.266Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T06:21:18.273Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:18.275Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:18.315Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:18.385Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:18.485Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:18.579Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:19.103Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:19.320Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:20.429Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:21.143Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:21.856Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:22.453Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:23.478Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:21:24.696Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T06:59:18.133Z ⚠️ [WARNING] POST /api/login took 1548ms
+2026-09-05T08:32:16.134Z }
+2026-09-05T08:32:16.134Z   "message": "(#100) Invalid parameter",
+2026-09-05T08:32:16.134Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T09:00:20.158Z [2026-09-05T09:00:20.157Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T09:00:20.158Z   "message": "(#100) Invalid parameter",
+2026-09-05T09:01:34.969Z }
+2026-09-05T09:01:34.969Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T09:01:34.969Z [2026-09-05T09:01:34.969Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T09:01:34.969Z   "name": "Error",
+2026-09-05T09:01:34.969Z   "message": "(#100) Invalid parameter",
+2026-09-05T09:02:25.681Z   "name": "Error",
+2026-09-05T09:02:25.681Z [2026-09-05T09:02:25.680Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T09:35:35.466Z   "message": "(#100) Invalid parameter",
+2026-09-05T09:35:35.466Z   "name": "Error",
+2026-09-05T09:35:35.466Z [2026-09-05T09:35:35.466Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T09:50:49.599Z [2026-09-05T09:50:49.599Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T09:50:49.599Z   "name": "Error",
+2026-09-05T09:55:09.184Z   "message": "(#100) Invalid parameter",
+2026-09-05T09:55:09.184Z [2026-09-05T09:55:09.184Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T09:55:09.184Z   "name": "Error",
+2026-09-05T10:02:05.920Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T10:02:05.920Z [2026-09-05T10:02:05.919Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T10:02:05.920Z   "message": "(#100) Invalid parameter",
+2026-09-05T10:02:05.920Z   "name": "Error",
+2026-09-05T10:12:03.291Z }
+2026-09-05T10:12:03.291Z   "name": "Error",
+2026-09-05T10:12:03.291Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T10:12:03.291Z   "message": "(#100) Invalid parameter",
+2026-09-05T10:12:03.291Z [2026-09-05T10:12:03.290Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T10:12:30.693Z [2026-09-05T10:12:30.693Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T10:12:30.693Z   "message": "(#100) Invalid parameter",
+2026-09-05T10:12:30.693Z   "name": "Error",
+2026-09-05T10:15:35.954Z   "name": "Error",
+2026-09-05T10:36:20.694Z [2026-09-05T10:36:20.694Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T10:36:20.694Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T10:36:20.694Z }
+2026-09-05T10:36:20.694Z   "message": "(#100) Invalid parameter",
+2026-09-05T10:36:20.694Z   "name": "Error",
+2026-09-05T10:46:37.612Z   "message": "(#100) Invalid parameter",
+2026-09-05T10:46:37.612Z [2026-09-05T10:46:37.612Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T10:46:37.612Z }
+2026-09-05T10:46:37.612Z   "name": "Error",
+2026-09-05T10:50:22.736Z [2026-09-05T10:50:22.736Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T11:08:03.283Z ⚠️ [WARNING] GET /api/production-orders took 516ms
+2026-09-05T12:09:10.329Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T12:09:10.329Z   "name": "Error",
+2026-09-05T12:09:10.329Z }
+2026-09-05T12:09:10.329Z   "message": "(#100) Invalid parameter",
+2026-09-05T12:09:10.329Z [2026-09-05T12:09:10.328Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T12:19:10.499Z ⚠️ [CRITICAL] GET /api/legacy/customer-products took 3070ms
+2026-09-05T12:31:16.292Z ⚠️ [WARNING] POST /api/login took 546ms
+2026-09-05T13:01:14.098Z   "name": "Error",
+2026-09-05T13:01:14.098Z [2026-09-05T13:01:14.098Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T13:01:14.098Z   "message": "(#100) Invalid parameter",
+2026-09-05T14:06:37.928Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T14:06:37.939Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:37.954Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:37.954Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:37.958Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:37.965Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:37.981Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:38.008Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:38.079Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:38.117Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:38.138Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:38.158Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:38.421Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:39.203Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:40.181Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:41.347Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:42.798Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:47.390Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T14:06:47.396Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:47.418Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:47.457Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:47.528Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:47.685Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:47.736Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:48.352Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:49.181Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:50.830Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:51.698Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:06:52.398Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T14:11:53.465Z command finished with error [npm run start]: signal: terminated
+2026-09-05T14:21:55.452Z command finished with error [npm run start]: signal: terminated
+2026-09-05T14:27:31.237Z ⚠️ [WARNING] POST /api/rolls/create-with-timing took 543ms
+2026-09-05T14:27:47.276Z ⚠️ [WARNING] POST /api/rolls/create-with-timing took 608ms
+2026-09-05T15:51:43.152Z ⚠️ [WARNING] GET /assets/index-DOKA8cLG.js took 644ms
+2026-09-05T16:00:03.959Z   "message": "(#100) Invalid parameter",
+2026-09-05T16:00:03.959Z   "name": "Error",
+2026-09-05T16:00:03.959Z [2026-09-05T16:00:03.959Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T16:00:34.059Z   "name": "Error",
+2026-09-05T16:00:34.059Z }
+2026-09-05T16:00:34.059Z   "message": "(#100) Invalid parameter",
+2026-09-05T16:00:34.059Z [2026-09-05T16:00:34.058Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T16:00:34.059Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T16:01:42.811Z   "name": "Error",
+2026-09-05T16:01:42.811Z [2026-09-05T16:01:42.811Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T16:01:42.811Z }
+2026-09-05T16:01:42.811Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T16:01:42.811Z   "message": "(#100) Invalid parameter",
+2026-09-05T16:05:43.420Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T16:05:43.420Z   "message": "(#100) Invalid parameter",
+2026-09-05T16:05:43.420Z   "name": "Error",
+2026-09-05T16:05:43.420Z [2026-09-05T16:05:43.420Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T16:05:43.420Z }
+2026-09-05T16:10:03.326Z ⚠️ [WARNING] GET /assets/dashboard-7KQ_Tgq0.js took 540ms
+2026-09-05T16:23:57.403Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T16:23:57.403Z   "message": "(#100) Invalid parameter",
+2026-09-05T16:23:57.403Z [2026-09-05T16:23:57.403Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T17:38:18.409Z [2026-09-05T17:38:18.409Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T17:38:18.409Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T17:38:18.409Z   "name": "Error",
+2026-09-05T17:38:18.409Z   "message": "(#100) Invalid parameter",
+2026-09-05T17:57:11.056Z [2026-09-05T17:57:11.056Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T17:57:11.056Z   "name": "Error",
+2026-09-05T18:00:43.735Z   "name": "Error",
+2026-09-05T18:00:43.735Z }
+2026-09-05T18:22:46.802Z ⚠️ Transient DB pool error (will reconnect): terminating connection due to administrator command
+2026-09-05T18:33:58.900Z [2026-09-05T18:33:58.900Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T18:33:58.900Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T18:33:58.900Z   "name": "Error",
+2026-09-05T18:33:58.900Z   "message": "(#100) Invalid parameter",
+2026-09-05T18:57:45.572Z   "message": "(#100) Invalid parameter",
+2026-09-05T19:29:54.655Z   "name": "Error",
+2026-09-05T19:29:54.655Z   "message": "(#100) Invalid parameter",
+2026-09-05T19:29:54.655Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-05T19:29:54.655Z }
+2026-09-05T19:29:54.655Z [2026-09-05T19:29:54.655Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-05T22:07:49.246Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-05T22:07:49.254Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:49.266Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:49.300Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:49.370Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:49.448Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:49.544Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:50.006Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:50.165Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:52.196Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:52.983Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:54.847Z healthcheck failed error=healthcheck / returned status 500
+2026-09-05T22:07:55.401Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T00:47:35.671Z command finished with error [npm run start]: signal: terminated
+2026-09-06T01:00:44.190Z healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-09-06T01:00:44.198Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:44.202Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:44.229Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:44.295Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:44.343Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:44.450Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:44.912Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:45.214Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:46.287Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:48.061Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:49.345Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:50.652Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T01:00:51.230Z healthcheck failed error=healthcheck / returned status 500
+2026-09-06T03:41:25.276Z ⚠️ [WARNING] POST /api/rolls/create-with-timing took 569ms
+2026-09-06T04:00:04.205Z   "message": "(#100) Invalid parameter",
+2026-09-06T04:00:04.205Z }
+2026-09-06T04:00:04.205Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T04:00:04.205Z [2026-09-06T04:00:04.202Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:00:04.205Z   "name": "Error",
+2026-09-06T04:00:10.001Z [2026-09-06T04:00:10.001Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:01:10.226Z [2026-09-06T04:01:10.226Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:01:10.226Z   "name": "Error",
+2026-09-06T04:02:07.857Z [system-users] تم رفض رد لذكره رقم طلب غير موجود
+2026-09-06T04:02:55.008Z [2026-09-06T04:02:55.008Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:02:55.008Z   "name": "Error",
+2026-09-06T04:02:55.008Z   "message": "(#100) Invalid parameter",
+2026-09-06T04:03:15.872Z [2026-09-06T04:03:15.872Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:03:15.872Z   "message": "(#100) Invalid parameter",
+2026-09-06T04:04:39.887Z   "name": "Error",
+2026-09-06T04:04:39.887Z   "message": "(#100) Invalid parameter",
+2026-09-06T04:06:49.216Z [system-users] تم رفض رد لذكره رقم طلب غير موجود
+2026-09-06T04:07:27.576Z [2026-09-06T04:07:27.575Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:07:27.576Z   "name": "Error",
+2026-09-06T04:12:57.162Z [2026-09-06T04:12:57.161Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:12:57.162Z   "message": "(#100) Invalid parameter",
+2026-09-06T04:21:54.617Z   "message": "(#100) Invalid parameter",
+2026-09-06T04:21:54.617Z   "name": "Error",
+2026-09-06T04:21:54.617Z [2026-09-06T04:21:54.617Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T04:38:49.963Z ⚠️ [WARNING] GET /api/dashboard/config took 1123ms
+2026-09-06T06:39:50.155Z ⚠️ [WARNING] POST /api/login took 1754ms
+2026-09-06T06:59:57.051Z ⚠️ [WARNING] POST /api/login took 1370ms
+2026-09-06T07:00:56.439Z [2026-09-06T07:00:56.438Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T07:00:56.439Z   "message": "(#100) Invalid parameter",
+2026-09-06T07:00:56.439Z   "name": "Error",
+2026-09-06T08:30:56.337Z   "name": "Error",
+2026-09-06T08:30:56.337Z   "message": "(#100) Invalid parameter",
+2026-09-06T08:30:56.337Z }
+2026-09-06T08:30:56.337Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T08:30:56.337Z [2026-09-06T08:30:56.337Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T08:34:24.441Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T08:34:24.441Z   "message": "(#100) Invalid parameter",
+2026-09-06T08:34:24.441Z [2026-09-06T08:34:24.440Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T08:34:24.441Z }
+2026-09-06T08:34:24.441Z   "name": "Error",
+2026-09-06T08:57:20.195Z   "message": "(#100) Invalid parameter",
+2026-09-06T08:57:20.195Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T08:57:20.195Z   "name": "Error",
+2026-09-06T09:01:45.704Z }
+2026-09-06T09:01:45.704Z [2026-09-06T09:01:45.704Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T09:13:22.316Z   "name": "Error",
+2026-09-06T09:13:22.316Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T09:20:22.270Z   "name": "Error",
+2026-09-06T09:20:22.270Z [2026-09-06T09:20:22.269Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T09:20:22.270Z   "message": "(#100) Invalid parameter",
+2026-09-06T09:22:36.209Z   "message": "(#100) Invalid parameter",
+2026-09-06T09:22:36.209Z [2026-09-06T09:22:36.209Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T09:22:36.209Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T09:22:36.209Z   "name": "Error",
+2026-09-06T09:22:40.085Z   "name": "Error",
+2026-09-06T09:22:40.085Z   "message": "(#100) Invalid parameter",
+2026-09-06T09:22:40.085Z [2026-09-06T09:22:40.084Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T09:28:39.067Z   "name": "Error",
+2026-09-06T09:28:39.067Z   "message": "(#100) Invalid parameter",
+2026-09-06T09:28:39.067Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T09:30:29.292Z ⚠️ [WARNING] GET /api/dashboard/stats took 1459ms
+2026-09-06T09:47:33.470Z   "message": "(#100) Invalid parameter",
+2026-09-06T09:47:33.470Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T09:47:33.470Z }
+2026-09-06T09:47:33.470Z   "name": "Error",
+2026-09-06T09:47:33.470Z [2026-09-06T09:47:33.469Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T09:49:55.566Z }
+2026-09-06T09:49:55.566Z   "message": "(#100) Invalid parameter",
+2026-09-06T09:49:55.566Z [2026-09-06T09:49:55.566Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T09:49:55.566Z   "name": "Error",
+2026-09-06T10:03:16.477Z   "name": "Error",
+2026-09-06T10:03:16.477Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T10:03:16.477Z   "message": "(#100) Invalid parameter",
+2026-09-06T10:03:16.477Z [2026-09-06T10:03:16.477Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T10:05:36.404Z   "message": "(#100) Invalid parameter",
+2026-09-06T10:05:36.404Z   "name": "Error",
+2026-09-06T10:05:36.404Z [2026-09-06T10:05:36.404Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T10:05:36.404Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T10:05:36.404Z }
+2026-09-06T10:17:18.542Z [2026-09-06T10:17:18.542Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T10:19:41.853Z [2026-09-06T10:19:41.852Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T10:19:41.853Z   "name": "Error",
+2026-09-06T10:21:34.504Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T10:21:34.504Z   "name": "Error",
+2026-09-06T10:21:34.504Z [2026-09-06T10:21:34.504Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T10:21:34.504Z   "message": "(#100) Invalid parameter",
+2026-09-06T10:21:34.504Z }
+2026-09-06T10:32:45.651Z [2026-09-06T10:32:45.651Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T10:32:45.651Z   "message": "(#100) Invalid parameter",
+2026-09-06T10:32:45.651Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T10:32:45.651Z   "name": "Error",
+2026-09-06T10:43:39.240Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T10:43:39.240Z }
+2026-09-06T10:43:39.240Z   "name": "Error",
+2026-09-06T11:40:13.002Z [2026-09-06T11:40:13.002Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T11:40:13.002Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T11:40:13.002Z }
+2026-09-06T12:02:49.659Z [2026-09-06T12:02:49.659Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T12:02:49.659Z   "message": "(#100) Invalid parameter",
+2026-09-06T13:25:01.006Z ⚠️ [CRITICAL] GET /api/legacy/customer-products took 3085ms
+2026-09-06T13:35:31.690Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1173ms
+2026-09-06T13:36:46.714Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T13:41:04.988Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1033ms
+2026-09-06T13:42:16.639Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T13:42:16.639Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T14:05:50.336Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1168ms
+2026-09-06T14:07:31.626Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T14:28:52.882Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1105ms
+2026-09-06T14:32:01.819Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T14:33:27.176Z     'cf-cache-status': 'DYNAMIC',
+2026-09-06T14:33:27.176Z     connection: 'keep-alive',
+2026-09-06T14:33:27.176Z     'cf-ray': 'a36e304fdd77b66c-DFW',
+2026-09-06T14:33:27.176Z   headers: Headers {
+2026-09-06T14:33:27.176Z     'content-type': 'application/json; charset=utf-8',
+2026-09-06T14:33:27.176Z     at OpenAI.makeStatusError (file:///home/runner/workspace/node_modules/openai/client.mjs:160:32)
+2026-09-06T14:33:27.176Z     date: 'Sun, 06 Sep 2026 14:33:27 GMT',
+2026-09-06T14:33:27.176Z   status: 429,
+2026-09-06T14:33:27.176Z     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+2026-09-06T14:33:27.176Z     at async file:///home/runner/workspace/dist/index.js:25999:24 {
+2026-09-06T14:33:27.176Z     at OpenAI.makeRequest (file:///home/runner/workspace/node_modules/openai/client.mjs:328:30)
+2026-09-06T14:33:27.176Z     'content-length': '283',
+2026-09-06T14:33:30.046Z     'set-cookie': '__cf_bm=0TIVyZEEx8uwLuFeJkWc007za_tYwoujf.1neXaGHVk-1788705209.9940012-1.0.1.1-oPItdVbm74sVyEqQ_gS8CXAOSo6drAv_dvUVdOpn9BXqBa9gDy85M_qdFcMz_ZzE3HyOWwEUm3LD6k5TVkSDrlsnMltA3PzLhSSmU5a2RObuhYBiiJYTByNfl8P9aTR0; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun, 06 Sep 2026 15:03:30 GMT',
+2026-09-06T14:33:30.046Z   status: 429,
+2026-09-06T14:33:30.046Z     at APIError.generate (file:///home/runner/workspace/node_modules/openai/core/error.mjs:59:20)
+2026-09-06T14:33:30.046Z Translation error: RateLimitError: 429 You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+2026-09-06T14:33:30.046Z     'x-content-type-options': 'nosniff',
+2026-09-06T14:33:30.046Z     'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+2026-09-06T14:33:30.046Z     vary: 'Origin',
+2026-09-06T14:33:30.046Z     'x-openai-proxy-wasm': 'v0.1',
+2026-09-06T14:33:30.046Z     'cf-cache-status': 'DYNAMIC',
+2026-09-06T14:33:30.046Z     'x-request-id': 'req_934222b44bcd46308dbc110362f1c2d5',
+2026-09-06T14:33:30.046Z     'access-control-expose-headers': 'CF-Ray, CF-Ray',
+2026-09-06T14:33:30.046Z     server: 'cloudflare',
+2026-09-06T14:37:21.449Z     at OpenAI.makeStatusError (file:///home/runner/workspace/node_modules/openai/client.mjs:160:32)
+2026-09-06T14:37:21.449Z     'content-type': 'application/json; charset=utf-8',
+2026-09-06T14:37:21.449Z     connection: 'keep-alive',
+2026-09-06T14:37:21.449Z   headers: Headers {
+2026-09-06T14:37:21.449Z   status: 429,
+2026-09-06T14:37:21.449Z     at APIError.generate (file:///home/runner/workspace/node_modules/openai/core/error.mjs:59:20)
+2026-09-06T14:37:21.449Z     'content-length': '283',
+2026-09-06T14:37:21.449Z     at OpenAI.makeRequest (file:///home/runner/workspace/node_modules/openai/client.mjs:328:30)
+2026-09-06T14:37:21.449Z     at async file:///home/runner/workspace/dist/index.js:25999:24 {
+2026-09-06T14:37:21.449Z Translation error: RateLimitError: 429 You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+2026-09-06T14:37:21.449Z     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+2026-09-06T14:37:21.449Z     date: 'Sun, 06 Sep 2026 14:37:21 GMT',
+2026-09-06T15:00:04.008Z [2026-09-06T15:00:04.008Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T15:00:04.008Z   "name": "Error",
+2026-09-06T15:05:01.923Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:05:01.933Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:05:01.934Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:12:09.758Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1056ms
+2026-09-06T15:13:46.584Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:14:29.208Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1095ms
+2026-09-06T15:14:29.290Z ⚠️ [WARNING] GET /api/legacy/customer-products took 517ms
+2026-09-06T15:16:01.914Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:16:01.920Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:26:04.016Z ⚠️ [WARNING] GET /api/legacy/customer-products took 1114ms
+2026-09-06T15:27:16.745Z 🟠 Legacy DB pool error (non-fatal): terminating connection due to administrator command
+2026-09-06T15:37:54.505Z ⚠️ [WARNING] POST /api/orders took 1247ms
+2026-09-06T16:01:24.441Z [2026-09-06T16:01:24.441Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T16:01:24.441Z }
+2026-09-06T16:01:24.441Z   "name": "Error",
+2026-09-06T16:01:24.441Z   "message": "(#100) Invalid parameter",
+2026-09-06T16:01:24.441Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T16:02:01.196Z [2026-09-06T16:02:01.195Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T16:02:01.196Z   "name": "Error",
+2026-09-06T16:02:36.237Z [2026-09-06T16:02:36.237Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T16:02:36.237Z   "message": "(#100) Invalid parameter",
+2026-09-06T16:02:36.237Z }
+2026-09-06T16:02:36.237Z   "name": "Error",
+2026-09-06T16:02:36.237Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T16:03:41.489Z [2026-09-06T16:03:41.488Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T16:03:41.489Z   "message": "(#100) Invalid parameter",
+2026-09-06T16:03:41.489Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"
+2026-09-06T16:03:41.489Z   "name": "Error",
+2026-09-06T16:17:17.354Z   "name": "Error",
+2026-09-06T16:17:17.354Z }
+2026-09-06T16:17:17.354Z   "message": "(#100) Invalid parameter",
+2026-09-06T16:17:17.354Z [2026-09-06T16:17:17.354Z] [ERROR] خطأ في إرسال رسالة واتس اب (قالب Meta) {
+2026-09-06T16:17:17.354Z   "stack": "Error: (#100) Invalid parameter\n    at MetaWhatsAppService.sendTemplateMessage (file:///home/runner/workspace/dist/index.js:20118:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///home/runner/workspace/dist/index.js:34947:17"

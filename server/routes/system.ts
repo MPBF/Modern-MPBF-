@@ -53,6 +53,7 @@ import {
   rolls,
   customers,
   customer_products,
+  categories,
   locations,
   users,
   attendance,
@@ -2604,24 +2605,197 @@ export async function registerSystemRoutes(app: Express, ctx: any) {
     }
   });
 
+  const getDisplayPeriodStart = (period: string): Date | null => {
+    const now = new Date();
+    if (period === "today") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return today;
+    }
+    if (period === "week") {
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+    if (period === "month") {
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    if (period === "year") {
+      return new Date(now.getFullYear(), 0, 1);
+    }
+    return null;
+  };
+
+  const displayStageRows = sql`
+    SELECT 'film' as stage, r.id, r.weight_kg as quantity_kg, r.created_at as event_at,
+           r.created_by as user_id, r.film_machine_id as machine_id
+    FROM rolls r
+    WHERE r.created_at IS NOT NULL
+    UNION ALL
+    SELECT 'printing' as stage, r.id, r.weight_kg as quantity_kg, r.printed_at as event_at,
+           r.printed_by as user_id, r.printing_machine_id as machine_id
+    FROM rolls r
+    WHERE r.printed_at IS NOT NULL
+    UNION ALL
+    SELECT 'cutting' as stage, r.id, COALESCE(NULLIF(r.cut_weight_total_kg, 0), r.weight_kg) as quantity_kg,
+           r.cut_completed_at as event_at, r.cut_by as user_id, r.cutting_machine_id as machine_id
+    FROM rolls r
+    WHERE r.cut_completed_at IS NOT NULL
+  `;
+
+  app.get("/api/display/live/orders-board", requireAuth, async (req, res) => {
+    try {
+      const status = String(req.query.status || "active");
+      const stage = String(req.query.stage || "all");
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || "8"), 10) || 8, 3), 20);
+      const statusFilter =
+        status === "all"
+          ? sql``
+          : status === "active"
+            ? sql`AND o.status IN ('waiting', 'in_production', 'on_hold', 'paused')`
+            : sql`AND o.status = ${status}`;
+      const stageFilter = stage === "all" ? sql`` : sql`AND po.production_stage = ${stage}`;
+
+      const orderResult = await db.execute(sql`
+        SELECT o.id, o.order_number, o.status, o.created_at, o.delivery_date,
+               c.name as customer_name, c.name_ar as customer_name_ar,
+               COUNT(po.id) as production_order_count,
+               AVG(po.film_completion_percentage) as film_completion_percentage,
+               AVG(po.printing_completion_percentage) as printing_completion_percentage,
+               AVG(po.cutting_completion_percentage) as cutting_completion_percentage
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id
+        LEFT JOIN production_orders po ON po.order_id = o.id
+        WHERE 1 = 1 ${statusFilter} ${stageFilter}
+        GROUP BY o.id, c.name, c.name_ar
+        ORDER BY o.created_at DESC
+        LIMIT ${limit}
+      `);
+
+      const orderIds = orderResult.rows.map((row: any) => row.id);
+      if (orderIds.length === 0) {
+        return res.json({ orders: [], filters: { status, stage, limit } });
+      }
+
+      const productionResult = await db.execute(sql`
+        SELECT po.id, po.order_id, po.production_order_number, po.status, po.production_stage,
+               po.quantity_kg, po.produced_quantity_kg, po.printed_quantity_kg, po.net_quantity_kg,
+               po.film_completion_percentage, po.printing_completion_percentage, po.cutting_completion_percentage,
+               COALESCE(cp.size_caption, '') as size_caption,
+               COALESCE(cat.name_ar, '') as category_name_ar,
+               COALESCE(cat.name, '') as category_name,
+               COALESCE(i.name_ar, '') as item_name_ar,
+               COALESCE(i.name, '') as item_name,
+               TRIM(BOTH ' - ' FROM CONCAT_WS(' - ', NULLIF(cat.name_ar, ''), NULLIF(i.name_ar, ''))) as customer_product_display_name
+        FROM production_orders po
+        LEFT JOIN customer_products cp ON po.customer_product_id = cp.id
+          LEFT JOIN categories cat ON cp.category_id = cat.id
+        LEFT JOIN items i ON cp.item_id = i.id
+        WHERE po.order_id IN (${sql.join(orderIds, sql`,`)}) ${stageFilter}
+        ORDER BY po.created_at DESC
+      `);
+
+      const productionByOrder = new Map<number, any[]>();
+      for (const po of productionResult.rows as any[]) {
+        const list = productionByOrder.get(po.order_id) || [];
+        list.push(po);
+        productionByOrder.set(po.order_id, list);
+      }
+
+      res.json({
+        filters: { status, stage, limit },
+        orders: orderResult.rows.map((order: any) => ({
+          ...order,
+          production_orders: productionByOrder.get(order.id) || [],
+        })),
+      });
+    } catch (error) {
+      console.error("Error fetching display orders board:", error);
+      res.status(500).json({ message: "خطأ في جلب بيانات طلبات شاشة العرض" });
+    }
+  });
+
+  app.get("/api/display/live/section-stats", requireAuth, async (req, res) => {
+    try {
+      const period = String(req.query.period || "today");
+      const start = getDisplayPeriodStart(period);
+      const dateFilter = start ? sql`WHERE event_at >= ${start}` : sql``;
+      const result = await db.execute(sql`
+        WITH stage_events AS (${displayStageRows})
+        SELECT stage,
+               COUNT(id) as roll_count,
+               COALESCE(SUM(quantity_kg), 0) as total_weight_kg,
+               COALESCE(AVG(quantity_kg), 0) as average_weight_kg
+        FROM stage_events
+        ${dateFilter}
+        GROUP BY stage
+        ORDER BY stage
+      `);
+      res.json({ period, sections: result.rows });
+    } catch (error) {
+      console.error("Error fetching display section stats:", error);
+      res.status(500).json({ message: "خطأ في جلب إحصائيات الأقسام" });
+    }
+  });
+
+  app.get("/api/display/live/machine-stats", requireAuth, async (req, res) => {
+    try {
+      const period = String(req.query.period || "today");
+      const stage = String(req.query.stage || "all");
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || "5"), 10) || 5, 3), 10);
+      const start = getDisplayPeriodStart(period);
+      const dateFilter = start ? sql`AND se.event_at >= ${start}` : sql``;
+      const stageFilter = stage === "all" ? sql`` : sql`AND se.stage = ${stage}`;
+      const result = await db.execute(sql`
+        WITH stage_events AS (${displayStageRows})
+        SELECT se.stage, se.machine_id, m.name, m.name_ar, m.type,
+               COUNT(se.id) as roll_count,
+               COALESCE(SUM(se.quantity_kg), 0) as total_weight_kg
+        FROM stage_events se
+        LEFT JOIN machines m ON se.machine_id = m.id
+        WHERE se.machine_id IS NOT NULL ${dateFilter} ${stageFilter}
+        GROUP BY se.stage, se.machine_id, m.name, m.name_ar, m.type
+        ORDER BY total_weight_kg DESC
+        LIMIT ${limit}
+      `);
+      res.json({ period, stage, machines: result.rows });
+    } catch (error) {
+      console.error("Error fetching display machine stats:", error);
+      res.status(500).json({ message: "خطأ في جلب إحصائيات الماكينات" });
+    }
+  });
+
+  app.get("/api/display/live/user-stats", requireAuth, async (req, res) => {
+    try {
+      const period = String(req.query.period || "today");
+      const stage = String(req.query.stage || "all");
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || "5"), 10) || 5, 3), 10);
+      const start = getDisplayPeriodStart(period);
+      const dateFilter = start ? sql`AND se.event_at >= ${start}` : sql``;
+      const stageFilter = stage === "all" ? sql`` : sql`AND se.stage = ${stage}`;
+      const result = await db.execute(sql`
+        WITH stage_events AS (${displayStageRows})
+        SELECT se.stage, se.user_id, u.full_name, u.username,
+               COUNT(se.id) as roll_count,
+               COALESCE(SUM(se.quantity_kg), 0) as total_weight_kg
+        FROM stage_events se
+        LEFT JOIN users u ON se.user_id = u.id
+        WHERE se.user_id IS NOT NULL ${dateFilter} ${stageFilter}
+        GROUP BY se.stage, se.user_id, u.full_name, u.username
+        ORDER BY total_weight_kg DESC
+        LIMIT ${limit}
+      `);
+      res.json({ period, stage, users: result.rows });
+    } catch (error) {
+      console.error("Error fetching display user stats:", error);
+      res.status(500).json({ message: "خطأ في جلب إحصائيات المستخدمين" });
+    }
+  });
+
   app.get("/api/display/live/top-producers", requireAuth, async (req, res) => {
     try {
       const period = (req.query.period as string) || "today";
       const stage = (req.query.stage as string) || "all";
 
-      let dateFilter = sql``;
-      const now = new Date();
-      if (period === "today") {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateFilter = sql`AND r.created_at >= ${today}`;
-      } else if (period === "week") {
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        dateFilter = sql`AND r.created_at >= ${weekAgo}`;
-      } else if (period === "month") {
-        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        dateFilter = sql`AND r.created_at >= ${monthAgo}`;
-      }
+      const start = getDisplayPeriodStart(period);
 
       const sections =
         stage === "all" ? ["film", "printing", "cutting"] : [stage];
@@ -2629,13 +2803,22 @@ export async function registerSystemRoutes(app: Express, ctx: any) {
 
       for (const sec of sections) {
         let userCol = sql`r.created_by`;
-        if (sec === "printing") userCol = sql`r.printed_by`;
-        else if (sec === "cutting") userCol = sql`r.cut_by`;
+        let dateCol = sql`r.created_at`;
+        let quantityCol = sql`r.weight_kg`;
+        if (sec === "printing") {
+          userCol = sql`r.printed_by`;
+          dateCol = sql`r.printed_at`;
+        } else if (sec === "cutting") {
+          userCol = sql`r.cut_by`;
+          dateCol = sql`r.cut_completed_at`;
+          quantityCol = sql`COALESCE(NULLIF(r.cut_weight_total_kg, 0), r.weight_kg)`;
+        }
+        const dateFilter = start ? sql`AND ${dateCol} >= ${start}` : sql``;
 
         const query = sql`
           SELECT ${userCol} as user_id, u.full_name, u.username,
                  COUNT(r.id) as roll_count,
-                 COALESCE(SUM(r.weight_kg), 0) as total_weight_kg
+                 COALESCE(SUM(${quantityCol}), 0) as total_weight_kg
           FROM rolls r
           LEFT JOIN users u ON ${userCol} = u.id
           WHERE ${userCol} IS NOT NULL ${dateFilter}

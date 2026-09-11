@@ -61,6 +61,7 @@ import { useCompanyLogo } from "../../hooks/use-company-logo";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest, queryClient } from "../../lib/queryClient";
 import { hasPermission } from "../../../../shared/permissions";
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { useAuth } from "../../hooks/use-auth";
 
 type Worker = {
@@ -196,7 +197,7 @@ function printSingle(v: WvRow, logoUrl?: string) {
     <div class="row"><span class="lbl">أمر الإنتاج:</span>${esc(v.production_order_id ?? "—")}</div>
     <div class="row"><span class="lbl">رقم التكرار:</span>${esc(v.repeat_index)}</div>
     <div class="row"><span class="lbl">النقاط:</span><b>${esc(v.points)}</b></div>
-    <div class="row"><span class="lbl">قيمة الخصم:</span><b>${esc(Number(v.deduction_amount).toFixed(2))} ر.س</b></div>
+    <div class="row"><span class="lbl">قيمة الخصم:</span><b>${esc(formatNumberAr(Number(v.deduction_amount), 2))} ر.س</b></div>
     ${v.waived ? `<div class="row waived"><span class="lbl">الحالة:</span>مُتجاوز عنها (بواسطة: ${esc(v.waived_by_name || "—")})${v.waive_reason ? " — السبب: " + esc(v.waive_reason) : ""}</div>` : ""}
     <div class="row"><span class="lbl">ملاحظات:</span>${esc(v.note || "—")}</div>
     <div class="row"><span class="lbl">سجّلها:</span>${esc(v.reported_by_name || "—")}</div>
@@ -224,7 +225,7 @@ function rowsTable(rows: WvRow[], managerView: boolean): string {
       <td>${esc(fmtDateTime(r.occurred_at))}</td><td>${esc(r.repeat_index)}</td><td>${esc(r.points)}</td>
       ${
         managerView
-          ? `<td>${esc(Number(r.deduction_amount).toFixed(2))}</td>
+          ? `<td>${esc(formatNumberAr(Number(r.deduction_amount), 2))}</td>
              <td>${r.waived ? `<span class="waived">مُتجاوز عنها${r.waived_by_name ? " (" + esc(r.waived_by_name) + ")" : ""}</span>` : "سارية"}</td>
              <td>${esc(r.reported_by_name || "—")}</td>`
           : ""
@@ -233,7 +234,7 @@ function rowsTable(rows: WvRow[], managerView: boolean): string {
     )
     .join("")}
   <tr class="total"><td colspan="5">الإجمالي (بدون المُتجاوز عنها)</td><td>${totalPoints}</td>
-  ${managerView ? `<td>${totalDeduction.toFixed(2)}</td><td colspan="2"></td>` : ""}</tr>
+  ${managerView ? `<td>${formatNumberAr(totalDeduction, 2)}</td><td colspan="2"></td>` : ""}</tr>
   </tbody></table>`;
 }
 
@@ -780,7 +781,7 @@ export default function WorkViolationsPage() {
                           <TableCell>{r.points}</TableCell>
                           {canManage && (
                             <TableCell>
-                              {Number(r.deduction_amount).toFixed(2)}
+                              {formatNumberAr(Number(r.deduction_amount), 2)}
                             </TableCell>
                           )}
                           <TableCell>

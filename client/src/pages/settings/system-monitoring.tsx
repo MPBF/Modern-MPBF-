@@ -48,6 +48,7 @@ import {
   TabsTrigger,
 } from "../../components/ui/tabs";
 import { apiRequest } from "../../lib/queryClient";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -107,7 +108,7 @@ function MetricGauge({
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>0</span>
-        <span>{percent.toFixed(0)}%</span>
+        <span>{formatNumberAr(percent, 0)}%</span>
         <span>
           {max}
           {unit}
@@ -918,7 +919,7 @@ export function SystemMonitoringContent({
                     {["1 دقيقة", "5 دقائق", "15 دقيقة"].map((label, i) => (
                       <div key={i} className="p-2 rounded-lg bg-muted/50">
                         <div className="font-mono font-semibold">
-                          {cpu?.loadAverage?.[i]?.toFixed(2) || "0.00"}
+                          {formatNumberAr(cpu?.loadAverage?.[i] ?? 0, 2)}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {label}

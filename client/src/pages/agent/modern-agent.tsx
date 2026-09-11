@@ -15,6 +15,8 @@ import {
   Image as ImageIcon,
   FileSpreadsheet,
 } from "lucide-react";
+
+import { formatNumberAr } from "../../../../shared/number-utils";
 import PageLayout from "../../components/layout/PageLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -72,7 +74,7 @@ const MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${formatNumberAr(bytes / (1024 * 1024), 1)} MB`;
 }
 
 function attachmentIcon(kind: AgentAttachment["kind"]) {

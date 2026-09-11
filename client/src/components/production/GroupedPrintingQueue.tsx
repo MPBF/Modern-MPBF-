@@ -3,6 +3,8 @@ import { Play, ChevronDown, ChevronRight, Printer } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { useLocalizedName } from "../../hooks/use-localized-name";
 import { useToast } from "../../hooks/use-toast";
 import { formatWeight } from "../../lib/formatNumber";
@@ -365,7 +367,7 @@ export default function GroupedPrintingQueue({
                         {orderGroup.total_rolls} {t("production.roll")}
                       </Badge>
                       <Badge variant="outline">
-                        {orderGroup.total_weight.toFixed(2)}{" "}
+                        {formatNumberAr(orderGroup.total_weight, 2)}{" "}
                         {t("production.units.kg")}
                       </Badge>
                     </div>
@@ -437,7 +439,8 @@ export default function GroupedPrintingQueue({
                                       variant="outline"
                                       className="text-xs"
                                     >
-                                      {productionOrderGroup.total_weight.toFixed(
+                                      {formatNumberAr(
+                                        productionOrderGroup.total_weight,
                                         2,
                                       )}{" "}
                                       {t("production.units.kg")}

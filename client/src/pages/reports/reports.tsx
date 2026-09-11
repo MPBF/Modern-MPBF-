@@ -284,7 +284,7 @@ export default function Reports() {
           ? parseFloat(value)
           : 0;
     const safeValue = isNaN(numValue) ? 0 : numValue;
-    return safeValue.toFixed(decimals);
+    return formatNumber(safeValue, decimals);
   };
 
   const formatChartValue = (
@@ -303,7 +303,7 @@ export default function Reports() {
 
     switch (type) {
       case "percentage":
-        return `${safeValue.toFixed(1)}%`;
+        return `${formatNumber(safeValue, 1)}%`;
       case "currency":
         return `${formatNumberWithCommas(safeValue)} ${t("common.sar")}`;
       default:

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useRef, useCallback, useState } from "react";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import {
   MATERIALS,
   BAG_COLORS,
@@ -155,7 +156,12 @@ export function ResultsStep({
     { label: "لون الكيس", value: bagColor?.label_ar || "-" },
     { label: "الطباعة", value: config.isPrinted ? "مطبوع" : "سادة" },
     ...(bagWeight
-      ? [{ label: "وزن الكيس التقديري", value: `${bagWeight.toFixed(2)} غم` }]
+      ? [
+          {
+            label: "وزن الكيس التقديري",
+            value: `${formatNumberAr(bagWeight, 2)} غم`,
+          },
+        ]
       : []),
     ...(bagsPerKg
       ? [

@@ -1,6 +1,8 @@
 import { Package, Weight, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
+
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 
 interface ProductionStageStatsProps {
@@ -135,7 +137,7 @@ export default function ProductionStageStats({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {stats.totalWeight.toFixed(2)}
+            {formatNumberAr(stats.totalWeight, 2)}
           </div>
           <p className="text-xs text-muted-foreground">
             {t("production.stats.kilogram")}

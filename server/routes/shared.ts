@@ -16,7 +16,14 @@ export let translateOpenAIClientPromise: Promise<any> | null = null;
 export async function getTranslateOpenAIClient() {
   if (!translateOpenAIClientPromise) {
     translateOpenAIClientPromise = import("openai").then(
-      (mod) => new mod.default({ timeout: 8000, maxRetries: 0 }),
+      (mod) =>
+        new mod.default({
+          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+          organization: null,
+          timeout: 8000,
+          maxRetries: 0,
+        }),
     );
   }
   return translateOpenAIClientPromise;

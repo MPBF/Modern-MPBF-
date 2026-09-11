@@ -53,7 +53,7 @@ function num(v: any): number {
 
 function money(v: any, isRTL: boolean): string {
   return num(v).toLocaleString(isRTL ? "ar-SA" : "en-US", {
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
 }

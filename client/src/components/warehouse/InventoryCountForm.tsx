@@ -3,6 +3,7 @@ import { Scan, Check, AlertTriangle, Trash2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 import { useToast } from "../../hooks/use-toast";
 import { Badge } from "../ui/badge";
@@ -469,7 +470,7 @@ export function InventoryCountForm({
                                   }
                                 >
                                   {item.difference > 0 ? "+" : ""}
-                                  {item.difference.toFixed(2)}
+                                  {formatNumberAr(item.difference, 2)}
                                 </Badge>
                               </TableCell>
                               <TableCell>
@@ -526,7 +527,7 @@ export function InventoryCountForm({
                                 className="text-xs"
                               >
                                 {item.difference > 0 ? "+" : ""}
-                                {item.difference.toFixed(2)}
+                                {formatNumberAr(item.difference, 2)}
                               </Badge>
                             </div>
                           </div>

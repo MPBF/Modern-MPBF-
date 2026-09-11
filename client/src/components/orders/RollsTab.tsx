@@ -24,6 +24,7 @@ import {
 import { useState, useMemo, Fragment } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { useLocalizedName } from "../../hooks/use-localized-name";
 import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
@@ -384,7 +385,7 @@ export default function RollsTab({
                 <div class="box"><div class="lbl">${t("orders.rolls.size")}</div><div class="val">${roll.size_caption || "-"}</div></div>
                 <div class="box"><div class="lbl">${t("orders.rolls.stage")}</div><div class="val">${stageConfig.label}</div></div>
               </div>
-              <div class="box highlight full"><div class="lbl">${t("orders.rolls.weight")}</div><div class="val">${parseFloat(roll.weight_kg).toFixed(2)} ${t("common.kg")}</div></div>
+              <div class="box highlight full"><div class="lbl">${t("orders.rolls.weight")}</div><div class="val">${formatNumberAr(parseFloat(roll.weight_kg), 2)} ${t("common.kg")}</div></div>
               <div class="stage-section">
                 <div class="stage-title">مراحل الإنتاج</div>
                 <div class="row3">
@@ -865,7 +866,7 @@ export default function RollsTab({
                             </div>
                           </TableCell>
                           <TableCell className="text-center font-semibold">
-                            {parseFloat(roll.weight_kg).toFixed(2)}{" "}
+                            {formatNumberAr(parseFloat(roll.weight_kg), 2)}{" "}
                             {t("common.kg")}
                           </TableCell>
                           <TableCell className="text-center text-sm text-muted-foreground">

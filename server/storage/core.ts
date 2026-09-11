@@ -134,6 +134,8 @@ import {
   type InsertAttendanceWithdrawal,
   type ShiftAssignment,
   type InsertShiftAssignment,
+  type ShiftTemplate,
+  type InsertShiftTemplate,
   type Reward,
   type InsertReward,
   type EmployeeCustody,
@@ -598,6 +600,10 @@ export async function withDatabaseErrorHandling<T>(
   try {
     return await operation();
   } catch (error) {
+    // Domain errors are part of the API contract, not database failures.
+    if (error instanceof Error && error.name === "OrderDomainError") {
+      throw error;
+    }
     handleDatabaseError(error, operationName, context);
   }
 }
@@ -677,6 +683,7 @@ export interface IStorage {
   }): Promise<NewOrder[]>;
   createOrder(insertOrder: InsertNewOrder): Promise<NewOrder>;
   updateOrder(id: number, orderUpdates: Partial<NewOrder>): Promise<NewOrder>;
+  transitionOrderStatus(id: number, status: string, updates?: Partial<NewOrder>, expectedPreviousStatus?: string | null): Promise<NewOrder>;
   updateOrderStatus(id: number, status: string): Promise<NewOrder>;
   updateOrderStatusWithPrevious(id: number, status: string, previousStatus: string | null): Promise<NewOrder>;
   getOrderById(id: number): Promise<NewOrder | undefined>;
@@ -705,7 +712,10 @@ export interface IStorage {
   backfillProductionOrderStages(): Promise<number>;
   getProductionOrderById(id: number): Promise<ProductionOrder | undefined>;
   createProductionOrder(po: InsertProductionOrder, extra?: { final_quantity_kg?: number }): Promise<ProductionOrder>;
-  findOpenCheckIn(userId: number): Promise<Attendance | null>;
+  findOpenCheckIn(
+    userId: number,
+    window?: { dateStr: string; start: Date; end: Date },
+  ): Promise<Attendance | null>;
   ensureBatchNumber(productionOrderId: number): Promise<string | null>;
   // Note: implementation returns Promise<any> (kept identical for the
   // fragment interface merge; the resolved shape is
@@ -801,7 +811,11 @@ export interface IStorage {
   getAttendanceReport(start: Date, end: Date, filters?: any): Promise<any[]>;
   getDailyAttendanceStats(date: string): Promise<any>;
   upsertManualAttendance(entries: any[]): Promise<any[]>;
-  getDailyAttendanceStatus(userId: number, date: string): Promise<any>;
+  getDailyAttendanceStatus(
+    userId: number,
+    date: string,
+    window?: { start: Date; end: Date; checkoutEnd?: Date },
+  ): Promise<any>;
   getDailyAttendanceOverview(
     date: string,
     sectionIds?: string[],
@@ -839,11 +853,16 @@ export interface IStorage {
   }>;
 
   // Shift assignments (monthly day/night scheduling)
+  getShiftTemplates(active?: boolean): Promise<ShiftTemplate[]>;
+  createShiftTemplate(data: InsertShiftTemplate, createdBy: number | null): Promise<ShiftTemplate>;
+  updateShiftTemplate(id: number, data: Partial<InsertShiftTemplate>): Promise<ShiftTemplate | null>;
+  disableShiftTemplate(id: number): Promise<ShiftTemplate | null>;
+  getShiftRoster(year: number, month: number): Promise<{ rows: any[]; roster_revision: string }>;
   getShiftAssignmentsByPeriod(year: number, month: number): Promise<ShiftAssignment[]>;
   getShiftAssignmentForUserMonth(userId: number, year: number, month: number): Promise<ShiftAssignment | null>;
   getShiftAssignmentsForUser(userId: number): Promise<ShiftAssignment[]>;
   upsertShiftAssignments(entries: InsertShiftAssignment[], createdBy: number | null): Promise<ShiftAssignment[]>;
-  saveShiftRoster(year: number, month: number, upsertEntries: InsertShiftAssignment[], deleteUserIds: number[], createdBy: number | null): Promise<ShiftAssignment[]>;
+  saveShiftRoster(year: number, month: number, upsertEntries: InsertShiftAssignment[], deleteUserIds: number[], createdBy: number | null, expectedRevision: string): Promise<ShiftAssignment[] | null>;
 
   // HR module (employee directory, file, computed attendance)
   getHREmployees(): Promise<any[]>;
@@ -1243,10 +1262,12 @@ export class StorageBase {
   }
 
 
-  protected buildShiftMap(assignments: ShiftAssignment[]): Map<string, ShiftType> {
-    const map = new Map<string, ShiftType>();
+  protected buildShiftMap(assignments: ShiftAssignment[]): Map<string, ShiftType | any> {
+    const map = new Map<string, ShiftType | any>();
     for (const a of assignments) {
-      if (isShiftType(a.shift)) map.set(`${a.year}-${a.month}`, a.shift);
+      const snapshot = a.shift_snapshot as any;
+      if (snapshot?.start_time && snapshot?.end_time) map.set(`${a.year}-${a.month}`, snapshot);
+      else if (isShiftType(a.shift)) map.set(`${a.year}-${a.month}`, a.shift);
     }
     return map;
   }

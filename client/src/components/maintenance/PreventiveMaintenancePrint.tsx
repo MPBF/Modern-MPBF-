@@ -49,7 +49,7 @@ const fmtNum = (val: unknown, decimals = 2) => {
   const n = Number(val ?? 0);
   if (isNaN(n)) return "0";
   return n.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   });
 };

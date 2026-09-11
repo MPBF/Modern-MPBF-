@@ -8205,7 +8205,7 @@ function PackagingUnitsManagerDialog({
                           className="h-8 text-center"
                         />
                       ) : (
-                        parseFloat(u.roll_weight_g).toFixed(2)
+                        formatNumber(parseFloat(u.roll_weight_g), 2)
                       )}
                     </td>
                     <td className="p-2 text-center">
@@ -8228,9 +8228,12 @@ function PackagingUnitsManagerDialog({
                       )}
                     </td>
                     <td className="p-2 text-center font-medium">
-                      {isEditing && editComputed !== null
-                        ? editComputed.toFixed(3)
-                        : parseFloat(u.unit_weight_kg).toFixed(3)}
+                      {formatNumber(
+                        isEditing && editComputed !== null
+                          ? editComputed
+                          : parseFloat(u.unit_weight_kg),
+                        3,
+                      )}
                     </td>
                     <td className="p-2 text-center">
                       {u.is_default ? (

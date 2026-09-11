@@ -129,6 +129,19 @@ import { validateRequest, commonSchemas } from "../middleware/validation";
 import { calculateProductionQuantities } from "@shared/quantity-utils";
 import ExcelJS from "exceljs";
 import multer from "multer";
+import {
+  OrderDomainError, ORDER_STATUS_GRAPH, orderDomainHttpStatus,
+} from "../services/order-status-policy";
+
+const orderUpdateShape = Object.fromEntries(
+  Object.entries(insertNewOrderSchema.shape).map(([key, field]) => [
+    key,
+    field instanceof z.ZodDefault
+      ? field.removeDefault().optional()
+      : field.optional(),
+  ]),
+) as any;
+const updateOrderSchema = z.object(orderUpdateShape).strict();
 
 import { resolveSessionUser } from "../auth/sessionUser";
 import {
@@ -1121,7 +1134,7 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const orderId = parseRouteParam(req.params.id, "id");
-        const result = insertNewOrderSchema.safeParse(req.body);
+        const result = updateOrderSchema.safeParse(req.body);
         if (!result.success) {
           return res
             .status(400)
@@ -1136,15 +1149,28 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
             : typeof dd === "string" && dd.length > 0
               ? dd.split("T")[0]
               : dd ?? null;
-        const updateData = {
-          ...result.data,
-          delivery_date: normalizedDeliveryDate,
-        };
+        // Keep only explicitly supplied keys so defaults from any nested Zod
+        // wrapper can never turn a PUT into an unintended field update.
+        const updateData: any = Object.fromEntries(
+          Object.keys(req.body).map((key) => [key, (result.data as any)[key]]),
+        );
+        if (Object.prototype.hasOwnProperty.call(req.body, "delivery_date")) {
+          updateData.delivery_date = normalizedDeliveryDate;
+        }
+        if (!Object.prototype.hasOwnProperty.call(req.body, "delivery_date")) {
+          delete updateData.delivery_date;
+        }
+        if (!Object.prototype.hasOwnProperty.call(req.body, "status")) {
+          delete updateData.status;
+        }
         const order = await storage.updateOrder(orderId, updateData);
         res.json(order);
       } catch (error) {
         console.error("Error updating order:", error);
-        res.status(500).json({ message: "خطأ في تحديث الطلب" });
+        res.status(orderDomainHttpStatus(error)).json({
+          message: "خطأ في تحديث الطلب",
+          ...(error instanceof OrderDomainError ? { error: error.message } : {}),
+        });
       }
     },
   );
@@ -1171,10 +1197,12 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
         const validStatuses = [
           "waiting",
           "on_hold",
+          "for_production",
           "in_production",
           "paused",
           "completed",
           "cancelled",
+          "delivered",
           "archived",
         ];
         if (!validStatuses.includes(status)) {
@@ -1206,9 +1234,11 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
         }
 
         // Define valid state transitions based on business logic
-        const validTransitions: Record<string, string[]> = {
+        const validTransitions: Record<string, string[]> = ORDER_STATUS_GRAPH as Record<string, string[]>;
+        /* const legacyValidTransitions: Record<string, string[]> = {
           waiting: [
             "on_hold",
+            "for_production",
             "in_production",
             "paused",
             "cancelled",
@@ -1216,6 +1246,7 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
           ],
           on_hold: [
             "waiting",
+            "for_production",
             "in_production",
             "paused",
             "cancelled",
@@ -1228,6 +1259,13 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
             "cancelled",
             "archived",
           ],
+          for_production: [
+            "waiting",
+            "in_production",
+            "paused",
+            "cancelled",
+            "archived",
+          ],
           paused: [
             "waiting",
             "on_hold",
@@ -1235,17 +1273,19 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
             "cancelled",
             "archived",
           ],
-          completed: ["in_production", "archived"],
+          completed: ["in_production", "delivered", "archived"],
           cancelled: ["waiting", "archived"],
+          delivered: ["archived"],
           archived: [
             "waiting",
             "on_hold",
+            "for_production",
             "in_production",
             "paused",
             "completed",
             "cancelled",
           ],
-        };
+        }; */
 
         // Check if transition is allowed
         const allowedNextStates = validTransitions[currentStatus] || [];
@@ -1262,109 +1302,9 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
           });
         }
 
-        // STEP 3: Additional business rule validations
-        if (newStatus === "completed") {
-          // Check if all production orders are completed before marking order as completed
-          const allProductionOrders = await storage.getAllProductionOrders();
-          const productionOrders = allProductionOrders.filter(
-            (po: any) => po.order_id === orderId,
-          );
-          const incompleteProdOrders = productionOrders.filter(
-            (po: any) => po.status !== "completed",
-          );
-
-          if (incompleteProdOrders.length > 0) {
-            return res.status(400).json({
-              message: `لا يمكن إتمام الطلب - يوجد ${incompleteProdOrders.length} أوامر إنتاج غير مكتملة`,
-              success: false,
-              incompleteProdOrders: incompleteProdOrders.length,
-            });
-          }
-        }
-
-        if (newStatus === "cancelled") {
-          // Check if there are production orders in progress
-          const allProductionOrders = await storage.getAllProductionOrders();
-          const productionOrders = allProductionOrders.filter(
-            (po: any) => po.order_id === orderId,
-          );
-          const activeProdOrders = productionOrders.filter((po: any) =>
-            po.status === "active",
-          );
-
-          if (activeProdOrders.length > 0) {
-            return res.status(400).json({
-              message: `لا يمكن إلغاء الطلب - يوجد ${activeProdOrders.length} أوامر إنتاج نشطة`,
-              success: false,
-              activeProdOrders: activeProdOrders.length,
-            });
-          }
-        }
-
-        // STEP 4: Perform atomic status update with validation
-        if (newStatus === "archived") {
-          await storage.updateOrderStatusWithPrevious(
-            orderId,
-            "archived",
-            currentStatus,
-          );
-        } else if (currentStatus === "archived") {
-          await storage.updateOrderStatusWithPrevious(orderId, newStatus, null);
-        } else {
-          await storage.updateOrderStatus(orderId, newStatus);
-        }
-
-        const order = await storage.getOrderById(orderId);
-
-        // STEP 5: Sync production orders status based on the new order status
-        if (newStatus === "in_production") {
-          await storage.updateProductionOrdersStatusByOrder(
-            orderId,
-            ["pending"],
-            "active",
-          );
-        } else if (newStatus === "paused") {
-          await storage.updateProductionOrdersStatusByOrder(
-            orderId,
-            ["active"],
-            "pending",
-          );
-        } else if (newStatus === "cancelled") {
-          await storage.updateProductionOrdersStatusByOrder(
-            orderId,
-            ["pending", "active"],
-            "cancelled",
-          );
-        } else if (newStatus === "archived") {
-          const orderProdOrders = await storage.getAllProductionOrders({
-            order_id: orderId,
-          });
-          for (const po of orderProdOrders) {
-            if (
-              ["pending", "active", "completed", "cancelled"].includes(
-                po.status,
-              )
-            ) {
-              await storage.updateProductionOrderStatusWithPrevious(
-                po.id,
-                "archived",
-                po.status,
-              );
-            }
-          }
-        } else if (currentStatus === "archived") {
-          const orderProdOrders = (
-            await storage.getAllProductionOrders({ order_id: orderId })
-          ).filter((po: any) => po.status === "archived");
-          for (const po of orderProdOrders) {
-            const poRestoreStatus = po.previous_status || "completed";
-            await storage.updateProductionOrderStatusWithPrevious(
-              po.id,
-              poRestoreStatus,
-              null,
-            );
-          }
-        }
+        // Perform the parent transition and all child synchronization in one
+        // transaction.
+        const order = await storage.transitionOrderStatus(orderId, newStatus);
 
         res.json({
           data: order,
@@ -1376,9 +1316,12 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
       } catch (error: any) {
         console.error("Error updating order status:", error);
 
-        res.status(500).json({
+        const message = String(error?.message || "");
+        const statusCode = orderDomainHttpStatus(error);
+        res.status(statusCode).json({
           message: "خطأ في تحديث حالة الطلب",
           success: false,
+          ...(statusCode !== 500 ? { error: message } : {}),
         });
       }
     },
@@ -1404,16 +1347,6 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
         const results: { orderId: number; success: boolean; error?: string }[] =
           [];
 
-        // Fetch all production orders once and index by order_id instead of
-        // re-querying inside the loop (previously O(N) full-table scans).
-        const allProdOrders = await storage.getAllProductionOrders();
-        const prodOrdersByOrderId = new Map<number, any[]>();
-        for (const po of allProdOrders) {
-          const list = prodOrdersByOrderId.get(po.order_id) || [];
-          list.push(po);
-          prodOrdersByOrderId.set(po.order_id, list);
-        }
-
         for (const orderId of order_ids) {
           try {
             const order = await storage.getOrderById(orderId);
@@ -1431,28 +1364,7 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
               continue;
             }
 
-            await storage.updateOrderStatusWithPrevious(
-              orderId,
-              "archived",
-              order.status,
-            );
-
-            const orderProdOrders = prodOrdersByOrderId.get(orderId) || [];
-            await Promise.all(
-              orderProdOrders
-                .filter((po: any) =>
-                  ["pending", "active", "completed", "cancelled"].includes(
-                    po.status,
-                  ),
-                )
-                .map((po: any) =>
-                  storage.updateProductionOrderStatusWithPrevious(
-                    po.id,
-                    "archived",
-                    po.status,
-                  ),
-                ),
-            );
+            await storage.transitionOrderStatus(orderId, "archived");
 
             results.push({ orderId, success: true });
           } catch (err: any) {
@@ -1520,24 +1432,7 @@ export async function registerOrdersRoutes(app: Express, ctx: any) {
             }
 
             const restoreStatus = order.previous_status || "completed";
-            await storage.updateOrderStatusWithPrevious(
-              orderId,
-              restoreStatus,
-              null,
-            );
-
-            const allProdOrders = await storage.getAllProductionOrders();
-            const orderProdOrders = allProdOrders.filter(
-              (po: any) => po.order_id === orderId && po.status === "archived",
-            );
-            for (const po of orderProdOrders) {
-              const poRestoreStatus = po.previous_status || "completed";
-              await storage.updateProductionOrderStatusWithPrevious(
-                po.id,
-                poRestoreStatus,
-                null,
-              );
-            }
+            await storage.transitionOrderStatus(orderId, restoreStatus);
 
             results.push({ orderId, success: true });
           } catch (err: any) {

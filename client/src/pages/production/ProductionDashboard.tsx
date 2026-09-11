@@ -126,7 +126,7 @@ export default function ProductionDashboard() {
       >
         <div className="flex items-center gap-2 mb-4 text-muted-foreground text-sm">
           <Focus className="h-4 w-4" />
-          <span>وضع المشغل المبسط</span>
+          <span>{t("production.dashboard.operatorFocusMode")}</span>
         </div>
         <Tabs defaultValue="focus" className="space-y-6">
           <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 gap-2 h-auto bg-transparent">

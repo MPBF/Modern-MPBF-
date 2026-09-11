@@ -71,7 +71,7 @@ export function safeParseInt(
 /**
  * Format a number for display with Arabic numerals
  * @param value - The number to format
- * @param decimals - Number of decimal places
+ * @param decimals - Maximum number of decimal places
  * @returns Formatted string
  */
 export function formatNumberAr(value: number, decimals: number = 0): string {
@@ -80,7 +80,7 @@ export function formatNumberAr(value: number, decimals: number = 0): string {
   }
 
   return value.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   });
 }

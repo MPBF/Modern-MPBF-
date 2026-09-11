@@ -14,7 +14,6 @@ import {
   Smartphone,
   Loader2,
   Activity,
-  Clock,
   ChevronLeft,
   ChevronRight,
   MessageCircle,
@@ -692,12 +691,6 @@ function SystemSection() {
     dateFormat: "DD/MM/YYYY",
     country: "المملكة العربية السعودية",
     region: "الرياض",
-    workingHours: { start: "08:00", end: "17:00" },
-    shifts: [
-      { id: 1, name: "الصباحية", start: "08:00", end: "16:00" },
-      { id: 2, name: "المسائية", start: "16:00", end: "00:00" },
-      { id: 3, name: "الليلية", start: "00:00", end: "08:00" },
-    ],
   });
 
   const [userSettings, setUserSettings] = useState({
@@ -721,10 +714,6 @@ function SystemSection() {
         dateFormat: o.dateFormat || prev.dateFormat,
         country: o.country || prev.country,
         region: o.region || prev.region,
-        workingHours: {
-          start: o.workingHoursStart || prev.workingHours.start,
-          end: o.workingHoursEnd || prev.workingHours.end,
-        },
       }));
     }
   }, [systemSettingsData]);
@@ -769,8 +758,6 @@ function SystemSection() {
             dateFormat: settings.dateFormat,
             country: settings.country,
             region: settings.region,
-            workingHoursStart: settings.workingHours.start,
-            workingHoursEnd: settings.workingHours.end,
           },
         }),
       });
@@ -977,73 +964,6 @@ function SystemSection() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" /> ساعات العمل والورديات
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>بداية الدوام</Label>
-              <Input
-                type="time"
-                value={systemSettings.workingHours.start}
-                onChange={(e) =>
-                  setSystemSettings((p) => ({
-                    ...p,
-                    workingHours: { ...p.workingHours, start: e.target.value },
-                  }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>نهاية الدوام</Label>
-              <Input
-                type="time"
-                value={systemSettings.workingHours.end}
-                onChange={(e) =>
-                  setSystemSettings((p) => ({
-                    ...p,
-                    workingHours: { ...p.workingHours, end: e.target.value },
-                  }))
-                }
-              />
-            </div>
-          </div>
-          <Separator />
-          <div className="space-y-2">
-            {systemSettings.shifts.map((shift) => (
-              <div
-                key={shift.id}
-                className="flex items-center justify-between p-3 border rounded-lg"
-              >
-                <div>
-                  <span className="font-medium">{shift.name}</span>
-                  <p className="text-sm text-muted-foreground">
-                    من {shift.start} إلى {shift.end}
-                  </p>
-                </div>
-                <Badge variant="outline">نشطة</Badge>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={() => saveSystemMutation.mutate(systemSettings)}
-              disabled={saveSystemMutation.isPending}
-            >
-              {saveSystemMutation.isPending ? (
-                <RefreshCw className="w-4 h-4 ml-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 ml-2" />
-              )}
-              حفظ إعدادات النظام
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

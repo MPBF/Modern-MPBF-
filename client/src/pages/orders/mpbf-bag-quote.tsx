@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useState, useCallback, useMemo } from "react";
 
+import { formatNumberAr } from "../../../../shared/number-utils";
 import { BagPreview } from "../../components/bag-wizard/BagPreview";
 import { BagTypeStep } from "../../components/bag-wizard/BagTypeStep";
 import { ColorStep } from "../../components/bag-wizard/ColorStep";
@@ -179,7 +180,11 @@ export default function MpbfBagQuote() {
         : "سادة",
     });
     const w = getBagWeightGrams(config);
-    if (w) items.push({ label: "الوزن التقديري", value: `${w.toFixed(2)} غم` });
+    if (w)
+      items.push({
+        label: "الوزن التقديري",
+        value: `${formatNumberAr(w, 2)} غم`,
+      });
     const bpk = getBagsPerKg(config);
     if (bpk)
       items.push({

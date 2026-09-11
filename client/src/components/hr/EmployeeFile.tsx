@@ -46,6 +46,7 @@ import {
   WagesTab,
   TraitsTab,
 } from "./EmployeeFileTabs";
+import { formatNumberAr } from "../../../../shared/number-utils";
 
 interface Props {
   userId: number;
@@ -292,7 +293,7 @@ export default function EmployeeFile({ userId, onBack }: Props) {
                         <td>${esc(r.production_order_number)}</td>
                         <td>${esc(r.order_number)}</td>
                         <td>${esc(r.customer_name || "—")}</td>
-                        <td>${nf(Number(r.weight_kg || 0).toFixed(1))}</td>
+                        <td>${formatNumberAr(Number(r.weight_kg || 0), 1)}</td>
                       </tr>`,
                   )
                   .join("")}</tbody>
@@ -987,7 +988,7 @@ function ProductionTab({ userId, isRTL }: { userId: number; isRTL: boolean }) {
                       <TableCell className="whitespace-nowrap">{r.production_order_number}</TableCell>
                       <TableCell className="whitespace-nowrap">{r.order_number}</TableCell>
                       <TableCell>{r.customer_name || "—"}</TableCell>
-                      <TableCell>{nf(Number(r.weight_kg || 0).toFixed(1))}</TableCell>
+                      <TableCell>{formatNumberAr(Number(r.weight_kg || 0), 1)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

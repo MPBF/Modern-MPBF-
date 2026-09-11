@@ -598,7 +598,13 @@ export default function SmartDistributionModal({
                                   :
                                 </span>
                                 <span>
-                                  {machine.proposedUtilization?.toFixed(1)}%
+                                  {machine.proposedUtilization == null
+                                    ? ""
+                                    : formatNumberAr(
+                                        machine.proposedUtilization,
+                                        1,
+                                      )}
+                                  %
                                 </span>
                               </div>
                               <Progress
@@ -625,10 +631,12 @@ export default function SmartDistributionModal({
                                   "modals.smartDistribution.expectedProductionTime",
                                 )}
                                 :{" "}
-                                {(
-                                  (machine.currentLoad + machine.proposedLoad) /
-                                  machine.productionRate
-                                ).toFixed(1)}{" "}
+                                {formatNumberAr(
+                                  (machine.currentLoad +
+                                    machine.proposedLoad) /
+                                    machine.productionRate,
+                                  1,
+                                )}{" "}
                                 {t("modals.smartDistribution.hour")}
                               </span>
                             </div>
@@ -664,7 +672,10 @@ export default function SmartDistributionModal({
                               stat.capacityStatus,
                             )}
                           >
-                            {stat.utilizationPercentage?.toFixed(1)}%
+                            {stat.utilizationPercentage == null
+                              ? ""
+                              : formatNumberAr(stat.utilizationPercentage, 1)}
+                            %
                           </Badge>
                         </div>
                       </CardHeader>

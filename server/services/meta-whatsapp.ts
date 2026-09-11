@@ -102,9 +102,10 @@ export class MetaWhatsAppService {
   // أرقام السعودية المحلية (05XXXXXXXX أو 5XXXXXXXX) تُحوّل إلى 9665XXXXXXXX،
   // وإلا يُرفض الرقم من Meta بخطأ (#100) Invalid parameter.
   private formatRecipientPhone(to: string): string {
-    let cleaned = (to || "")
-      .replace(/[\+\s\-\(\)]/g, "")
-      .replace("whatsapp:", "");
+    let cleaned = String(to || "")
+      .trim()
+      .replace(/^whatsapp:/i, "")
+      .replace(/\D/g, "");
     if (cleaned.startsWith("00")) {
       cleaned = cleaned.substring(2);
     }
@@ -114,6 +115,12 @@ export class MetaWhatsAppService {
       cleaned = "966" + cleaned;
     }
     return cleaned;
+  }
+
+  private maskRecipientPhone(phone: string): string {
+    if (!phone) return "[empty]";
+    const visible = phone.slice(-4);
+    return `${"*".repeat(Math.max(0, phone.length - visible.length))}${visible}`;
   }
 
   private getAuthHeaders(): Record<string, string> {
@@ -450,6 +457,16 @@ export class MetaWhatsAppService {
 
       // تنسيق رقم الهاتف
       const formattedPhone = this.formatRecipientPhone(to);
+      if (!/^[1-9]\d{7,14}$/.test(formattedPhone)) {
+        throw new Error("رقم واتساب فارغ أو غير صالح");
+      }
+
+      const sanitizedVariables = variables.map((variable) =>
+        this.sanitizeTemplateParam(variable),
+      );
+      if (sanitizedVariables.some((variable) => variable.length === 0)) {
+        throw new Error("أحد متغيرات قالب واتساب فارغ");
+      }
 
       const messageData: any = {
         messaging_product: "whatsapp",
@@ -469,9 +486,9 @@ export class MetaWhatsAppService {
         messageData.template.components = [
           {
             type: "body",
-            parameters: variables.map((variable) => ({
+            parameters: sanitizedVariables.map((variable) => ({
               type: "text",
-              text: this.sanitizeTemplateParam(variable),
+              text: variable,
             })),
           },
         ];
@@ -489,10 +506,19 @@ export class MetaWhatsAppService {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(
+        const metaError = new Error(
           result.error?.message ||
             `HTTP ${response.status}: ${response.statusText}`,
         );
+        (metaError as any).safeMetaDetails = {
+          httpStatus: response.status,
+          code: result.error?.code,
+          subcode: result.error?.error_subcode,
+          type: result.error?.type,
+          details: result.error?.error_data?.details,
+          traceId: result.error?.fbtrace_id,
+        };
+        throw metaError;
       }
 
       // حفظ الإشعار في قاعدة البيانات
@@ -524,7 +550,23 @@ export class MetaWhatsAppService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "خطأ غير معروف";
-      logger.error("خطأ في إرسال رسالة واتس اب (قالب Meta)", error);
+      const formattedPhone = this.formatRecipientPhone(to);
+      const logDetails = {
+        error: errorMessage,
+        templateName,
+        language,
+        variableCount: variables.length,
+        recipient: this.maskRecipientPhone(formattedPhone),
+        ...((error as any)?.safeMetaDetails || {}),
+      };
+      const isLocalValidationError =
+        errorMessage === "رقم واتساب فارغ أو غير صالح" ||
+        errorMessage === "أحد متغيرات قالب واتساب فارغ";
+      if (isLocalValidationError) {
+        logger.warn("تم تخطي رسالة واتس اب بسبب بيانات غير صالحة", logDetails);
+      } else {
+        logger.error("خطأ في إرسال رسالة واتس اب (قالب Meta)", logDetails);
+      }
 
       const notificationData = {
         title: options?.title || "رسالة واتس اب (قالب)",

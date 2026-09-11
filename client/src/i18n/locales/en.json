@@ -440,6 +440,7 @@
     "fetchCategoriesFailed": "Fetch Categories Failed",
     "loginRequired": "Login Required",
     "updateOrderFailed": "Failed to update order",
+    "structureEditBlocked": "Production-order products and quantities cannot be changed from this order dialog. Use production management to preserve linked rolls and receipts.",
     "generateOrderNumberFailed": "Generate Order Number Failed",
     "createOrderFailed": "Create Order Failed",
     "createProductionOrdersFailed": "Create Production Orders Failed",
@@ -530,6 +531,7 @@
       "cutRolls": "Cut Rolls",
       "todayProduction": "Today's Production",
       "todayProductionDesc": "Last 24 hours output",
+      "operatorFocusMode": "Simplified operator mode",
       "active": "Active"
     },
     "todayProduction": {
@@ -4784,8 +4786,8 @@
       "notDone": "Not done",
       "attendanceSuccess": "Attendance recorded successfully",
       "attendanceError": "Registration Error",
-      "detailedLog": "Detailed Attendance Record",
-      "detailedLogDesc": "Comprehensive view of all attendance records with times",
+      "detailedLog": "Daily Attendance Record",
+      "detailedLogDesc": "Daily summary of first check-in, last check-out, and break times",
       "detailedRecord": "Detailed Attendance Record",
       "detailedRecordDesc": "Comprehensive view of all attendance records with times",
       "entry": "Entry",
