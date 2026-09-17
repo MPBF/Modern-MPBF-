@@ -1,0 +1,2 @@
+{"environment":"development","level":"info","message":"✅ Swagger API documentation available at /api/docs","service":"mpbf-erp","timestamp":"2026-09-17 09:29:16"}
+{"environment":"development","level":"info","message":"✅ Monitoring dashboard available at /api/admin/monitoring/*","service":"mpbf-erp","timestamp":"2026-09-17 09:29:16"}
