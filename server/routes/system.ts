@@ -1,12 +1,30 @@
-import type { Express, Request } from "express";
 
 import crypto from "crypto";
 import { createServer, type Server } from "http";
 
-import bcrypt from "bcrypt";
-import { storage } from "../storage";
-import { db } from "../db";
 
+import { hasPermission } from "@shared/permissions";
+import {
+  parseIntSafe,
+  parseFloatSafe,
+  coercePositiveInt,
+  coerceNonNegativeInt,
+  extractNumericId,
+  generateNextId,
+} from "@shared/validation-utils";
+import {
+  createAlertsRouter,
+  createSystemHealthRouter,
+  createPerformanceRouter,
+  createCorrectiveActionsRouter,
+  createDataValidationRouter,
+} from "./alerts";
+import { getSystemHealthMonitor } from "../services/system-health-monitor";
+import { getAlertManager } from "../services/alert-manager";
+import { getDataValidator } from "../services/data-validator";
+import QRCode from "qrcode";
+import { validateRequest, commonSchemas } from "../middleware/validation";
+import { calculateProductionQuantities } from "@shared/quantity-utils";
 import {
   insertUserSchema,
   insertNewOrderSchema,
@@ -101,40 +119,19 @@ import {
   updateIndustrialWasteVoucherOutSchema,
 } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
-import { invalidateLetterheadCache } from "../modern-agent/letterhead";
-import { hasPermission } from "@shared/permissions";
+import bcrypt from "bcrypt";
 import { eq, sql, and, gte, lte, gt, desc, inArray } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
-import {
-  parseIntSafe,
-  parseFloatSafe,
-  coercePositiveInt,
-  coerceNonNegativeInt,
-  extractNumericId,
-  generateNextId,
-} from "@shared/validation-utils";
-import {
-  createAlertsRouter,
-  createSystemHealthRouter,
-  createPerformanceRouter,
-  createCorrectiveActionsRouter,
-  createDataValidationRouter,
-} from "./alerts";
-import { getSystemHealthMonitor } from "../services/system-health-monitor";
-import { getAlertManager } from "../services/alert-manager";
-import { getDataValidator } from "../services/data-validator";
-import QRCode from "qrcode";
-import { validateRequest, commonSchemas } from "../middleware/validation";
-import { calculateProductionQuantities } from "@shared/quantity-utils";
 import ExcelJS from "exceljs";
 import multer from "multer";
+import { z } from "zod";
 
 import { resolveSessionUser } from "../auth/sessionUser";
 import {
   createPerformanceIndexes,
   createTextSearchIndexes,
 } from "../database-optimizations";
+import { db } from "../db";
 import { logger } from "../lib/logger";
 import {
   requireAuth,
@@ -153,20 +150,18 @@ import {
   revokeMobileSession,
 } from "../middleware/session-auth";
 import {
-  setupAuth,
-  isAuthenticated as isAuthenticatedReplit,
-} from "../replitAuth";
+  translateAnnouncement,
+  ensureAnnouncementTranslations,
+} from "../services/announcement-translation";
 import {
   getNotificationManager,
   type SystemNotificationData,
 } from "../services/notification-manager";
 import { NotificationService } from "../services/notification-service";
 import { TaqnyatSMSService } from "../services/taqnyat-sms";
-import {
-  translateAnnouncement,
-  ensureAnnouncementTranslations,
-} from "../services/announcement-translation";
+import { storage } from "../storage";
 import { setNotificationManager } from "../storage";
+
 import {
   notificationService,
   taqnyatSMS,
@@ -176,6 +171,8 @@ import {
   insertCustomerSchema,
   insertLocationSchema,
 } from "./shared";
+
+import type { Express, Request } from "express";
 
 // Extracted from the original server/routes.ts (registration order preserved
 // within this domain). See server/routes/README.md.
@@ -1264,7 +1261,6 @@ export async function registerSystemRoutes(app: Express, ctx: any) {
             .insert(company_profile)
             .values({ name: "Company", ...updates });
         }
-        invalidateLetterheadCache();
         res.json({ message: "تم حفظ قالب الخطابات بنجاح" });
       } catch (error: any) {
         if (error?.message === "INVALID_OBJECT_PATH") {
@@ -2654,41 +2650,4 @@ export async function registerSystemRoutes(app: Express, ctx: any) {
     }
   });
 
-  app.post(
-    "/api/display/upload-image",
-    requireAuth,
-    requirePermission("manage_display_screen"),
-    upload.single("image"),
-    async (req, res) => {
-      try {
-        if (!req.file) {
-          return res.status(400).json({ message: "لم يتم رفع صورة" });
-        }
-        const { ObjectStorageService, objectStorageClient } =
-          await import("../replit_integrations/object_storage");
-        const storageService = new ObjectStorageService();
-        const ext = req.file.originalname.split(".").pop() || "jpg";
-        const fileName = `display-slides/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const publicPaths = storageService.getPublicObjectSearchPaths();
-        const basePath = publicPaths[0];
-        const fullPath = `${basePath}/${fileName}`;
-
-        const normalizedPath = fullPath.startsWith("/")
-          ? fullPath
-          : `/${fullPath}`;
-        const pathParts = normalizedPath.split("/");
-        const bucketName = pathParts[1];
-        const objectPath = pathParts.slice(2).join("/");
-        const bucket = objectStorageClient.bucket(bucketName);
-        const file = bucket.file(objectPath);
-        await file.save(req.file.buffer, { contentType: req.file.mimetype });
-
-        const publicUrl = `/objects/${objectPath}`;
-        res.json({ url: publicUrl, fileName });
-      } catch (error) {
-        console.error("Error uploading image:", error);
-        res.status(500).json({ message: "خطأ في رفع الصورة" });
-      }
-    },
-  );
 }

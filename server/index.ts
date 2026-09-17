@@ -11,19 +11,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 
 import { db, pool, sessionPool, isTransientDbError } from "./db";
-import { runLegacySystemUserDataAccessBackfill } from "./services/system-user-data-access";
 import { MemoryMonitor } from "./middleware/memory-monitor";
-import { performanceMonitor } from "./middleware/performance-monitor";
 import { populateUserFromSession } from "./middleware/session-auth";
-import monitoringRoutes from "./routes/monitoring";
 import { setupVite, serveStatic, log } from "./vite";
-
-// 📚 API Documentation & Monitoring Services
-import { swaggerSpec } from "./swagger-config";
-import swaggerUi from "swagger-ui-express";
-import { loggerMiddleware, winstonLogger } from "./services/logger";
-import { initializeSentry, sentryContextMiddleware } from "./services/sentry-monitoring";
-import { registerMonitoringRoutes } from "./services/monitoring-dashboard";
 
 function sanitizeErrorForLog(error: any): any {
   if (!error || typeof error !== "object") return error;
@@ -481,21 +471,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// � Initialize Error Tracking (Sentry) - must be early in middleware chain
-if (process.env.SENTRY_ENABLED === "true" && process.env.SENTRY_DSN) {
-  initializeSentry(app);
-  winstonLogger.info("✅ Sentry error tracking initialized");
-}
-
-// 📝 HTTP Request Logging - logs all API requests with duration
-app.use(loggerMiddleware);
-
-// 👤 Sentry Context Middleware - adds user context for error tracking
-app.use(sentryContextMiddleware);
-
-// �📊 Performance monitoring middleware - tracks API response times and resource usage
-app.use(performanceMonitor);
-
 // Session extension middleware - extends session on any API call with enhanced reliability
 const SESSION_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 const sessionSaveTimestamps = new Map<string, number>();
@@ -687,7 +662,8 @@ function sanitizeResponseForLogging(response: any): any {
 
   // Auto-migration: ensure all schema tables exist (safe for existing data)
   // drizzle-kit push only adds missing tables/columns, never drops or modifies existing ones
-  try {
+  const migrationPromise = (async () => {
+    try {
     console.log("🔄 فحص قاعدة البيانات وتحديث الهيكل...");
 
     await db.execute(sql`SELECT 1 as test`);
@@ -950,12 +926,21 @@ function sanitizeResponseForLogging(response: any): any {
 
       // One-time backfill of production_stage from current rolls state
       const { storage: storageImpl } = await import("./storage");
-      const updatedCount = await storageImpl.backfillProductionOrderStages();
-      if (updatedCount > 0) {
-        console.log(
-          `🔁 تم ترحيل مرحلة ${updatedCount} أمر إنتاج بناءً على رولاتها الحالية`,
-        );
-      }
+      void storageImpl
+        .backfillProductionOrderStages()
+        .then((updatedCount) => {
+          if (updatedCount > 0) {
+            console.log(
+              `🔁 تم ترحيل مرحلة ${updatedCount} أمر إنتاج بناءً على رولاتها الحالية`,
+            );
+          }
+        })
+        .catch((backfillError) => {
+          console.warn(
+            "⚠️ فشل ترحيل مراحل أوامر الإنتاج بعد بدء الخادم:",
+            backfillError?.message || backfillError,
+          );
+        });
 
       // Roll products are completed by the percentage-recompute path (which sets
       // status='completed' on reaching 'done'); the one-time backfill only sets
@@ -2335,11 +2320,6 @@ function sanitizeResponseForLogging(response: any): any {
         ON system_user_message_queue (system_user_id)
       `);
 
-      // ترحيل أحادي التنفيذ للمستخدمين الموجودين وقت إطلاق الميزة فقط.
-      // العلامة الدائمة تمنع أي تشغيل لاحق من إعادة منح صلاحيات سحبها المدير،
-      // كما تمنع منح المستخدمين الآليين المنشأين بعد الترحيل وصولاً ضمنياً.
-      await runLegacySystemUserDataAccessBackfill(pool);
-
       console.log("✅ مركز تحكم مستخدمي النظام: تم التحقق من قاعدة البيانات");
     } catch (sucErr: any) {
       console.warn(
@@ -2355,39 +2335,27 @@ function sanitizeResponseForLogging(response: any): any {
       process.exit(1);
     }
     console.warn("⚠️ متابعة التشغيل في وضع التطوير رغم فشل التهيئة");
-  }
+    }
+  })();
+
+  // Database reconciliation must not block route registration or the UI.
+  void migrationPromise.catch((migrationError) => {
+    console.warn(
+      "⚠️ فشل ترحيل قاعدة البيانات في الخلفية:",
+      migrationError?.message || migrationError,
+    );
+  });
 
   // Security check: Verify no plaintext passwords remain
-  await performPasswordSecurityCheck();
+  void performPasswordSecurityCheck().catch((securityError) => {
+    console.warn(
+      "⚠️ تعذر إكمال فحص أمان كلمات المرور في الخلفية:",
+      securityError?.message || securityError,
+    );
+  });
 
   // 📊 Start memory monitoring
   MemoryMonitor.startMonitoring(30000); // Every 30 seconds
-
-  // � Register Swagger/OpenAPI Documentation
-  if (process.env.SWAGGER_ENABLED !== "false") {
-    app.use(
-      "/api/docs",
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerSpec, {
-        swaggerOptions: {
-          persistAuthorization: true,
-          docExpansion: "list",
-          filter: true,
-          deepLinking: true,
-        },
-        customCss:
-          ".topbar { display: none } .swagger-ui .topbar-wrapper { display: none }",
-      })
-    );
-    winstonLogger.info("✅ Swagger API documentation available at /api/docs");
-  }
-
-  // 📊 Register Monitoring Dashboard Routes
-  registerMonitoringRoutes(app);
-  winstonLogger.info("✅ Monitoring dashboard available at /api/admin/monitoring/*");
-
-  // 🔧 Register monitoring routes (legacy)
-  app.use(monitoringRoutes);
 
   const { registerRoutes } = await import("./routes");
   const server = await registerRoutes(

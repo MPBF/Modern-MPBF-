@@ -1,11 +1,14 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey:
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    "not-configured",
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
   // Explicitly clear the org header. The SDK otherwise auto-sends
   // OPENAI_ORG_ID from the environment, which does not match the
-  // Replit AI integration key and causes a 401 mismatched_organization.
+  // A configured organization header can cause a mismatched-organization 401.
   organization: null,
 });
 

@@ -294,30 +294,6 @@ export default function Login() {
             </form>
           </Form>
 
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 uppercase tracking-wider">
-              {t("auth.or")}
-            </span>
-            <div className="flex-1 h-px bg-gray-200" />
-          </div>
-
-          {/* Replit SSO */}
-          <Button
-            variant="outline"
-            className="w-full h-11 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
-            onClick={() => {
-              window.location.href = "/api/login-replit";
-            }}
-            data-testid="button-login-replit"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2 2v20h20V2H2zm18 18H4V4h16v16z" />
-            </svg>
-            {t("auth.loginWithReplit")}
-          </Button>
-
           <p className="mt-8 text-center text-xs text-gray-400">
             {t("auth.copyright")}
           </p>

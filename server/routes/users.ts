@@ -1,12 +1,30 @@
-import type { Express, Request, Response } from "express";
 
 import crypto from "crypto";
 import { createServer, type Server } from "http";
 
-import bcrypt from "bcrypt";
-import { storage } from "../storage";
-import { db } from "../db";
 
+import { hasPermission } from "@shared/permissions";
+import {
+  parseIntSafe,
+  parseFloatSafe,
+  coercePositiveInt,
+  coerceNonNegativeInt,
+  extractNumericId,
+  generateNextId,
+} from "@shared/validation-utils";
+import {
+  createAlertsRouter,
+  createSystemHealthRouter,
+  createPerformanceRouter,
+  createCorrectiveActionsRouter,
+  createDataValidationRouter,
+} from "./alerts";
+import { getSystemHealthMonitor } from "../services/system-health-monitor";
+import { getAlertManager } from "../services/alert-manager";
+import { getDataValidator } from "../services/data-validator";
+import QRCode from "qrcode";
+import { validateRequest, commonSchemas } from "../middleware/validation";
+import { calculateProductionQuantities } from "@shared/quantity-utils";
 import {
   insertUserSchema,
   insertNewOrderSchema,
@@ -101,40 +119,19 @@ import {
   updateIndustrialWasteVoucherOutSchema,
 } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
-import { invalidateLetterheadCache } from "../modern-agent/letterhead";
-import { hasPermission } from "@shared/permissions";
+import bcrypt from "bcrypt";
 import { eq, sql, and, gte, lte, gt, desc, inArray } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
-import {
-  parseIntSafe,
-  parseFloatSafe,
-  coercePositiveInt,
-  coerceNonNegativeInt,
-  extractNumericId,
-  generateNextId,
-} from "@shared/validation-utils";
-import {
-  createAlertsRouter,
-  createSystemHealthRouter,
-  createPerformanceRouter,
-  createCorrectiveActionsRouter,
-  createDataValidationRouter,
-} from "./alerts";
-import { getSystemHealthMonitor } from "../services/system-health-monitor";
-import { getAlertManager } from "../services/alert-manager";
-import { getDataValidator } from "../services/data-validator";
-import QRCode from "qrcode";
-import { validateRequest, commonSchemas } from "../middleware/validation";
-import { calculateProductionQuantities } from "@shared/quantity-utils";
 import ExcelJS from "exceljs";
 import multer from "multer";
+import { z } from "zod";
 
 import { resolveSessionUser } from "../auth/sessionUser";
 import {
   createPerformanceIndexes,
   createTextSearchIndexes,
 } from "../database-optimizations";
+import { db } from "../db";
 import { logger } from "../lib/logger";
 import {
   requireAuth,
@@ -153,21 +150,19 @@ import {
   revokeMobileSession,
 } from "../middleware/session-auth";
 import {
-  setupAuth,
-  isAuthenticated as isAuthenticatedReplit,
-} from "../replitAuth";
+  translateAnnouncement,
+  ensureAnnouncementTranslations,
+} from "../services/announcement-translation";
 import {
   getNotificationManager,
   type SystemNotificationData,
 } from "../services/notification-manager";
 import { NotificationService } from "../services/notification-service";
 import { TaqnyatSMSService } from "../services/taqnyat-sms";
-import {
-  translateAnnouncement,
-  ensureAnnouncementTranslations,
-} from "../services/announcement-translation";
-import { setNotificationManager } from "../storage";
 import { buildUserRequestDecisionNotification } from "../services/user-request-notifications";
+import { setNotificationManager } from "../storage";
+import { storage } from "../storage";
+
 import {
   notificationService,
   taqnyatSMS,
@@ -175,6 +170,8 @@ import {
   getAuthUserId,
   parseRouteParam,
 } from "./shared";
+
+import type { Express, Request, Response } from "express";
 
 // Extracted from the original server/routes.ts (registration order preserved
 // within this domain). See server/routes/README.md.
@@ -188,23 +185,6 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     CHANGE_PW_MAX_ATTEMPTS,
   } = ctx;
 
-
-  // Replit Auth user endpoint
-  app.get("/api/auth/user", isAuthenticatedReplit, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUserByReplitId(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      const { password, ...safeUser } = user;
-      res.json(safeUser);
-    } catch (error) {
-      logger.error("Error fetching Replit auth user", error);
-      console.error("[API Error]", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
 
   // Authentication routes
   app.post(
@@ -379,7 +359,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     },
   );
 
-  // Get current user - unified endpoint for both username/password and Replit Auth
+  // Get current user from the local session.
   app.get("/api/me", async (req, res) => {
     try {
       // Use unified session resolver to handle both auth types
@@ -557,13 +537,9 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
     }
   });
 
-  // Logout - unified endpoint for both username/password and Replit Auth
+  // Logout from the local session.
   app.post("/api/logout", async (req, res) => {
     try {
-      // Check if user is authenticated via Replit Auth
-      const replitUser = req.user as any;
-      const isReplitAuth = replitUser?.claims?.sub;
-
       // Destroy session
       if (req.session?.destroy) {
         req.session.destroy((err) => {
@@ -576,17 +552,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
           res.clearCookie("connect.sid");
           res.clearCookie("plastic-bag-session");
 
-          // For Replit Auth users, also call passport logout
-          if (isReplitAuth && req.logout) {
-            req.logout(() => {
-              res.json({
-                message: "تم تسجيل الخروج بنجاح",
-                replitAuth: true,
-              });
-            });
-          } else {
-            res.json({ message: "تم تسجيل الخروج بنجاح" });
-          }
+          res.json({ message: "تم تسجيل الخروج بنجاح" });
         });
       } else {
         // Fallback session clearing
@@ -594,16 +560,7 @@ export async function registerUsersRoutes(app: Express, ctx: any) {
         res.clearCookie("connect.sid");
         res.clearCookie("plastic-bag-session");
 
-        if (isReplitAuth && req.logout) {
-          req.logout(() => {
-            res.json({
-              message: "تم تسجيل الخروج بنجاح",
-              replitAuth: true,
-            });
-          });
-        } else {
-          res.json({ message: "تم تسجيل الخروج بنجاح" });
-        }
+        res.json({ message: "تم تسجيل الخروج بنجاح" });
       }
     } catch (error) {
       logger.error("Logout error", error);

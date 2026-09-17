@@ -110,7 +110,6 @@ import {
   type User,
   type SafeUser,
   type InsertUser,
-  type UpsertUser,
   type NewOrder,
   type InsertNewOrder,
   type ProductionOrder,
@@ -428,63 +427,6 @@ export class UsersStorage extends StorageBase {
   }
 
 
-  async getUserByReplitId(replitUserId: string): Promise<User | undefined> {
-    return withDatabaseErrorHandling(
-      async () => {
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.replit_user_id, replitUserId));
-        return user;
-      },
-      "getUserByReplitId",
-      `جلب مستخدم Replit ${replitUserId}`,
-    );
-  }
-
-
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    return withDatabaseErrorHandling(
-      async () => {
-        const existingUser = userData.replit_user_id
-          ? await this.getUserByReplitId(userData.replit_user_id)
-          : undefined;
-
-        if (existingUser) {
-          const [updatedUser] = await db
-            .update(users)
-            .set({
-              display_name: userData.display_name,
-              display_name_ar:
-                userData.display_name_ar || userData.display_name,
-              updated_at: new Date(),
-            })
-            .where(eq(users.id, existingUser.id))
-            .returning();
-          return updatedUser;
-        }
-
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            username: userData.username,
-            replit_user_id: userData.replit_user_id,
-            display_name: userData.display_name,
-            display_name_ar: userData.display_name_ar || userData.display_name,
-            role_id: 2, // الافتراضي هو موظف
-            status: "active",
-            created_at: new Date(),
-            updated_at: new Date(),
-          })
-          .returning();
-        return newUser;
-      },
-      "upsertUser",
-      "تحديث أو إنشاء مستخدم Replit",
-    );
-  }
-
-
   async getSafeUser(id: number): Promise<SafeUser | undefined> {
     return withDatabaseErrorHandling(
       async () => {
@@ -501,7 +443,6 @@ export class UsersStorage extends StorageBase {
             section_id: users.section_id,
             status: users.status,
             must_change_password: users.must_change_password,
-            replit_user_id: users.replit_user_id,
             first_name: users.first_name,
             last_name: users.last_name,
             profile_image_url: users.profile_image_url,
@@ -541,7 +482,6 @@ export class UsersStorage extends StorageBase {
             section_id: users.section_id,
             status: users.status,
             must_change_password: users.must_change_password,
-            replit_user_id: users.replit_user_id,
             first_name: users.first_name,
             last_name: users.last_name,
             profile_image_url: users.profile_image_url,
@@ -581,7 +521,6 @@ export class UsersStorage extends StorageBase {
             section_id: users.section_id,
             status: users.status,
             must_change_password: users.must_change_password,
-            replit_user_id: users.replit_user_id,
             first_name: users.first_name,
             last_name: users.last_name,
             profile_image_url: users.profile_image_url,
@@ -883,7 +822,6 @@ export class UsersStorage extends StorageBase {
       | "display_name_ar"
       | "role_id"
       | "status"
-      | "replit_user_id"
       | "created_at"
     >[]
   > {
@@ -895,7 +833,6 @@ export class UsersStorage extends StorageBase {
         display_name_ar: users.display_name_ar,
         role_id: users.role_id,
         status: users.status,
-        replit_user_id: users.replit_user_id,
         created_at: users.created_at,
       })
       .from(users)

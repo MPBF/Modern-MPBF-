@@ -115,7 +115,6 @@ import {
   type User,
   type SafeUser,
   type InsertUser,
-  type UpsertUser,
   type NewOrder,
   type InsertNewOrder,
   type ProductionOrder,
@@ -657,10 +656,6 @@ export interface IStorage {
     identifier: string,
   ): Promise<User | undefined>;
   createUser(insertUser: InsertUser): Promise<User>;
-
-  // Replit Auth user operations
-  getUserByReplitId(replitUserId: string): Promise<User | undefined>;
-  upsertUser(userData: UpsertUser): Promise<User>;
 
   // Safe users (without sensitive data like passwords)
   getSafeUser(id: number): Promise<SafeUser | undefined>;
