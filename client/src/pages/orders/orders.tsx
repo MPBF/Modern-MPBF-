@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, FileText, Package } from "lucide-react";
-import { useState, lazy, Suspense } from "react";
+import { FileText, Package } from "lucide-react";
+import { useState } from "react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
@@ -14,7 +14,6 @@ import {
   RollsTab,
 } from "../../components/orders";
 import ViewOrderDialog from "../../components/orders/ViewOrderDialog";
-import { Skeleton } from "../../components/ui/skeleton";
 import {
   Tabs,
   TabsContent,
@@ -25,34 +24,6 @@ import { useAuth } from "../../hooks/use-auth";
 import { fetchAllCustomerProducts } from "../../lib/queryClient";
 import { useToast } from "../../hooks/use-toast";
 import { isUserAdmin } from "../../utils/roleUtils";
-
-function lazyWithRetry(importFn: () => Promise<any>) {
-  return lazy(() =>
-    importFn().catch((error: any) => {
-      if (
-        error?.message?.includes(
-          "Failed to fetch dynamically imported module",
-        ) ||
-        error?.message?.includes("Loading chunk") ||
-        error?.name === "ChunkLoadError"
-      ) {
-        const reloadKey = "chunk_reload_" + window.location.pathname;
-        const lastReload = sessionStorage.getItem(reloadKey);
-        const now = Date.now();
-        if (!lastReload || now - parseInt(lastReload) > 10000) {
-          sessionStorage.setItem(reloadKey, now.toString());
-          window.location.reload();
-          return new Promise(() => {});
-        }
-      }
-      throw error;
-    }),
-  );
-}
-
-const ProductionOrdersManagement = lazyWithRetry(
-  () => import("../production/ProductionOrdersManagement"),
-);
 
 export default function Orders() {
   const { t } = useTranslation();
@@ -954,15 +925,6 @@ export default function Orders() {
     );
   }
 
-  // Loading fallback للصفحات الكسولة
-  const LoadingFallback = () => (
-    <div className="space-y-4 p-6">
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-64 w-full" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
-
   return (
     <PageLayout
       title={t("orders.title")}
@@ -981,7 +943,7 @@ export default function Orders() {
         className="space-y-6"
         dir="rtl"
       >
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid h-auto p-1.5 gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid h-auto p-1.5 gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
           <TabsTrigger
             value="orders"
             data-testid="tab-orders"
@@ -989,14 +951,6 @@ export default function Orders() {
           >
             <FileText className="h-4 w-4" />
             <span>{t("navigation.orders")}</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="production-orders"
-            data-testid="tab-production-orders"
-            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:font-bold text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-all gap-2"
-          >
-            <ClipboardCheck className="h-4 w-4" />
-            <span>{t("navigation.productionOrders")}</span>
           </TabsTrigger>
           <TabsTrigger
             value="rolls"
@@ -1061,15 +1015,6 @@ export default function Orders() {
               </div>
             </>
           )}
-        </TabsContent>
-
-        {/* محتوى أوامر الإنتاج */}
-        <TabsContent value="production-orders">
-          <Suspense fallback={<LoadingFallback />}>
-            <div className="embedded-page-wrapper">
-              <ProductionOrdersManagement />
-            </div>
-          </Suspense>
         </TabsContent>
 
         {/* محتوى الرولات */}

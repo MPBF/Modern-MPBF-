@@ -174,24 +174,12 @@ import {
 } from "./routes/shared";
 import { registerSystemRoutes } from "./routes/system";
 import { registerUsersRoutes } from "./routes/users";
-import { registerReportsRoutes } from "./routes/reports";
-import { registerNotificationsRoutes } from "./routes/notifications";
-import { registerMessagesRoutes } from "./routes/messages";
 import { registerOrdersRoutes } from "./routes/orders";
 import { registerProductionRoutes } from "./routes/production";
 import { registerMachinesRoutes } from "./routes/machines";
-import { registerMiscRoutes } from "./routes/misc";
 import { registerWarehouseRoutes } from "./routes/warehouse";
 import { registerMixingRoutes } from "./routes/mixing";
-import { registerHrRoutes } from "./routes/hr";
-import { registerSystemUsersRoutes } from "./routes/system-users";
-import { startSystemUserSimulator } from "./services/system-user-simulator";
-import { registerMaintenanceRoutes } from "./routes/maintenance";
-import { registerQualityRoutes } from "./routes/quality";
-import { registerMobileRoutes } from "./routes/mobile";
 import { registerLegacyRoutes } from "./routes/legacy";
-import { registerAdminRoutes } from "./routes/admin";
-import { registerCustomerServiceRoutes } from "./routes/customer-service";
 
 // Orchestrator: the original 20,000-line registerRoutes was split into domain
 // modules under server/routes/ (see server/routes/README.md). Shared
@@ -205,40 +193,6 @@ export async function registerRoutes(
 
   // Setup Replit Auth (OpenID Connect)
   await setupAuth(app);
-
-  // Register quote & quote-template routes
-  const { registerQuoteRoutes } = await import("./quote-routes");
-  registerQuoteRoutes(app);
-
-  // Register MCP OAuth 2.1 routes (must be before MCP routes)
-  const { registerMcpOAuthRoutes } = await import("./mcp-oauth");
-  registerMcpOAuthRoutes(app);
-
-  // Register MCP server routes
-  const { registerMcpRoutes } = await import("./mcp-routes");
-  registerMcpRoutes(app);
-
-  // Twilio Voice callbacks are signature-verified and intentionally unauthenticated.
-  const { registerTwilioVoiceRoutes } = await import("./twilio-voice/routes");
-  registerTwilioVoiceRoutes(app);
-
-  // Register Modern AI Agent routes
-  const { registerModernAgentRoutes } = await import("./modern-agent/routes");
-  registerModernAgentRoutes(app);
-
-  // Register External SQL Server connection routes (READ-ONLY browsing)
-  const { registerExternalDbRoutes } = await import("./external-db/routes");
-  registerExternalDbRoutes(app);
-
-  const { registerMaintenanceEngineerRoutes } = await import(
-    "./maintenance-engineer"
-  );
-  registerMaintenanceEngineerRoutes(app);
-
-  // Register Object Storage routes (serves /objects/* for uploaded files)
-  const { registerObjectStorageRoutes } =
-    await import("./replit_integrations/object_storage");
-  registerObjectStorageRoutes(app);
 
   // ==========================================================================
   // PUBLIC: Mobile bag-design quote endpoint (no auth required)
@@ -635,46 +589,15 @@ export async function registerRoutes(
   }
 
   const httpServer = existingServer || createServer(app);
-  Object.assign(ctx, { registerQuoteRoutes, registerMcpOAuthRoutes, registerMcpRoutes, registerModernAgentRoutes, registerExternalDbRoutes, registerMaintenanceEngineerRoutes, registerObjectStorageRoutes, bagQuoteIpHits, bagQuoteGlobalHits, IP_WINDOW_MS, IP_MAX, GLOBAL_WINDOW_MS, GLOBAL_MAX, normalizePhoneServer, webLoginAttempts, WEB_RATE_LIMIT_WINDOW_MS, WEB_MAX_ATTEMPTS, WEB_RATE_LIMIT_MAX_ENTRIES, changePasswordAttempts, CHANGE_PW_WINDOW_MS, CHANGE_PW_MAX_ATTEMPTS, resolveInlinePrintedFields, sanitizeRollCreateInput, cleanMachineDimensionFields, validateMachineDimensionRanges, VALID_QUEUE_STAGES, setupAttempts, COMPANY_LOGO_CACHE_TTL_MS, loadCompanyLogo, excelUpload, WV_READ, WV_RECORD, WV_MANAGE, HR_VIEW, HR_CREATE, HR_EDIT, HR_DELETE, parseEmployeeId, dataValidator, mobileLoginAttempts, MOBILE_RATE_LIMIT_WINDOW_MS, MOBILE_MAX_ATTEMPTS, getLegacyPool, isLegacyDbConfigured, legacyCountCache, deliveryStopSchema, deliveryManifestPayloadSchema, parseManifestId, ADMIN_DOC_TYPES, adminToolDocPayloadSchema, parseAdminDocId });
+  Object.assign(ctx, { bagQuoteIpHits, bagQuoteGlobalHits, IP_WINDOW_MS, IP_MAX, GLOBAL_WINDOW_MS, GLOBAL_MAX, normalizePhoneServer, webLoginAttempts, WEB_RATE_LIMIT_WINDOW_MS, WEB_MAX_ATTEMPTS, WEB_RATE_LIMIT_MAX_ENTRIES, changePasswordAttempts, CHANGE_PW_WINDOW_MS, CHANGE_PW_MAX_ATTEMPTS, resolveInlinePrintedFields, sanitizeRollCreateInput, cleanMachineDimensionFields, validateMachineDimensionRanges, VALID_QUEUE_STAGES, setupAttempts, COMPANY_LOGO_CACHE_TTL_MS, loadCompanyLogo, excelUpload, WV_READ, WV_RECORD, WV_MANAGE, HR_VIEW, HR_CREATE, HR_EDIT, HR_DELETE, parseEmployeeId, dataValidator, mobileLoginAttempts, MOBILE_RATE_LIMIT_WINDOW_MS, MOBILE_MAX_ATTEMPTS, getLegacyPool, isLegacyDbConfigured, legacyCountCache, deliveryStopSchema, deliveryManifestPayloadSchema, parseManifestId, ADMIN_DOC_TYPES, adminToolDocPayloadSchema, parseAdminDocId });
 
   await registerSystemRoutes(app, ctx);
   await registerUsersRoutes(app, ctx);
-  await registerReportsRoutes(app, ctx);
-  await registerNotificationsRoutes(app, ctx);
-  await registerMessagesRoutes(app, ctx);
   await registerOrdersRoutes(app, ctx);
   await registerProductionRoutes(app, ctx);
   await registerMachinesRoutes(app, ctx);
-  await registerMiscRoutes(app, ctx);
   await registerWarehouseRoutes(app, ctx);
   await registerMixingRoutes(app, ctx);
-  await registerHrRoutes(app, ctx);
-  await registerSystemUsersRoutes(app, ctx);
-  startSystemUserSimulator();
-  await registerMaintenanceRoutes(app, ctx);
-  // Schedules are also reconciled at startup, so a server restart never loses
-  // a due annual maintenance cycle. The database transaction in storage keeps
-  // this safe if multiple app instances happen to run at the same time.
-  const processMaintenanceSchedules = async () => {
-    try {
-      const result = await storage.processDueMaintenanceSchedules();
-      if (result.processed > 0) {
-        console.log(`📅 تمت معالجة ${result.processed} جدول صيانة مستحق`);
-      }
-    } catch (error: any) {
-      console.error(
-        "⚠️ تعذرت معالجة جداول الصيانة المستحقة:",
-        error?.message || error,
-      );
-    }
-  };
-  void processMaintenanceSchedules();
-  setInterval(() => void processMaintenanceSchedules(), 15 * 60 * 1000);
-  await registerQualityRoutes(app, ctx);
-  await registerMobileRoutes(app, ctx);
   await registerLegacyRoutes(app, ctx);
-  await registerAdminRoutes(app, ctx);
-  await registerCustomerServiceRoutes(app, ctx);
-
 
   return httpServer;}

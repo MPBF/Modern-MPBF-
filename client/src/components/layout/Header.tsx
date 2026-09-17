@@ -5,8 +5,6 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTheme, type Theme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../hooks/use-auth";
 import { useCompanyLogo } from "../../hooks/use-company-logo";
-import { NotificationBell } from "../notifications/NotificationBell";
-import { MessagesBell } from "../notifications/MessagesBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -127,15 +125,10 @@ export default function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Language + Notifications — inherit color from context */}
+          {/* Language selector */}
           <div style={{ color: "rgba(255,255,255,0.75)" }}>
             <LanguageSwitcher variant="dropdown" size="sm" />
           </div>
-          <div style={{ color: "rgba(255,255,255,0.75)" }}>
-            <MessagesBell />
-            <NotificationBell />
-          </div>
-
           {/* User info + avatar */}
           <div className="flex items-center gap-2 ms-1">
             <div
