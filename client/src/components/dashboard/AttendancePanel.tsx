@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, LogIn, LogOut, Coffee, Play, AlertOctagon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -8,6 +8,7 @@ import {
   type FactoryGeofence,
 } from "../../hooks/use-attendance-watchdog";
 import { useToday } from "../../hooks/use-today";
+import { calculateWorkedSeconds } from "../../lib/attendance-timer";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -36,6 +37,7 @@ interface DailyStatus {
     name_en?: string | null;
     start_time?: string | null;
     end_time?: string | null;
+    attendance_date?: string | null;
   } | null;
 }
 
@@ -99,7 +101,7 @@ export default function AttendancePanel({
     // refresh attendance state so live timers reset cleanly without a
     // page refresh.
     void queryClient.invalidateQueries({
-      queryKey: ["/api/attendance/withdrawals/today", userId],
+      queryKey: ["/api/attendance/withdrawals/today", userId, attendanceDate],
     });
     void queryClient.invalidateQueries({
       queryKey: ["/api/attendance/daily-status", userId],
@@ -107,15 +109,17 @@ export default function AttendancePanel({
     void queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
   });
 
+  const attendanceDate =
+    dailyStatus?.assigned_shift?.attendance_date || todayStr;
   const todayRecords = useMemo(() => {
     return (attendanceRecords || []).filter((r) => {
       if (r.user_id !== userId || !r.date) return false;
       // Drizzle returns `date` columns as either "YYYY-MM-DD" or a full
       // ISO timestamp depending on the driver — normalize before compare.
       const d = String(r.date).slice(0, 10);
-      return d === todayStr;
+      return d === attendanceDate;
     });
-  }, [attendanceRecords, userId, todayStr]);
+  }, [attendanceRecords, userId, attendanceDate]);
 
   // Per-action records. Historic rows may not have the dedicated timestamp
   // columns populated (older bug), so fall back to `created_at` of the row
@@ -123,17 +127,27 @@ export default function AttendancePanel({
   const pickByStatus = (statuses: string[]) =>
     todayRecords.find((r) => statuses.includes(r.status));
 
+  const orderedRecords = useMemo(
+    () =>
+      [...todayRecords].sort(
+        (a, b) =>
+          new Date(a.created_at || 0).getTime() -
+            new Date(b.created_at || 0).getTime() ||
+          a.id - b.id,
+      ),
+    [todayRecords],
+  );
   const checkInRecord =
-    todayRecords.find((r) => r.check_in_time) || pickByStatus(["حاضر"]);
+    orderedRecords.find((r) => r.check_in_time) || pickByStatus(["حاضر"]);
   const lunchStartRecord =
-    todayRecords.find((r) => r.lunch_start_time) ||
+    orderedRecords.find((r) => r.lunch_start_time) ||
     pickByStatus(["في الاستراحة"]);
   const lunchEndRecord =
-    todayRecords.find((r) => r.lunch_end_time) ||
+    orderedRecords.find((r) => r.lunch_end_time) ||
     // "يعمل" is set after ending lunch
     [...todayRecords].reverse().find((r) => r.status === "يعمل");
   const checkOutRecord =
-    todayRecords.find((r) => r.check_out_time) || pickByStatus(["مغادر"]);
+    orderedRecords.find((r) => r.check_out_time) || pickByStatus(["مغادر"]);
 
   // Effective timestamps with `created_at` fallback for historic NULLs.
   const checkInAt =
@@ -151,7 +165,7 @@ export default function AttendancePanel({
   // for the ownership check; it resolves the real current state from
   // the user's full day of rows.
   const activeAttendanceId =
-    [...todayRecords].sort((a, b) => {
+    [...orderedRecords].sort((a, b) => {
       const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
       const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
       return tb - ta;
@@ -160,20 +174,24 @@ export default function AttendancePanel({
   // Withdrawals query
   const { data: withdrawals, refetch: refetchWithdrawals } =
     useQuery<WithdrawalsResponse>({
-      queryKey: ["/api/attendance/withdrawals/today", userId],
+      queryKey: [
+        "/api/attendance/withdrawals/today",
+        userId,
+        { date: attendanceDate },
+      ],
       enabled: !!userId && !!activeAttendanceId,
       refetchInterval: 60_000,
     });
 
-  // Anti-fraud watchdog only runs while user is actively working (not on
-  // break, not checked out, not absent).
+  // Keep the watchdog alive during a withdrawal so a return inside the
+  // geofence can close the open interval.
   const watchdogEnabled =
     !!dailyStatus?.hasCheckedIn &&
     !dailyStatus?.hasCheckedOut &&
     dailyStatus?.currentStatus !== "في الاستراحة" &&
     dailyStatus?.currentStatus !== "مغادر" &&
     dailyStatus?.currentStatus !== "غائب" &&
-    dailyStatus?.currentStatus !== "منسحب";
+    true;
 
   // Active factory geofences for the GPS-based watchdog. Withdrawals
   // only fire when the device leaves all of these radii — tab hide /
@@ -189,7 +207,8 @@ export default function AttendancePanel({
     attendanceId: activeAttendanceId,
     userId,
     factoryLocations,
-    onWithdrawalChanged: () => {
+    isWithdrawalOpen: dailyStatus?.currentStatus === "منسحب",
+    onWithdrawalChanged: useCallback(() => {
       void refetchWithdrawals();
       // Refresh daily status + attendance list so the restored "حاضر"
       // status (after returning) shows up immediately rather than waiting
@@ -198,27 +217,24 @@ export default function AttendancePanel({
         queryKey: ["/api/attendance/daily-status", userId],
       });
       void queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
-    },
+    }, [queryClient, refetchWithdrawals, userId]),
   });
 
   // ---- Live counters ----
   const onBreak = dailyStatus?.currentStatus === "في الاستراحة";
   const isCheckedOut = dailyStatus?.hasCheckedOut;
 
-  const counterSeconds = useMemo(() => {
-    if (onBreak && lunchStartAt) {
-      return (now.getTime() - new Date(lunchStartAt).getTime()) / 1000;
-    }
-    if (checkInAt) {
-      const end = isCheckedOut && checkOutAt ? new Date(checkOutAt) : now;
-      return (end.getTime() - new Date(checkInAt).getTime()) / 1000;
-    }
-    return 0;
-  }, [now, onBreak, isCheckedOut, lunchStartAt, checkInAt, checkOutAt]);
+  const counterSeconds = useMemo(
+    () =>
+      calculateWorkedSeconds(
+        orderedRecords,
+        now,
+        withdrawals?.withdrawals || [],
+      ),
+    [orderedRecords, now, withdrawals?.withdrawals],
+  );
 
-  const counterLabel = onBreak
-    ? t("userDashboard.attendance.elapsedOnBreak")
-    : t("userDashboard.attendance.elapsedSinceCheckIn");
+  const counterLabel = t("userDashboard.attendance.elapsedSinceCheckIn");
 
   const counterColorClass = onBreak
     ? "from-yellow-500 to-amber-500"

@@ -635,96 +635,14 @@ export async function registerMobileRoutes(app: Express, ctx: any) {
     "/api/mobile/sync/attendance",
     requireAuth,
     async (req: AuthRequest, res) => {
-      try {
-        const userId = req.user?.id;
-        if (!userId) return res.status(401).json({ message: "غير مصرح" });
-
-        const { records } = req.body;
-        if (!Array.isArray(records) || records.length === 0) {
-          return res.status(400).json({ message: "لا توجد سجلات للمزامنة" });
-        }
-
-        const results: {
-          client_id: string;
-          status: string;
-          server_id?: number;
-          error?: string;
-        }[] = [];
-
-        const isAdmin = req.user?.permissions?.includes("admin");
-
-        for (const record of records) {
-          try {
-            if (!record.date) {
-              results.push({
-                client_id: record.client_id || "unknown",
-                status: "error",
-                error: "date is required",
-              });
-              continue;
-            }
-
-            const targetUserId =
-              isAdmin && record.user_id ? record.user_id : userId;
-
-            const existing = await db.execute(sql`
-            SELECT id FROM attendance WHERE user_id = ${targetUserId} AND date = ${record.date} LIMIT 1
-          `);
-
-            if (existing.rows.length > 0) {
-              const existingId = (existing.rows[0] as any).id;
-              await db.execute(sql`
-              UPDATE attendance SET
-                status = COALESCE(${record.status}, status),
-                check_in_time = COALESCE(${record.check_in_time}, check_in_time),
-                check_out_time = COALESCE(${record.check_out_time}, check_out_time),
-                location_accuracy = COALESCE(${record.location_accuracy}, location_accuracy),
-                distance_from_factory = COALESCE(${record.distance_from_factory}, distance_from_factory),
-                device_info = COALESCE(${record.device_info}, device_info),
-                notes = COALESCE(${record.notes}, notes),
-                updated_at = NOW(),
-                updated_by = ${userId}
-              WHERE id = ${existingId}
-            `);
-              results.push({
-                client_id: record.client_id || record.date,
-                status: "updated",
-                server_id: existingId,
-              });
-            } else {
-              const inserted = await db.execute(sql`
-              INSERT INTO attendance (user_id, date, status, check_in_time, check_out_time, 
-                location_accuracy, distance_from_factory, device_info, notes, shift_type, created_by)
-              VALUES (${targetUserId}, ${record.date}, ${record.status || "حاضر"}, 
-                ${record.check_in_time}, ${record.check_out_time},
-                ${record.location_accuracy}, ${record.distance_from_factory}, 
-                ${record.device_info}, ${record.notes}, ${record.shift_type || "صباحي"}, ${userId})
-              RETURNING id
-            `);
-              results.push({
-                client_id: record.client_id || record.date,
-                status: "created",
-                server_id: (inserted.rows[0] as any)?.id,
-              });
-            }
-          } catch (err: any) {
-            results.push({
-              client_id: record.client_id || record.date,
-              status: "error",
-              error: err?.message,
-            });
-          }
-        }
-
-        res.json({
-          data: results,
-          synced: results.filter((r) => r.status !== "error").length,
-          errors: results.filter((r) => r.status === "error").length,
-        });
-      } catch (error) {
-        logger.error("Mobile sync attendance error", error);
-        res.status(500).json({ message: "خطأ في مزامنة الحضور" });
-      }
+      // Attendance is deliberately excluded from offline entity sync.  A
+      // client-side batch can otherwise create or rewrite a human check-in
+      // without the explicit, location-verified attendance action.
+      return res.status(410).json({
+        message:
+          "مزامنة الحضور معطلة. يرجى استخدام زر تسجيل الحضور اليدوي داخل لوحة المستخدم.",
+        code: "ATTENDANCE_SYNC_DISABLED",
+      });
     },
   );
 

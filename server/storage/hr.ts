@@ -2935,6 +2935,7 @@ export class HrStorage extends MachinesStorage {
   async getAttendance(opts?: {
     limit?: number;
     offset?: number;
+    userId?: number;
   }): Promise<Attendance[]> {
     if (!opts) {
       return await db.select().from(attendance).orderBy(desc(attendance.date));
@@ -2944,6 +2945,7 @@ export class HrStorage extends MachinesStorage {
     return await db
       .select()
       .from(attendance)
+      .where(opts.userId != null ? eq(attendance.user_id, opts.userId) : undefined)
       .orderBy(desc(attendance.date))
       .limit(limit)
       .offset(offset);

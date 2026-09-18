@@ -39,6 +39,7 @@ interface UseAttendanceWatchdogParams {
   attendanceId: number | null | undefined;
   userId: number | null | undefined;
   factoryLocations?: FactoryGeofence[];
+  isWithdrawalOpen?: boolean;
   onWithdrawalChanged?: () => void;
   /** Sustained out-of-range duration before opening a withdrawal. */
   outsideGraceMs?: number;
@@ -67,6 +68,7 @@ export function useAttendanceWatchdog({
   attendanceId,
   userId,
   factoryLocations,
+  isWithdrawalOpen = false,
   onWithdrawalChanged,
   outsideGraceMs = 60_000,
 }: UseAttendanceWatchdogParams) {
@@ -95,6 +97,7 @@ export function useAttendanceWatchdog({
     if (fences.length === 0) return;
 
     let cancelled = false;
+    isOpenRef.current = isWithdrawalOpen;
 
     const callAction = async (
       action: "start" | "end",
@@ -250,6 +253,7 @@ export function useAttendanceWatchdog({
     attendanceId,
     userId,
     factoryLocations,
+    isWithdrawalOpen,
     outsideGraceMs,
     toast,
     onWithdrawalChanged,

@@ -1324,41 +1324,6 @@ export default function UserDashboard() {
                         >
                           {dailyAttendanceStatus.currentStatus}
                         </Badge>
-                        {(dailyAttendanceStatus.currentStatus === "حاضر" ||
-                          dailyAttendanceStatus.currentStatus ===
-                            "في الاستراحة" ||
-                          dailyAttendanceStatus.currentStatus === "يعمل" ||
-                          dailyAttendanceStatus.currentStatus === "مغادر") &&
-                          dailyAttendanceStatus.hasCheckedIn && (
-                            <span className="text-sm text-gray-600 dark:text-gray-300">
-                              {(() => {
-                                const todayRecord = attendanceRecords?.find(
-                                  (record) =>
-                                    record.date === today &&
-                                    record.user_id === user?.id &&
-                                    record.check_in_time,
-                                );
-
-                                if (!todayRecord?.check_in_time) return "";
-
-                                const checkIn = new Date(
-                                  todayRecord.check_in_time,
-                                );
-                                const now = todayRecord.check_out_time
-                                  ? new Date(todayRecord.check_out_time)
-                                  : currentTime;
-                                const diff = now.getTime() - checkIn.getTime();
-                                const hours = Math.floor(
-                                  diff / (1000 * 60 * 60),
-                                );
-                                const minutes = Math.floor(
-                                  (diff % (1000 * 60 * 60)) / (1000 * 60),
-                                );
-
-                                return `${hours} ${t("userDashboard.attendance.hour")} ${minutes} ${t("userDashboard.attendance.minute")}`;
-                              })()}
-                            </span>
-                          )}
                       </div>
                     ) : (
                       <Badge variant="outline">

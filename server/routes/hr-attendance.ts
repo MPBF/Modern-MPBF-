@@ -4,9 +4,15 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { db } from "../db";
 
-import { violations, roles } from "@shared/schema";
+import {
+  attendance,
+  attendance_withdrawals,
+  violations,
+  roles,
+} from "@shared/schema";
 import { hasPermission } from "@shared/permissions";
 import { z } from "zod";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { parseIntSafe } from "@shared/validation-utils";
 import {
   factoryNowParts,
@@ -111,7 +117,23 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         Math.min(parseInt(String(req.query.limit ?? "")) || 50, 500),
       );
       const offset = Math.max(0, parseInt(String(req.query.offset ?? "")) || 0);
-      const attendance = await storage.getAttendance({ limit, offset });
+      const authUserId = getAuthUserId(req);
+      const permissions = (req as any).user?.permissions || [];
+      const canViewOthers = hasPermission(permissions, [
+        "view_attendance",
+        "view_attendance_reports",
+        "manage_attendance",
+        "view_hr",
+        "manage_hr",
+      ]);
+      if (!canViewOthers && authUserId == null) {
+        return res.status(401).json({ message: "غير مصرح" });
+      }
+      const attendance = await storage.getAttendance({
+        limit,
+        offset,
+        userId: canViewOthers ? undefined : authUserId!,
+      });
       res.set("X-Pagination-Limit", String(limit));
       res.set("X-Pagination-Offset", String(offset));
       res.set("X-Pagination-Count", String(attendance.length));
@@ -520,6 +542,81 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const nowTs = new Date();
         const status = String(req.body.status || "");
         const action = String(req.body.action || "");
+        const allowedStatuses = new Set([
+          "حاضر",
+          "في الاستراحة",
+          "يعمل",
+          "مغادر",
+          ...(canManageAttendance ? ["غائب", "إجازة"] : []),
+        ]);
+        if (!allowedStatuses.has(status)) {
+          return res.status(400).json({
+            message: "حالة الحضور غير صحيحة",
+            code: "INVALID_ATTENDANCE_STATUS",
+          });
+        }
+        if (action && !new Set(["end_lunch"]).has(action)) {
+          return res.status(400).json({
+            message: "إجراء الحضور غير صحيح",
+            code: "INVALID_ATTENDANCE_ACTION",
+          });
+        }
+        if (status === "يعمل" && action !== "end_lunch") {
+          return res.status(400).json({
+            message: "يجب تحديد إنهاء الاستراحة",
+            code: "INVALID_ATTENDANCE_ACTION",
+          });
+        }
+        if (status !== "يعمل" && action === "end_lunch") {
+          return res.status(400).json({
+            message: "إنهاء الاستراحة يتطلب حالة يعمل",
+            code: "INVALID_ATTENDANCE_ACTION",
+          });
+        }
+        // Self-service attendance is a strict state machine. Admin edits use
+        // the dedicated management routes and retain their existing behavior.
+        const openSession = await storage.findOpenCheckIn(req.body.user_id);
+        if (!canManageAttendance) {
+          const current = openSession
+            ? await storage.getDailyAttendanceStatus(
+                req.body.user_id,
+                String(openSession.date).slice(0, 10),
+              )
+            : null;
+          if (status === "حاضر" && openSession) {
+            return res.status(409).json({
+              message: "تم تسجيل الحضور مسبقاً",
+              code: "ATTENDANCE_ALREADY_CHECKED_IN",
+            });
+          }
+          if (status !== "حاضر" && !openSession) {
+            return res.status(409).json({
+              message: "لا توجد جلسة حضور مفتوحة",
+              code: "ATTENDANCE_SESSION_NOT_OPEN",
+            });
+          }
+          if (status === "في الاستراحة" &&
+              (current?.currentStatus !== "حاضر" &&
+                current?.currentStatus !== "يعمل")) {
+            return res.status(409).json({
+              message: "لا يمكن بدء الاستراحة في الحالة الحالية",
+              code: "INVALID_ATTENDANCE_TRANSITION",
+            });
+          }
+          if (status === "يعمل" && current?.currentStatus !== "في الاستراحة") {
+            return res.status(409).json({
+              message: "لا توجد استراحة مفتوحة",
+              code: "INVALID_ATTENDANCE_TRANSITION",
+            });
+          }
+          if (status === "مغادر" &&
+              (current?.hasCheckedOut || current?.currentStatus === "مغادر")) {
+            return res.status(409).json({
+              message: "تم تسجيل الانصراف مسبقاً",
+              code: "ATTENDANCE_ALREADY_CHECKED_OUT",
+            });
+          }
+        }
         const factoryToday = factoryNowParts(nowTs);
         const resolvedAssignment = await getResolvedAssignmentForInstant(
           req.body.user_id,
@@ -554,33 +651,25 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             code: "OUTSIDE_ASSIGNED_SHIFT",
           });
         }
-        const stampOverrides: Record<string, Date | undefined> = {};
-        if (status === "حاضر" && !req.body.check_in_time) {
-          stampOverrides.check_in_time = nowTs;
-        }
-        if (status === "في الاستراحة" && !req.body.lunch_start_time) {
-          stampOverrides.lunch_start_time = nowTs;
-        }
-        if (
-          (status === "يعمل" || action === "end_lunch") &&
-          !req.body.lunch_end_time
-        ) {
-          stampOverrides.lunch_end_time = nowTs;
-        }
-        if (status === "مغادر" && !req.body.check_out_time) {
-          stampOverrides.check_out_time = nowTs;
-        }
+        const stampOverrides: Record<string, Date | undefined> = {
+          check_in_time: undefined,
+          check_out_time: undefined,
+          lunch_start_time: undefined,
+          lunch_end_time: undefined,
+        };
+        if (status === "حاضر") stampOverrides.check_in_time = nowTs;
+        if (status === "في الاستراحة") stampOverrides.lunch_start_time = nowTs;
+        if (status === "يعمل") stampOverrides.lunch_end_time = nowTs;
+        if (status === "مغادر") stampOverrides.check_out_time = nowTs;
         // Actions after check-in belong to the already-open session, not to
         // today's potentially changed roster. This also covers a night shift
         // crossing a month/year boundary.
-        const openSession =
-          status !== "حاضر"
-            ? await storage.findOpenCheckIn(req.body.user_id)
-            : null;
         const openSnapshot = openSession?.shift_snapshot as any;
 
         const attendanceData = {
-          ...req.body,
+          user_id: req.body.user_id,
+          status,
+          notes: typeof req.body.notes === "string" ? req.body.notes : undefined,
           ...stampOverrides,
           // Attendance action dates are server-authoritative and use the
           // factory's Riyadh calendar, not the browser/UTC calendar.
@@ -650,10 +739,65 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           }
         }
 
-        const attendance = await storage.createAttendance(attendanceData);
+        const createdAttendance = canManageAttendance
+          ? await storage.createAttendance(attendanceData)
+          : await db.transaction(async (tx) => {
+               await tx.execute(sql`
+                 SELECT pg_advisory_xact_lock(4107, ${Number(req.body.user_id)})
+               `);
+              const rows = await tx.execute(sql`
+                SELECT status, check_in_time, check_out_time
+                FROM attendance
+                WHERE user_id = ${Number(req.body.user_id)}
+                  AND date = ${attendanceData.date}
+                ORDER BY created_at ASC, id ASC
+              `);
+              const currentRows = rows.rows as any[];
+              const checkedIn = currentRows.some((r) => r.status === "حاضر");
+              const checkedOut = currentRows.some((r) => r.status === "مغادر");
+              const latest = currentRows.at(-1)?.status;
+               const conflict = (message: string, code: string) =>
+                 Object.assign(new Error(message), {
+                   code: "ATTENDANCE_TRANSITION_CONFLICT",
+                   attendanceCode: code,
+                 });
+               if (status === "حاضر" && checkedIn) {
+                 throw conflict(
+                   "تم تسجيل الحضور مسبقاً",
+                   "ATTENDANCE_ALREADY_CHECKED_IN",
+                 );
+              }
+              if (status !== "حاضر" && (!checkedIn || checkedOut)) {
+                 throw conflict(
+                   "لا توجد جلسة حضور مفتوحة",
+                   "ATTENDANCE_SESSION_NOT_OPEN",
+                 );
+              }
+               if (
+                 status === "في الاستراحة" &&
+                 latest !== "حاضر" &&
+                 latest !== "يعمل"
+               ) {
+                 throw conflict(
+                   "لا يمكن بدء الاستراحة في الحالة الحالية",
+                   "INVALID_ATTENDANCE_TRANSITION",
+                 );
+              }
+              if (status === "يعمل" && latest !== "في الاستراحة") {
+                 throw conflict(
+                   "لا توجد استراحة مفتوحة",
+                   "INVALID_ATTENDANCE_TRANSITION",
+                 );
+              }
+              const [created] = await tx
+                .insert(attendance)
+                .values(attendanceData as any)
+                .returning();
+              return created;
+            });
 
         // Send attendance notification asynchronously (fire-and-forget)
-        const attendanceId = attendance.id;
+        const attendanceId = createdAttendance.id;
         const attendanceUserId = req.body.user_id;
         const attendanceStatus = req.body.status;
         (async () => {
@@ -714,9 +858,19 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           }
         })();
 
-        res.status(201).json(attendance);
+        res.status(201).json(createdAttendance);
       } catch (error) {
         console.error("Error creating attendance:", error);
+
+        if (
+          error instanceof Error &&
+          (error as any).code === "ATTENDANCE_TRANSITION_CONFLICT"
+        ) {
+          return res.status(409).json({
+            message: error.message,
+            code: (error as any).attendanceCode,
+          });
+        }
 
         // Return the specific error message for validation errors
         if (error instanceof Error && error.message.includes("تم تسجيل")) {
@@ -898,10 +1052,17 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
 
         const now = new Date();
         const today = factoryNowParts(now).dateStr;
-        if (att.date && String(att.date).slice(0, 10) !== today) {
-          return res
-            .status(400)
-            .json({ message: "لا يمكن تسجيل انسحاب على سجل قديم" });
+        const openSession = await storage.findOpenCheckIn(att.user_id);
+        const sessionDate = openSession?.date
+          ? String(openSession.date).slice(0, 10)
+          : String(att.date).slice(0, 10);
+        if (sessionDate !== today) {
+          const activeNight = getActivePreviousNightShift(now);
+          if (!activeNight || sessionDate !== activeNight.dateStr) {
+            return res
+              .status(400)
+              .json({ message: "لا يمكن تسجيل انسحاب على سجل قديم" });
+          }
         }
 
         // Resolve the user's CURRENT daily state from the canonical
@@ -911,7 +1072,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         // ownership check above.
         const dailyStatus = await storage.getDailyAttendanceStatus(
           att.user_id,
-          today,
+          sessionDate,
         );
         const currentStatus: string = dailyStatus?.currentStatus ?? "غائب";
         const hasCheckedIn: boolean = !!dailyStatus?.hasCheckedIn;
@@ -924,7 +1085,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           // differ from the param `:id` after status transitions.
           const existing = await storage.getOpenAttendanceWithdrawalForUser(
             att.user_id,
-            today,
+            sessionDate,
           );
           if (existing) {
             return res.json({
@@ -1016,36 +1177,105 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
               distance: Math.round(nearestDistance),
             });
           }
-          // Insert a new attendance row with status "منسحب" so that
-          // `getDailyAttendanceStatus` (which keys off the latest row by
-          // created_at) reflects the withdrawal state on the UI.
-          const withdrawnRow = await storage.createAttendance({
-            user_id: att.user_id,
-            date: today,
-            status: "منسحب",
-            notes: parsed.data.reason || "page_abandonment",
-          } as any);
-          const created = await storage.createAttendanceWithdrawal({
-            attendance_id: withdrawnRow.id,
-            user_id: att.user_id,
-            date: today as any,
-            started_at: now,
-            ended_at: null,
-            duration_minutes: 0,
-            reason: parsed.data.reason || "page_abandonment",
-            previous_status: currentStatus,
+          // Serialize attendance transitions and withdrawal creation for this
+          // user. This prevents two tabs/devices from opening overlapping
+          // withdrawal intervals against different action rows.
+          const startResult = await db.transaction(async (tx) => {
+            await tx.execute(sql`
+              SELECT pg_advisory_xact_lock(4107, ${att.user_id})
+            `);
+
+            const [existingLocked] = await tx
+              .select()
+              .from(attendance_withdrawals)
+              .where(
+                and(
+                  eq(attendance_withdrawals.user_id, att.user_id),
+                  eq(attendance_withdrawals.date, sessionDate),
+                  isNull(attendance_withdrawals.ended_at),
+                ),
+              )
+              .limit(1);
+            if (existingLocked) {
+              return { kind: "existing" as const, withdrawal: existingLocked };
+            }
+
+            const lockedRows = await tx
+              .select({ status: attendance.status })
+              .from(attendance)
+              .where(
+                and(
+                  eq(attendance.user_id, att.user_id),
+                  eq(attendance.date, sessionDate),
+                ),
+              )
+              .orderBy(asc(attendance.created_at), asc(attendance.id));
+            const statuses = lockedRows.map((row) => row.status);
+            const latestStatus = statuses.at(-1) ?? "غائب";
+            if (
+              !statuses.includes("حاضر") ||
+              statuses.includes("مغادر") ||
+              (latestStatus !== "حاضر" && latestStatus !== "يعمل")
+            ) {
+              return {
+                kind: "conflict" as const,
+                currentStatus: latestStatus,
+              };
+            }
+
+            const [withdrawnRow] = await tx
+              .insert(attendance)
+              .values({
+                user_id: att.user_id,
+                date: sessionDate,
+                status: "منسحب",
+                notes: parsed.data.reason || "page_abandonment",
+              } as any)
+              .returning();
+            const [created] = await tx
+              .insert(attendance_withdrawals)
+              .values({
+                attendance_id: withdrawnRow.id,
+                user_id: att.user_id,
+                date: sessionDate as any,
+                started_at: now,
+                ended_at: null,
+                duration_minutes: 0,
+                reason: parsed.data.reason || "page_abandonment",
+                previous_status: latestStatus,
+              })
+              .returning();
+            return {
+              kind: "created" as const,
+              withdrawal: created,
+              attendanceId: withdrawnRow.id,
+            };
           });
+
+          if (startResult.kind === "existing") {
+            return res.json({
+              withdrawal: startResult.withdrawal,
+              status: "منسحب",
+              alreadyOpen: true,
+            });
+          }
+          if (startResult.kind === "conflict") {
+            return res.status(409).json({
+              message: "لا يمكن فتح فترة انسحاب في الحالة الحالية",
+              currentStatus: startResult.currentStatus,
+            });
+          }
           return res.json({
-            withdrawal: created,
+            withdrawal: startResult.withdrawal,
             status: "منسحب",
-            attendanceId: withdrawnRow.id,
+            attendanceId: startResult.attendanceId,
           });
         }
 
         // action === 'end'
         const open = await storage.getOpenAttendanceWithdrawalForUser(
           att.user_id,
-          today,
+          sessionDate,
         );
         if (!open) {
           // No open period — nothing to finalize.
@@ -1058,12 +1288,12 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           if (!open.previous_status) return null;
           const after = await storage.getDailyAttendanceStatus(
             att.user_id,
-            today,
+            sessionDate,
           );
           if (after?.currentStatus !== "منسحب") return null;
           await storage.createAttendance({
             user_id: att.user_id,
-            date: today,
+            date: sessionDate,
             status: open.previous_status,
             notes: "auto_restore_after_withdrawal",
           } as any);
@@ -1084,7 +1314,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           const restoredStatus = await restoreStatus();
           const totals = await storage.getAttendanceWithdrawalsForDay(
             att.user_id,
-            today,
+            sessionDate,
           );
           return res.json({
             withdrawal: finalized,
@@ -1105,7 +1335,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           // return current totals so the client converges.
           const restoredStatus = await restoreStatus();
           const { totalMinutes } =
-            await storage.getAttendanceWithdrawalsForDay(att.user_id, today);
+            await storage.getAttendanceWithdrawalsForDay(att.user_id, sessionDate);
           return res.json({
             withdrawal: null,
             durationMinutes: 0,
@@ -1118,7 +1348,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
 
         const { totalMinutes } = await storage.getAttendanceWithdrawalsForDay(
           att.user_id,
-          today,
+          sessionDate,
         );
         let violationCreated = false;
         let createdViolationId: number | null = null;
