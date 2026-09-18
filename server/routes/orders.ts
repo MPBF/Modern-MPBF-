@@ -4,26 +4,6 @@ import { createServer, type Server } from "http";
 
 
 import { hasPermission } from "@shared/permissions";
-import {
-  parseIntSafe,
-  parseFloatSafe,
-  coercePositiveInt,
-  coerceNonNegativeInt,
-  extractNumericId,
-  generateNextId,
-} from "@shared/validation-utils";
-import {
-  createAlertsRouter,
-  createSystemHealthRouter,
-  createPerformanceRouter,
-  createCorrectiveActionsRouter,
-  createDataValidationRouter,
-} from "./alerts";
-import { getSystemHealthMonitor } from "../services/system-health-monitor";
-import { getAlertManager } from "../services/alert-manager";
-import { getDataValidator } from "../services/data-validator";
-import QRCode from "qrcode";
-import { validateRequest, commonSchemas } from "../middleware/validation";
 import { calculateProductionQuantities } from "@shared/quantity-utils";
 import {
   insertUserSchema,
@@ -119,11 +99,20 @@ import {
   updateIndustrialWasteVoucherOutSchema,
 } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
+import {
+  parseIntSafe,
+  parseFloatSafe,
+  coercePositiveInt,
+  coerceNonNegativeInt,
+  extractNumericId,
+  generateNextId,
+} from "@shared/validation-utils";
 import bcrypt from "bcrypt";
 import { eq, sql, and, gte, lte, gt, desc, inArray } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import ExcelJS from "exceljs";
 import multer from "multer";
+import QRCode from "qrcode";
 import { z } from "zod";
 
 import { resolveSessionUser } from "../auth/sessionUser";
@@ -149,19 +138,30 @@ import {
   refreshMobileSession,
   revokeMobileSession,
 } from "../middleware/session-auth";
+import { validateRequest, commonSchemas } from "../middleware/validation";
+import { getAlertManager } from "../services/alert-manager";
 import {
   translateAnnouncement,
   ensureAnnouncementTranslations,
 } from "../services/announcement-translation";
+import { getDataValidator } from "../services/data-validator";
 import {
   getNotificationManager,
   type SystemNotificationData,
 } from "../services/notification-manager";
 import { NotificationService } from "../services/notification-service";
+import { getSystemHealthMonitor } from "../services/system-health-monitor";
 import { TaqnyatSMSService } from "../services/taqnyat-sms";
 import { storage } from "../storage";
 import { setNotificationManager } from "../storage";
 
+import {
+  createAlertsRouter,
+  createSystemHealthRouter,
+  createPerformanceRouter,
+  createCorrectiveActionsRouter,
+  createDataValidationRouter,
+} from "./alerts";
 import {
   notificationService,
   taqnyatSMS,

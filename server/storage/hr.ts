@@ -288,6 +288,13 @@ import {
   type AdminToolDocument,
   type InsertAdminToolDocument,
 } from "@shared/schema";
+import {
+  isShiftType,
+  factoryNowParts,
+  getActivePreviousNightShift,
+  BASE_WORK_HOURS,
+  type ShiftType,
+} from "@shared/shifts";
 import bcrypt from "bcrypt";
 import {
   eq,
@@ -303,13 +310,9 @@ import {
   lte,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import {
-  applyApprovedLeaveToAttendance as applyApprovedLeaveToAttendanceImpl,
-  getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
-} from "../services/leave-attendance";
-import { toNumericSectionIds } from "./section-ids";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
+
 import { db, pool } from "../db";
 import {
   computeEmployeeAttendance,
@@ -317,12 +320,10 @@ import {
 } from "../services/attendance-engine";
 import { getDataValidator } from "../services/data-validator";
 import {
-  isShiftType,
-  factoryNowParts,
-  getActivePreviousNightShift,
-  BASE_WORK_HOURS,
-  type ShiftType,
-} from "@shared/shifts";
+  applyApprovedLeaveToAttendance as applyApprovedLeaveToAttendanceImpl,
+  getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
+} from "../services/leave-attendance";
+
 import {
   StorageBase,
   withDatabaseErrorHandling,
@@ -340,6 +341,7 @@ import {
   type NotificationManager,
 } from "./core";
 import { MachinesStorage } from "./machines";
+import { toNumericSectionIds } from "./section-ids";
 
 export class HrStorage extends MachinesStorage {
   async getAttendanceByDate(date: string): Promise<any[]> {

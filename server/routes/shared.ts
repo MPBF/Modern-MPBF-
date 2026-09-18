@@ -201,8 +201,6 @@ import {
   updateIndustrialWasteVoucherOutSchema,
 } from "@shared/schema";
 import { isShiftType, factoryNowParts } from "@shared/shifts";
-
-
 import { hasPermission } from "@shared/permissions";
 import { eq, sql, and, gte, lte, gt, desc, inArray } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";

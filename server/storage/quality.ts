@@ -288,6 +288,12 @@ import {
   type AdminToolDocument,
   type InsertAdminToolDocument,
 } from "@shared/schema";
+import {
+  isShiftType,
+  factoryNowParts,
+  BASE_WORK_HOURS,
+  type ShiftType,
+} from "@shared/shifts";
 import bcrypt from "bcrypt";
 import {
   eq,
@@ -312,12 +318,7 @@ import {
   type EmployeeAttendanceResult,
 } from "../services/attendance-engine";
 import { getDataValidator } from "../services/data-validator";
-import {
-  isShiftType,
-  factoryNowParts,
-  BASE_WORK_HOURS,
-  type ShiftType,
-} from "@shared/shifts";
+
 import {
   StorageBase,
   withDatabaseErrorHandling,
@@ -621,7 +622,7 @@ export class QualityStorage extends MaintenanceStorage {
       conditions.push(
         sql`${quality_inspection_forms.inspected_at} <= ${filters.dateTo}::date + interval '1 day'`,
       );
-    let query = this.qualityInspectionFormBaseQuery();
+    const query = this.qualityInspectionFormBaseQuery();
     const rows = conditions.length
       ? await query.where(and(...conditions)).orderBy(
           desc(quality_inspection_forms.id),

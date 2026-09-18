@@ -299,6 +299,12 @@ import {
   type AdminToolDocument,
   type InsertAdminToolDocument,
 } from "@shared/schema";
+import {
+  isShiftType,
+  factoryNowParts,
+  BASE_WORK_HOURS,
+  type ShiftType,
+} from "@shared/shifts";
 import bcrypt from "bcrypt";
 import {
   eq,
@@ -323,12 +329,6 @@ import {
   type EmployeeAttendanceResult,
 } from "../services/attendance-engine";
 import { getDataValidator } from "../services/data-validator";
-import {
-  isShiftType,
-  factoryNowParts,
-  BASE_WORK_HOURS,
-  type ShiftType,
-} from "@shared/shifts";
 
 // Enhanced cache system with memory optimization
 class OptimizedCache {
@@ -1780,7 +1780,7 @@ export class StorageBase {
     };
 
     if (usable.length > 0 && backlog.length > 0) {
-      let ordered = [...backlog];
+      const ordered = [...backlog];
       if (algorithm === "priority") {
         const rank = (s: string) =>
           s === "active" ? 0 : 1;

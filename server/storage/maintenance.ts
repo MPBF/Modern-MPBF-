@@ -297,6 +297,12 @@ import {
   type AdminToolDocument,
   type InsertAdminToolDocument,
 } from "@shared/schema";
+import {
+  isShiftType,
+  factoryNowParts,
+  BASE_WORK_HOURS,
+  type ShiftType,
+} from "@shared/shifts";
 import bcrypt from "bcrypt";
 import {
   eq,
@@ -321,12 +327,7 @@ import {
   type EmployeeAttendanceResult,
 } from "../services/attendance-engine";
 import { getDataValidator } from "../services/data-validator";
-import {
-  isShiftType,
-  factoryNowParts,
-  BASE_WORK_HOURS,
-  type ShiftType,
-} from "@shared/shifts";
+
 import {
   StorageBase,
   withDatabaseErrorHandling,

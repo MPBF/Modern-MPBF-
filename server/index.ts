@@ -357,16 +357,7 @@ app.use((req, res, next) => {
     allowedOrigins.push(`https://${currentHost}`);
   }
 
-  // MCP endpoint: allow any origin (protected by API key auth)
-  const isMcpRoute =
-    req.path === "/mcp" ||
-    req.path.startsWith("/oauth/") ||
-    req.path === "/.well-known/oauth-authorization-server";
-
-  if (isMcpRoute && origin) {
-    res.header("Access-Control-Allow-Origin", origin);
-    res.header("Access-Control-Allow-Credentials", "false");
-  } else if (origin && allowedOrigins.includes(origin)) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Access-Control-Allow-Credentials", "true");
   } else if (!origin) {
@@ -382,9 +373,9 @@ app.use((req, res, next) => {
   );
   res.header(
     "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Cookie, Set-Cookie, Mcp-Session-Id",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Cookie, Set-Cookie",
   );
-  res.header("Access-Control-Expose-Headers", "Set-Cookie, Mcp-Session-Id");
+  res.header("Access-Control-Expose-Headers", "Set-Cookie");
 
   if (req.method === "OPTIONS") {
     res.sendStatus(200);
@@ -463,9 +454,9 @@ app.use(
 
 // Apply session authentication middleware - populate req.user from session
 app.use((req, res, next) => {
-  // Only resolve the user for API/MCP requests; static assets and Vite
+  // Only resolve the user for API requests; static assets and Vite
   // resources don't need req.user and shouldn't pay for a DB lookup.
-  if (req.path.startsWith("/api") || req.path.startsWith("/mcp")) {
+  if (req.path.startsWith("/api")) {
     return populateUserFromSession(req, res, next);
   }
   next();
@@ -475,13 +466,6 @@ app.use((req, res, next) => {
 const SESSION_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 const sessionSaveTimestamps = new Map<string, number>();
 app.use((req, res, next) => {
-  // Skip session extension for MCP/OAuth routes (uses API key auth)
-  if (
-    req.path === "/mcp" ||
-    req.path.startsWith("/oauth/") ||
-    req.path === "/.well-known/oauth-authorization-server"
-  )
-    return next();
   // For API requests, extend the session if it exists
   if (req.path.startsWith("/api") && req.session) {
     // Check if session has userId (authenticated session)
@@ -745,11 +729,6 @@ function sanitizeResponseForLogging(response: any): any {
         "mobile_sessions",
         "mobile_device_tokens",
         "mobile_sync_queue",
-        "mcp_api_keys",
-        "mcp_oauth_tokens",
-        "mcp_oauth_clients",
-        "twilio_allowed_phone_numbers",
-        "twilio_voice_calls",
         "delivery_manifests",
         "admin_tool_documents",
       ];
