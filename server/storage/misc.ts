@@ -307,6 +307,7 @@ import ExcelJS from "exceljs";
 import QRCode from "qrcode";
 
 import { db, pool } from "../db";
+import { isOpenSessionRelevant } from "./attendance-session";
 import {
   computeEmployeeAttendance,
   type EmployeeAttendanceResult,
@@ -347,15 +348,17 @@ export class MiscStorage extends SystemStorage {
   ): Promise<Attendance | null> {
     return withDatabaseErrorHandling(
       async () => {
+        const now = new Date();
+        const yesterday = factoryNowParts(new Date(now.getTime() - 86400000)).dateStr;
         const conditions = [
           eq(attendance.user_id, userId),
           isNotNull(attendance.check_in_time),
           isNull(attendance.check_out_time),
           window
             ? eq(attendance.date, window.dateStr)
-            // An explicit follow-up action must always be attached to its
-            // open check-in, even after a long night/holiday boundary.
-            : sql`TRUE`,
+            // Ignore orphaned sessions older than yesterday. They remain in
+            // history for HR review; they must not block today's check-in.
+            : gte(attendance.date, yesterday),
         ];
         if (window) {
           conditions.push(gte(attendance.check_in_time, window.start));
@@ -386,7 +389,9 @@ export class MiscStorage extends SystemStorage {
           )
           .limit(1);
 
-        return laterCheckout ? null : record;
+        return laterCheckout || (!window && !isOpenSessionRelevant(record, now))
+          ? null
+          : record;
       },
       "findOpenCheckIn",
       `جلب تسجيل الدخول المفتوح للمستخدم ${userId}`,

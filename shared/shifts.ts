@@ -156,7 +156,7 @@ export function getShiftWindowForSnapshot(
   const endParts = wallTimeParts(snapshot.end_time);
   const start = factoryWallToInstant(y, m, d, startParts.hour, startParts.minute);
   const nextDay =
-    snapshot.kind === "flexible" ||
+    getSnapshotShiftType(snapshot) === "flexible" ||
     snapshot.end_time < snapshot.start_time;
   const endDate = nextDay ? new Date(Date.UTC(y, m - 1, d + 1)) : new Date(Date.UTC(y, m - 1, d));
   const end = factoryWallToInstant(
@@ -200,6 +200,9 @@ export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
 
 export function getSnapshotShiftType(snapshot: ShiftSnapshot): ShiftType {
   if (snapshot.kind && isShiftType(snapshot.kind)) return snapshot.kind;
+  // Older saved flexible snapshots may not have a kind.
+  if (snapshot.start_time === "00:00" && snapshot.end_time === "00:00")
+    return "flexible";
   return snapshot.end_time < snapshot.start_time ? "night" : "day";
 }
 

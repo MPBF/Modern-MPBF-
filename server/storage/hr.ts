@@ -310,7 +310,7 @@ import {
   getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
 } from "../services/leave-attendance";
 import { toNumericSectionIds } from "./section-ids";
-import { filterAttendanceRecordsByWindow } from "./attendance-session";
+import { filterAttendanceRecordsByWindow, summarizeActionSession } from "./attendance-session";
 import * as shiftTemplateStore from "./shift-template-store";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
@@ -695,7 +695,7 @@ export class HrStorage extends MachinesStorage {
       .select()
       .from(attendance)
       .where(and(eq(attendance.user_id, userId), eq(attendance.date, date)))
-      .orderBy(desc(attendance.created_at));
+      .orderBy(desc(attendance.created_at), desc(attendance.id));
     const records = filterAttendanceRecordsByWindow(dateRecords, window);
 
     if (records.length === 0) {
@@ -727,26 +727,25 @@ export class HrStorage extends MachinesStorage {
               eq(attendance.date, openRecord.date as string),
             ),
           )
-          .orderBy(desc(attendance.created_at));
+          .orderBy(desc(attendance.created_at), desc(attendance.id));
         const shiftLatest = shiftRecords[0];
+        const shiftSession = summarizeActionSession(shiftRecords);
         return {
           status: shiftLatest.status,
           currentStatus: shiftLatest.status,
-          hasCheckedIn: shiftRecords.some((r) => r.status === "حاضر"),
-          hasStartedLunch: shiftRecords.some(
-            (r) => r.status === "في الاستراحة",
-          ),
-          hasEndedLunch: shiftRecords.some((r) => r.status === "يعمل"),
+          hasCheckedIn: shiftSession.hasCheckedIn,
+          hasStartedLunch: shiftSession.hasStartedLunch,
+          hasEndedLunch: shiftSession.hasEndedLunch,
           hasCheckedOut: false,
           check_in_time:
-            shiftRecords.find((r) => r.status === "حاضر")?.check_in_time ||
+            shiftSession.session.find((r) => r.check_in_time)?.check_in_time ||
             shiftLatest.check_in_time,
           check_out_time: null,
           lunch_start_time:
-            shiftRecords.find((r) => r.status === "في الاستراحة")
+            shiftSession.session.find((r) => r.status === "في الاستراحة")
               ?.lunch_start_time || null,
           lunch_end_time:
-            shiftRecords.find((r) => r.status === "يعمل")?.lunch_end_time ||
+            shiftSession.session.find((r) => r.status === "يعمل")?.lunch_end_time ||
             null,
           work_hours: shiftLatest.work_hours,
           records: shiftRecords,
@@ -765,10 +764,9 @@ export class HrStorage extends MachinesStorage {
     }
 
     const latest = records[0];
-    const hasCheckedIn = records.some((r) => r.status === "حاضر");
-    const hasStartedLunch = records.some((r) => r.status === "في الاستراحة");
-    const hasEndedLunch = records.some((r) => r.status === "يعمل");
-    const hasCheckedOut = records.some((r) => r.status === "مغادر");
+    const {
+      session, hasCheckedIn, hasStartedLunch, hasEndedLunch, hasCheckedOut,
+    } = summarizeActionSession(records);
 
     return {
       status: latest.status,
@@ -778,16 +776,16 @@ export class HrStorage extends MachinesStorage {
       hasEndedLunch,
       hasCheckedOut,
       check_in_time:
-        records.find((r) => r.status === "حاضر")?.check_in_time ||
+        session.find((r) => r.check_in_time)?.check_in_time ||
         latest.check_in_time,
       check_out_time:
-        records.find((r) => r.status === "مغادر")?.check_out_time ||
+        session.find((r) => r.status === "مغادر")?.check_out_time ||
         latest.check_out_time,
       lunch_start_time:
-        records.find((r) => r.status === "في الاستراحة")?.lunch_start_time ||
+        session.find((r) => r.status === "في الاستراحة")?.lunch_start_time ||
         latest.lunch_start_time,
       lunch_end_time:
-        records.find((r) => r.status === "يعمل")?.lunch_end_time ||
+        session.find((r) => r.status === "يعمل")?.lunch_end_time ||
         latest.lunch_end_time,
       work_hours: latest.work_hours,
       records: records,

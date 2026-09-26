@@ -15,6 +15,7 @@ import {
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { requiresFactoryGeofence } from "@shared/attendance-policy";
 
 import AttendancePanel from "../../components/dashboard/AttendancePanel";
 import AttendanceStats from "../../components/dashboard/AttendanceStats";
@@ -750,22 +751,35 @@ export default function UserDashboard() {
         isMocked?: boolean;
       };
     }) => {
-      const response = await fetch("/api/attendance", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          user_id: user?.id,
-          status: data.status,
-          action: data.action,
-          date: today,
-          notes: data.notes,
-          location: data.location,
-        }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
+      let response: Response;
+      try {
+        response = await fetch("/api/attendance", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+          credentials: "include",
+          signal: controller.signal,
+          body: JSON.stringify({
+            user_id: user?.id,
+            status: data.status,
+            action: data.action,
+            date: today,
+            notes: data.notes,
+            location: data.location,
+          }),
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new Error("انتهت مهلة طلب الحضور. تحقق من حالة الحضور قبل إعادة المحاولة.");
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
 
       const responseBody = await readResponseBody(response);
 
@@ -798,6 +812,12 @@ export default function UserDashboard() {
       toast({ title: t("userDashboard.attendance.attendanceSuccess") });
     },
     onError: (error: unknown) => {
+      // A timed-out request may have been committed on the server. Refresh
+      // before offering another attempt instead of relying on stale buttons.
+      void queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/attendance/daily-status", user?.id],
+      });
       const message =
         error instanceof Error && error.message
           ? error.message
@@ -1065,7 +1085,7 @@ export default function UserDashboard() {
     }
 
     // انتظار تحميل المواقع
-    if (isLoadingLocations) {
+    if (requiresFactoryGeofence(status) && isLoadingLocations) {
       toast({
         title: t("common.loading"),
         description: t("common.pleaseWait"),
@@ -1073,8 +1093,9 @@ export default function UserDashboard() {
       return;
     }
 
-    // التحقق من وجود مواقع نشطة
-    if (!Array.isArray(activeLocations) || activeLocations.length === 0) {
+    // Check-out records the device location even after leaving the factory.
+    if (requiresFactoryGeofence(status) &&
+        (!Array.isArray(activeLocations) || activeLocations.length === 0)) {
       toast({
         title: t("common.error"),
         description: t("userDashboard.location.notNearFactory"),
@@ -1083,7 +1104,7 @@ export default function UserDashboard() {
       return;
     }
 
-    const validLocations = activeLocations
+    const validLocations = (activeLocations || [])
       .map(normalizeFactoryLocation)
       .filter(
         (
@@ -1092,7 +1113,7 @@ export default function UserDashboard() {
           location !== null,
       );
 
-    if (validLocations.length === 0) {
+    if (requiresFactoryGeofence(status) && validLocations.length === 0) {
       toast({
         title: t("common.error"),
         description:
@@ -1130,7 +1151,7 @@ export default function UserDashboard() {
 
     // إذا كان المستخدم داخل النطاق، السماح بتسجيل الحضور بغض النظر عن دقة GPS
     // إذا كان خارج النطاق، عرض رسالة خطأ
-    if (!isWithinRange) {
+    if (requiresFactoryGeofence(status) && !isWithinRange) {
       toast({
         title: t("userDashboard.location.notNearFactory"),
         description: Number.isFinite(closestDistance)
@@ -1151,7 +1172,9 @@ export default function UserDashboard() {
         lat: userLatitude,
         lng: userLongitude,
         accuracy: userAccuracy,
-        distance: Math.round(validDistance),
+        distance: Number.isFinite(closestDistance)
+          ? Math.round(isWithinRange ? validDistance : closestDistance)
+          : 0,
         timestamp: currentLocation.timestamp,
         // كشف Mock Location - في المتصفحات الحديثة يمكن كشف بعض أنواع التزوير
         isMocked: false, // سيتم التحقق إضافياً على الخادم

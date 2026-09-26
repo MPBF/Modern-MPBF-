@@ -11,6 +11,7 @@ import {
   roles,
 } from "@shared/schema";
 import { hasPermission } from "@shared/permissions";
+import { requiresFactoryGeofence } from "@shared/attendance-policy";
 import { z } from "zod";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { parseIntSafe } from "@shared/validation-utils";
@@ -28,6 +29,7 @@ import {
 
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { getNotificationManager } from "../services/notification-manager";
+import { isOpenSessionRelevant } from "../storage/attendance-session";
 import { notificationService, notificationManagerHolder, getAuthUserId, parseRouteParam } from "./shared";
 
 async function getAssignedShiftForInstant(
@@ -200,10 +202,17 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const factoryToday = factoryNowParts(now);
         const requestedDate = (req.query.date as string) || factoryToday.dateStr;
         const resolvedAssignment = await getResolvedAssignmentForInstant(userId, now);
-        const openSession =
+        const candidateOpenSession =
           requestedDate === factoryToday.dateStr
             ? await storage.findOpenCheckIn(userId)
             : null;
+        const openSession = candidateOpenSession &&
+          (String(candidateOpenSession.date).slice(0, 10) ===
+            resolvedAssignment?.attendanceDate ||
+            !resolvedAssignment ||
+            (resolvedAssignment &&
+              ["night", "flexible"].includes(getSnapshotShiftType(resolvedAssignment.snapshot))))
+          ? candidateOpenSession : null;
         const openSnapshot = openSession?.shift_snapshot as any;
         const date = openSession
           ? String(openSession.date).slice(0, 10)
@@ -426,7 +435,8 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const activeLocations = await storage.getActiveFactoryLocations();
 
         // مندوب المبيعات لا يحتاج لمواقع مصانع نشطة
-        if (activeLocations.length === 0 && !isSalesRep) {
+        if (activeLocations.length === 0 && !isSalesRep &&
+            requiresFactoryGeofence(String(req.body.status || ""))) {
           return res.status(400).json({
             message: "لا توجد مواقع مصانع نشطة. يرجى التواصل مع الإدارة.",
             code: "NO_ACTIVE_LOCATIONS",
@@ -482,7 +492,8 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
               factoryLocation.allowedRadius > 0,
           );
 
-        if (activeLocations.length > 0 && validLocations.length === 0) {
+        if (activeLocations.length > 0 && validLocations.length === 0 &&
+            requiresFactoryGeofence(String(req.body.status || ""))) {
           return res.status(400).json({
             message:
               "بيانات مواقع المصنع غير صالحة. يرجى التواصل مع الإدارة.",
@@ -513,7 +524,9 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           }
         }
 
-        if (!isWithinRange) {
+        // A valid location is still recorded for checkout, but requiring the
+        // employee to remain inside the factory prevents them closing a shift.
+        if (!isWithinRange && requiresFactoryGeofence(String(req.body.status || ""))) {
           const errorMsg = `أنت خارج نطاق المصنع. المسافة: ${Math.round(closestDistance)} متر. النطاق المسموح: ${closestLocation?.allowed_radius} متر.`;
 
           return res.status(403).json({
@@ -575,7 +588,25 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         }
         // Self-service attendance is a strict state machine. Admin edits use
         // the dedicated management routes and retain their existing behavior.
-        const openSession = await storage.findOpenCheckIn(req.body.user_id);
+        const factoryToday = factoryNowParts(nowTs);
+        const resolvedAssignment = await getResolvedAssignmentForInstant(
+          req.body.user_id,
+          nowTs,
+        );
+        const assignedShift = resolvedAssignment
+          ? getSnapshotShiftType(resolvedAssignment.snapshot)
+          : null;
+        const attendanceDate = assignedShift
+          ? resolvedAssignment!.attendanceDate
+          : factoryToday.dateStr;
+        const assignedWindow = assignedShift
+          ? resolvedAssignment!.window
+          : null;
+        const candidateOpenSession = await storage.findOpenCheckIn(req.body.user_id);
+        const openSession = candidateOpenSession &&
+          (status !== "حاضر" ||
+            String(candidateOpenSession.date).slice(0, 10) === attendanceDate)
+          ? candidateOpenSession : null;
         if (!canManageAttendance) {
           const current = openSession
             ? await storage.getDailyAttendanceStatus(
@@ -617,20 +648,6 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             });
           }
         }
-        const factoryToday = factoryNowParts(nowTs);
-        const resolvedAssignment = await getResolvedAssignmentForInstant(
-          req.body.user_id,
-          nowTs,
-        );
-        const assignedShift = resolvedAssignment
-          ? getSnapshotShiftType(resolvedAssignment.snapshot)
-          : null;
-        const attendanceDate = assignedShift
-          ? resolvedAssignment!.attendanceDate
-          : factoryToday.dateStr;
-        const assignedWindow = assignedShift
-          ? resolvedAssignment!.window
-          : null;
         if (status === "حاضر" && !resolvedAssignment) {
           return res.status(400).json({
             message: "لا توجد وردية مجدولة لك لهذا الشهر. يرجى مراجعة مسؤول الموارد البشرية.",
@@ -697,7 +714,8 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           location_lng: lng,
           factory_location_id: matchedLocation?.id,
           device_info: JSON.stringify(deviceInfo),
-          distance_from_factory: Math.round(closestDistance),
+          distance_from_factory: Number.isFinite(closestDistance)
+            ? Math.round(closestDistance) : null,
         };
 
         // =============== دعم الوردية الليلية ===============
@@ -753,8 +771,13 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
                 ORDER BY created_at ASC, id ASC
               `);
               const currentRows = rows.rows as any[];
-              const checkedIn = currentRows.some((r) => r.status === "حاضر");
-              const checkedOut = currentRows.some((r) => r.status === "مغادر");
+              const lastCheckInIndex = currentRows.findLastIndex(
+                (r) => r.check_in_time != null,
+              );
+              const activeRows = lastCheckInIndex >= 0
+                ? currentRows.slice(lastCheckInIndex) : [];
+              const checkedIn = lastCheckInIndex >= 0;
+              const checkedOut = activeRows.some((r) => r.check_out_time != null);
               const latest = currentRows.at(-1)?.status;
                const conflict = (message: string, code: string) =>
                  Object.assign(new Error(message), {
@@ -793,6 +816,37 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
                 .insert(attendance)
                 .values(attendanceData as any)
                 .returning();
+              if (status === "مغادر") {
+                // Checkout closes an active offsite interval too. Otherwise
+                // the stopped watchdog leaves a withdrawal open indefinitely.
+                const [openWithdrawal] = await tx
+                  .select()
+                  .from(attendance_withdrawals)
+                  .where(and(
+                    eq(attendance_withdrawals.user_id, Number(req.body.user_id)),
+                    eq(attendance_withdrawals.date, attendanceData.date),
+                    isNull(attendance_withdrawals.ended_at),
+                  ))
+                  .limit(1);
+                if (openWithdrawal) {
+                  const duration = Math.min(1440, Math.max(0,
+                    Math.round((nowTs.getTime() -
+                      new Date(openWithdrawal.started_at).getTime()) / 60_000)));
+                  const [closed] = await tx
+                    .update(attendance_withdrawals)
+                    .set({ ended_at: nowTs, duration_minutes: duration })
+                    .where(and(
+                      eq(attendance_withdrawals.id, openWithdrawal.id),
+                      isNull(attendance_withdrawals.ended_at),
+                    ))
+                    .returning();
+                  if (closed && duration > 0) {
+                    await tx.update(attendance)
+                      .set({ total_withdrawn_minutes: sql`COALESCE(${attendance.total_withdrawn_minutes}, 0) + ${duration}` })
+                      .where(eq(attendance.id, openWithdrawal.attendance_id));
+                  }
+                }
+              }
               return created;
             });
 
@@ -1057,8 +1111,8 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           ? String(openSession.date).slice(0, 10)
           : String(att.date).slice(0, 10);
         if (sessionDate !== today) {
-          const activeNight = getActivePreviousNightShift(now);
-          if (!activeNight || sessionDate !== activeNight.dateStr) {
+          if (!openSession || !isOpenSessionRelevant(openSession, now) ||
+              String(openSession.date).slice(0, 10) !== sessionDate) {
             return res
               .status(400)
               .json({ message: "لا يمكن تسجيل انسحاب على سجل قديم" });
