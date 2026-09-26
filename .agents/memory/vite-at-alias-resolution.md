@@ -17,7 +17,11 @@ When it happens the esbuild dep scanner reports unresolved `@/` imports in WAVES
 ## Convention / fix
 This codebase overwhelmingly uses RELATIVE imports; only a few files used `@/`.
 **Use relative imports** (`../ui/button`, `../../lib/queryClient`) in client code, not `@/`.
-`@shared` and `@assets` aliases are fine and widely used — only `@/` is the problem.
+`@shared` is also occasionally fragile in client pages despite an apparently
+correct Vite alias: a newly added shared module failed Vite import analysis
+after hours of normal operation while TypeScript passed. Prefer relative
+imports from the client when adding a shared module; don't assume tsc proves
+that Vite will resolve an alias in the browser.
 
 **Why:** the `@/` alias is configured but proves fragile under Vite dep
 re-optimization after dependency/lockfile churn (e.g. post-merge dependency refresh);

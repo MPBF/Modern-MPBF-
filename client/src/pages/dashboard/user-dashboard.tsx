@@ -15,7 +15,7 @@ import {
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { requiresFactoryGeofence } from "@shared/attendance-policy";
+import { requiresFactoryGeofence } from "../../../../shared/attendance-policy";
 
 import AttendancePanel from "../../components/dashboard/AttendancePanel";
 import AttendanceStats from "../../components/dashboard/AttendanceStats";
