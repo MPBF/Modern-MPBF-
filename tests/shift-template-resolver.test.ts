@@ -41,6 +41,23 @@ describe("snapshot shift resolver", () => {
     expect(result?.snapshot.name_ar).toBe("ليل");
   });
 
+  it("opens today's day check-in window despite yesterday's night cutoff at 09:00", () => {
+    const today: ShiftSnapshot = {
+      name_ar: "نهارية", kind: "day", start_time: "07:00", end_time: "19:00",
+      grace_minutes: 30, base_work_hours: 8, attendance_cutoff_time: "00:00",
+    };
+    const previous: ShiftSnapshot = {
+      name_ar: "ليلية", kind: "night", start_time: "19:00", end_time: "07:00",
+      grace_minutes: 30, base_work_hours: 8, attendance_cutoff_time: "09:00",
+    };
+    const current = { shift_snapshot: today };
+    const prior = { shift_snapshot: previous };
+    expect(resolveAssignmentSnapshot(current, prior, instant("2026-10-01T06:29:59"))?.attendanceDate)
+      .toBe("2026-09-30");
+    expect(resolveAssignmentSnapshot(current, prior, instant("2026-10-01T06:30:00"))?.attendanceDate)
+      .toBe("2026-10-01");
+  });
+
   it("keeps legacy assignments readable", () => {
     expect(resolveAssignmentSnapshot({ shift: "day" }, null, instant("2026-09-01T10:00:00"))?.snapshot.start_time).toBe("07:00");
   });

@@ -9,7 +9,6 @@ import {
 } from "../../hooks/use-attendance-watchdog";
 import { useToday } from "../../hooks/use-today";
 import { calculateWorkedSeconds } from "../../lib/attendance-timer";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 
@@ -37,6 +36,9 @@ interface DailyStatus {
     name_en?: string | null;
     start_time?: string | null;
     end_time?: string | null;
+    attendance_cutoff_time?: string | null;
+    grace_minutes?: number | null;
+    kind?: "day" | "night" | "flexible" | null;
     attendance_date?: string | null;
   } | null;
 }
@@ -86,7 +88,8 @@ export default function AttendancePanel({
   isPending,
   onAction,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language.startsWith("ar");
   const queryClient = useQueryClient();
   const [now, setNow] = useState<Date>(new Date());
 
@@ -263,6 +266,53 @@ export default function AttendancePanel({
     assignedShift?.start_time && assignedShift?.end_time
       ? `${assignedShift.start_time} – ${assignedShift.end_time}`
       : null;
+  const checkoutHelp = useMemo(() => {
+    const endTime = assignedShift?.end_time;
+    const grace = assignedShift?.grace_minutes;
+    const isFlexible =
+      assignedShift?.kind === "flexible" ||
+      (assignedShift?.start_time === "00:00" && endTime === "00:00");
+    if (
+      !endTime ||
+      grace == null ||
+      !Number.isFinite(grace) ||
+      grace < 0 ||
+      isFlexible ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)
+    ) {
+      return null;
+    }
+    const [hour, minute] = endTime.split(":").map(Number);
+    const [startHour, startMinute] = (assignedShift?.start_time || "00:00")
+      .split(":")
+      .map(Number);
+    const clockEndMinutes = hour * 60 + minute;
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes =
+      assignedShift?.kind === "night" ||
+      (assignedShift?.kind == null && clockEndMinutes <= startMinutes)
+        ? clockEndMinutes + 1440
+        : clockEndMinutes;
+    const formatWallTime = (minutes: number) => {
+      const normalized = (minutes + 1440) % 1440;
+      return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(
+        normalized % 60,
+      ).padStart(2, "0")}`;
+    };
+    const cutoff =
+      assignedShift?.attendance_cutoff_time ||
+      (assignedShift?.kind === "night" ? "09:00" : "00:00");
+    const [cutoffHour, cutoffMinute] = cutoff.split(":").map(Number);
+    const cutoffMinutes =
+      Number.isFinite(cutoffHour) && Number.isFinite(cutoffMinute)
+        ? 1440 + cutoffHour * 60 + cutoffMinute
+        : endMinutes + grace;
+    const lower = formatWallTime(endMinutes - grace);
+    const upper = formatWallTime(Math.min(endMinutes + grace, cutoffMinutes));
+    return isArabic
+      ? `الانصراف متاح ${lower}–${upper}. إذا لم تسجل انصرافك قبل فصل اليوم ${cutoff}، يُغلق اليوم «منسحب» ويُخصم أجره كاملاً.`
+      : `Checkout is available ${lower}–${upper}. Without checkout by the ${cutoff} day cutoff, the day closes as withdrawn and the full day's pay is deducted.`;
+  }, [assignedShift, isArabic]);
 
   // ---- Buttons ----
   const buttons: Array<{
@@ -413,6 +463,11 @@ export default function AttendancePanel({
                 <div className="text-[11px] sm:text-xs text-gray-500 mt-1 h-4 text-center font-mono">
                   {formatTime(b.timestamp)}
                 </div>
+                {b.key === "check-out" && checkoutHelp && (
+                  <p className="text-[10px] leading-tight text-muted-foreground mt-1 text-center">
+                    {checkoutHelp}
+                  </p>
+                )}
               </div>
             );
           })}

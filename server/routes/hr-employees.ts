@@ -49,6 +49,7 @@ const shiftTemplateInput = z
     kind: z.enum(["day", "night", "flexible"]),
     start_time: z.string(),
     end_time: z.string(),
+    attendance_cutoff_time: z.string().optional(),
     grace_minutes: z.coerce.number().int().min(0).max(180),
     base_work_hours: z.preprocess(
       (value) => (typeof value === "number" ? String(value) : value),
@@ -58,11 +59,33 @@ const shiftTemplateInput = z
   })
   .superRefine((value, ctx) => {
     const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const attendanceCutoffTime =
+      value.attendance_cutoff_time ??
+      (value.kind === "night" ? "09:00" : "00:00");
     if (!time.test(value.start_time)) ctx.addIssue({ code: "custom", path: ["start_time"], message: "وقت البداية يجب أن يكون HH:mm" });
     if (!time.test(value.end_time)) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية يجب أن يكون HH:mm" });
+    if (!time.test(attendanceCutoffTime)) ctx.addIssue({ code: "custom", path: ["attendance_cutoff_time"], message: "وقت فصل اليوم يجب أن يكون HH:mm" });
     if (value.kind !== "flexible" && value.start_time === value.end_time) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية لا يساوي البداية" });
     const graceMinutes = value.grace_minutes ?? 0;
     if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 180) ctx.addIssue({ code: "custom", path: ["grace_minutes"], message: "فترة السماح من 0 إلى 180" });
+    if (value.kind !== "flexible" && time.test(attendanceCutoffTime) && time.test(value.start_time) && time.test(value.end_time)) {
+      const minutes = (timeValue: string) => {
+        const [hour, minute] = timeValue.split(":").map(Number);
+        return hour * 60 + minute;
+      };
+      const start = minutes(value.start_time);
+      const end = minutes(value.end_time);
+      const cutoff = 1440 + minutes(attendanceCutoffTime);
+      const endAfterMidnight = end <= start ? 1440 + end : end;
+      const nextCheckInOpening = 1440 + start - graceMinutes;
+      if (cutoff <= endAfterMidnight || cutoff > nextCheckInOpening) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["attendance_cutoff_time"],
+          message: "يجب أن يكون وقت الفصل بعد نهاية الوردية وألا يتجاوز بداية نافذة دخول الوردية التالية",
+        });
+      }
+    }
     const hours = Number(value.base_work_hours);
     const [sh, sm] = value.start_time.split(":").map(Number);
     const [eh, em] = value.end_time.split(":").map(Number);
@@ -74,7 +97,13 @@ const shiftTemplateInput = z
     if (!isCanonicalShiftTemplate(value)) {
       ctx.addIssue({ code: "custom", path: ["kind"], message: "يجب استخدام أحد تعريفات الورديات الثابتة" });
     }
-  });
+  })
+  .transform((value) => ({
+    ...value,
+    attendance_cutoff_time:
+      value.attendance_cutoff_time ??
+      (value.kind === "night" ? "09:00" : "00:00"),
+  }));
 
 function parseSectionIdsQuery(
   rawSectionIds: unknown,
@@ -571,6 +600,7 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
                 template_id: template.id, name_ar: template.name_ar, name_en: template.name_en,
                 kind: template.kind,
               start_time: template.start_time, end_time: template.end_time,
+              attendance_cutoff_time: template.attendance_cutoff_time,
               grace_minutes: template.grace_minutes, base_work_hours: Number(template.base_work_hours),
             } : undefined,
             notes: e.notes ?? null,

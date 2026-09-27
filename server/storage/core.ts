@@ -716,6 +716,7 @@ export interface IStorage {
     userId: number,
     window?: { dateStr: string; start: Date; end: Date },
   ): Promise<Attendance | null>;
+  closeExpiredAttendanceSessions(userId?: number): Promise<number>;
   ensureBatchNumber(productionOrderId: number): Promise<string | null>;
   // Note: implementation returns Promise<any> (kept identical for the
   // fragment interface merge; the resolved shape is

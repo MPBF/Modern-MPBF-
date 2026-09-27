@@ -32,14 +32,16 @@ describe("open attendance session boundaries", () => {
   it("allows a late night checkout after 07:00 but not into the next 19:00 shift", () => {
     const open = session("2026-09-01", "2026-09-01T19:00:00");
     expect(isOpenSessionRelevant(open, at("2026-09-02T06:59:00"))).toBe(true);
-    expect(isOpenSessionRelevant(open, at("2026-09-02T12:00:00"))).toBe(true);
+    expect(isOpenSessionRelevant(open, at("2026-09-02T08:59:00"))).toBe(true);
+    expect(isOpenSessionRelevant(open, at("2026-09-02T09:00:00"))).toBe(false);
     expect(isOpenSessionRelevant(open, at("2026-09-02T19:00:00"))).toBe(false);
   });
 
   it("limits flexible cross-midnight sessions to 24 hours from check-in", () => {
     const flexible: ShiftSnapshot = { ...night, kind: "flexible", start_time: "00:00", end_time: "00:00" };
     const open = session("2026-09-01", "2026-09-01T23:00:00", flexible);
-    expect(isOpenSessionRelevant(open, at("2026-09-02T02:00:00"))).toBe(true);
+    expect(isOpenSessionRelevant(open, at("2026-09-01T23:59:00"))).toBe(true);
+    expect(isOpenSessionRelevant(open, at("2026-09-02T00:00:00"))).toBe(false);
     expect(isOpenSessionRelevant(open, at("2026-09-02T23:00:00"))).toBe(false);
   });
 

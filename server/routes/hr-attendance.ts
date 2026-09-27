@@ -13,7 +13,7 @@ import {
 import { hasPermission } from "@shared/permissions";
 import { requiresFactoryGeofence } from "@shared/attendance-policy";
 import { z } from "zod";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { parseIntSafe } from "@shared/validation-utils";
 import {
   factoryNowParts,
@@ -29,8 +29,17 @@ import {
 
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { getNotificationManager } from "../services/notification-manager";
-import { isOpenSessionRelevant } from "../storage/attendance-session";
+import {
+  isCheckoutAllowedForSnapshot,
+  getAttendanceCutoffInstant,
+  isOpenSessionRelevant,
+} from "../storage/attendance-session";
+import {
+  closeExpiredAttendanceSessionsInTransaction,
+} from "../services/attendance-cutoff";
 import { notificationService, notificationManagerHolder, getAuthUserId, parseRouteParam } from "./shared";
+
+let attendanceCutoffTimer: ReturnType<typeof setInterval> | null = null;
 
 async function getAssignedShiftForInstant(
   userId: number,
@@ -82,6 +91,16 @@ async function getResolvedAssignmentForInstant(userId: number, now: Date) {
 // Extracted from server/routes/hr.ts (registration order preserved; called
 // from registerHrRoutes). See server/routes/README.md.
 export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
+  if (!attendanceCutoffTimer) {
+    attendanceCutoffTimer = setInterval(() => {
+      void storage.closeExpiredAttendanceSessions().catch((error) => {
+        console.error("Failed to close expired attendance sessions:", error);
+      });
+    }, 60_000);
+    void storage.closeExpiredAttendanceSessions().catch((error) => {
+      console.error("Initial attendance cutoff sweep failed:", error);
+    });
+  }
 
   // ============ HR Attendance Management API ============
 
@@ -199,6 +218,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           return res.status(403).json({ message: "غير مصرح بعرض حضور مستخدم آخر" });
         }
         const now = new Date();
+        await storage.closeExpiredAttendanceSessions(userId);
         const factoryToday = factoryNowParts(now);
         const requestedDate = (req.query.date as string) || factoryToday.dateStr;
         const resolvedAssignment = await getResolvedAssignmentForInstant(userId, now);
@@ -209,9 +229,7 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
         const openSession = candidateOpenSession &&
           (String(candidateOpenSession.date).slice(0, 10) ===
             resolvedAssignment?.attendanceDate ||
-            !resolvedAssignment ||
-            (resolvedAssignment &&
-              ["night", "flexible"].includes(getSnapshotShiftType(resolvedAssignment.snapshot))))
+            !resolvedAssignment)
           ? candidateOpenSession : null;
         const openSnapshot = openSession?.shift_snapshot as any;
         const date = openSession
@@ -607,6 +625,16 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           (status !== "حاضر" ||
             String(candidateOpenSession.date).slice(0, 10) === attendanceDate)
           ? candidateOpenSession : null;
+        if (
+          status === "مغادر" &&
+          openSession?.shift_snapshot &&
+          !isCheckoutAllowedForSnapshot(openSession, nowTs)
+        ) {
+          return res.status(400).json({
+            message: "يمكن تسجيل الانصراف فقط ضمن فترة السماح حول نهاية الوردية",
+            code: "OUTSIDE_ASSIGNED_CHECKOUT_WINDOW",
+          });
+        }
         if (!canManageAttendance) {
           const current = openSession
             ? await storage.getDailyAttendanceStatus(
@@ -757,98 +785,179 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           }
         }
 
-        const createdAttendance = canManageAttendance
-          ? await storage.createAttendance(attendanceData)
-          : await db.transaction(async (tx) => {
-               await tx.execute(sql`
-                 SELECT pg_advisory_xact_lock(4107, ${Number(req.body.user_id)})
-               `);
-              const rows = await tx.execute(sql`
-                SELECT status, check_in_time, check_out_time
-                FROM attendance
-                WHERE user_id = ${Number(req.body.user_id)}
-                  AND date = ${attendanceData.date}
-                ORDER BY created_at ASC, id ASC
-              `);
-              const currentRows = rows.rows as any[];
-              const lastCheckInIndex = currentRows.findLastIndex(
-                (r) => r.check_in_time != null,
-              );
-              const activeRows = lastCheckInIndex >= 0
-                ? currentRows.slice(lastCheckInIndex) : [];
-              const checkedIn = lastCheckInIndex >= 0;
-              const checkedOut = activeRows.some((r) => r.check_out_time != null);
-              const latest = currentRows.at(-1)?.status;
-               const conflict = (message: string, code: string) =>
-                 Object.assign(new Error(message), {
-                   code: "ATTENDANCE_TRANSITION_CONFLICT",
-                   attendanceCode: code,
-                 });
-               if (status === "حاضر" && checkedIn) {
-                 throw conflict(
-                   "تم تسجيل الحضور مسبقاً",
-                   "ATTENDANCE_ALREADY_CHECKED_IN",
-                 );
-              }
-              if (status !== "حاضر" && (!checkedIn || checkedOut)) {
-                 throw conflict(
-                   "لا توجد جلسة حضور مفتوحة",
-                   "ATTENDANCE_SESSION_NOT_OPEN",
-                 );
-              }
-               if (
-                 status === "في الاستراحة" &&
-                 latest !== "حاضر" &&
-                 latest !== "يعمل"
-               ) {
-                 throw conflict(
-                   "لا يمكن بدء الاستراحة في الحالة الحالية",
-                   "INVALID_ATTENDANCE_TRANSITION",
-                 );
-              }
-              if (status === "يعمل" && latest !== "في الاستراحة") {
-                 throw conflict(
-                   "لا توجد استراحة مفتوحة",
-                   "INVALID_ATTENDANCE_TRANSITION",
-                 );
-              }
-              const [created] = await tx
-                .insert(attendance)
-                .values(attendanceData as any)
-                .returning();
-              if (status === "مغادر") {
-                // Checkout closes an active offsite interval too. Otherwise
-                // the stopped watchdog leaves a withdrawal open indefinitely.
-                const [openWithdrawal] = await tx
-                  .select()
-                  .from(attendance_withdrawals)
-                  .where(and(
-                    eq(attendance_withdrawals.user_id, Number(req.body.user_id)),
-                    eq(attendance_withdrawals.date, attendanceData.date),
-                    isNull(attendance_withdrawals.ended_at),
-                  ))
-                  .limit(1);
-                if (openWithdrawal) {
-                  const duration = Math.min(1440, Math.max(0,
-                    Math.round((nowTs.getTime() -
-                      new Date(openWithdrawal.started_at).getTime()) / 60_000)));
-                  const [closed] = await tx
-                    .update(attendance_withdrawals)
-                    .set({ ended_at: nowTs, duration_minutes: duration })
-                    .where(and(
-                      eq(attendance_withdrawals.id, openWithdrawal.id),
-                      isNull(attendance_withdrawals.ended_at),
-                    ))
-                    .returning();
-                  if (closed && duration > 0) {
-                    await tx.update(attendance)
-                      .set({ total_withdrawn_minutes: sql`COALESCE(${attendance.total_withdrawn_minutes}, 0) + ${duration}` })
-                      .where(eq(attendance.id, openWithdrawal.attendance_id));
-                  }
-                }
-              }
-              return created;
+        const createdAttendance = await db.transaction(async (tx) => {
+          const userId = Number(req.body.user_id);
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(4107, ${userId})`);
+          await closeExpiredAttendanceSessionsInTransaction(
+            tx,
+            userId,
+            new Date(),
+          );
+
+          const rows = await tx
+            .select()
+            .from(attendance)
+            .where(
+              and(
+                eq(attendance.user_id, userId),
+                eq(attendance.date, attendanceData.date),
+              ),
+            )
+            .orderBy(asc(attendance.created_at), asc(attendance.id));
+          const currentRows = rows as any[];
+          const lastCheckInIndex = currentRows.findLastIndex(
+            (row) => row.check_in_time != null,
+          );
+          const activeRows = lastCheckInIndex >= 0
+            ? currentRows.slice(lastCheckInIndex)
+            : [];
+          const checkedIn = lastCheckInIndex >= 0;
+          const checkedOut = activeRows.some(
+            (row) => row.check_out_time != null,
+          );
+          const latest = currentRows.at(-1)?.status;
+          const conflict = (message: string, code: string) =>
+            Object.assign(new Error(message), {
+              code: "ATTENDANCE_TRANSITION_CONFLICT",
+              attendanceCode: code,
             });
+
+          if (status === "مغادر") {
+            if (!checkedIn || checkedOut) {
+              throw conflict(
+                "لا توجد جلسة حضور مفتوحة للانصراف",
+                "ATTENDANCE_SESSION_NOT_OPEN",
+              );
+            }
+            const [recentAutoClose] = await tx
+              .select()
+              .from(attendance)
+              .where(and(
+                eq(attendance.user_id, userId),
+                eq(attendance.notes, "auto_withdrawn_at_cutoff"),
+                gte(
+                  attendance.check_out_time,
+                  new Date(nowTs.getTime() - 36 * 60 * 60 * 1000),
+                ),
+              ))
+              .orderBy(desc(attendance.check_out_time));
+            if (recentAutoClose?.check_out_time) {
+              const [laterCheckIn] = await tx
+                .select({ id: attendance.id })
+                .from(attendance)
+                .where(and(
+                  eq(attendance.user_id, userId),
+                  gte(attendance.check_in_time, recentAutoClose.check_out_time),
+                ))
+                .limit(1);
+              if (!laterCheckIn) {
+                throw conflict(
+                  "أُغلقت الجلسة تلقائياً عند وقت فصل اليوم ولا يمكن تسجيل انصراف يدوي بعدها",
+                  "ATTENDANCE_CLOSED_AT_CUTOFF",
+                );
+              }
+            }
+            const latestCheckIn = [...currentRows]
+              .reverse()
+              .find((row) => row.check_in_time);
+            const wasAutoClosed = latestCheckIn
+              ? currentRows.some(
+                  (row) =>
+                    row.notes === "auto_withdrawn_at_cutoff" &&
+                    row.check_out_time &&
+                    new Date(row.check_out_time).getTime() >=
+                      new Date(latestCheckIn.check_in_time).getTime(),
+                )
+              : false;
+            if (wasAutoClosed) {
+              throw conflict(
+                "أُغلقت الجلسة تلقائياً عند وقت فصل اليوم ولا يمكن تسجيل انصراف يدوي بعدها",
+                "ATTENDANCE_CLOSED_AT_CUTOFF",
+              );
+            }
+            if (latestCheckIn?.shift_snapshot && !checkedOut &&
+                !isCheckoutAllowedForSnapshot(
+                  {
+                    date: latestCheckIn.date,
+                    shift_snapshot: latestCheckIn.shift_snapshot,
+                  },
+                  nowTs,
+                )) {
+              throw conflict(
+                "يمكن تسجيل الانصراف فقط ضمن فترة السماح حول نهاية الوردية",
+                "OUTSIDE_ASSIGNED_CHECKOUT_WINDOW",
+              );
+            }
+          }
+
+          if (!canManageAttendance) {
+            if (status === "حاضر" && checkedIn) {
+              throw conflict(
+                "تم تسجيل الحضور مسبقاً",
+                "ATTENDANCE_ALREADY_CHECKED_IN",
+              );
+            }
+            if (status !== "حاضر" && (!checkedIn || checkedOut)) {
+              throw conflict(
+                "لا توجد جلسة حضور مفتوحة",
+                "ATTENDANCE_SESSION_NOT_OPEN",
+              );
+            }
+            if (
+              status === "في الاستراحة" &&
+              latest !== "حاضر" &&
+              latest !== "يعمل"
+            ) {
+              throw conflict(
+                "لا يمكن بدء الاستراحة في الحالة الحالية",
+                "INVALID_ATTENDANCE_TRANSITION",
+              );
+            }
+            if (status === "يعمل" && latest !== "في الاستراحة") {
+              throw conflict(
+                "لا توجد استراحة مفتوحة",
+                "INVALID_ATTENDANCE_TRANSITION",
+              );
+            }
+          }
+
+          const [created] = await tx
+            .insert(attendance)
+            .values(attendanceData as any)
+            .returning();
+          if (status === "مغادر") {
+            // Checkout closes an active offsite interval too. Otherwise the
+            // stopped watchdog leaves a withdrawal open indefinitely.
+            const [openWithdrawal] = await tx
+              .select()
+              .from(attendance_withdrawals)
+              .where(and(
+                eq(attendance_withdrawals.user_id, userId),
+                eq(attendance_withdrawals.date, attendanceData.date),
+                isNull(attendance_withdrawals.ended_at),
+              ))
+              .limit(1);
+            if (openWithdrawal) {
+              const duration = Math.min(1440, Math.max(0,
+                Math.round((nowTs.getTime() -
+                  new Date(openWithdrawal.started_at).getTime()) / 60_000)));
+              const [closed] = await tx
+                .update(attendance_withdrawals)
+                .set({ ended_at: nowTs, duration_minutes: duration })
+                .where(and(
+                  eq(attendance_withdrawals.id, openWithdrawal.id),
+                  isNull(attendance_withdrawals.ended_at),
+                ))
+                .returning();
+              if (closed && duration > 0) {
+                await tx.update(attendance)
+                  .set({ total_withdrawn_minutes: sql`COALESCE(${attendance.total_withdrawn_minutes}, 0) + ${duration}` })
+                  .where(eq(attendance.id, openWithdrawal.attendance_id));
+              }
+            }
+          }
+          return created;
+        });
 
         // Send attendance notification asynchronously (fire-and-forget)
         const attendanceId = createdAttendance.id;
@@ -947,8 +1056,120 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
     async (req, res) => {
       try {
         const id = parseRouteParam(req.params.id, "id");
-        const attendance = await storage.updateAttendance(id, req.body);
-        res.json(attendance);
+        const current = await storage.getAttendanceById(id);
+        if (!current) {
+          return res.status(404).json({ message: "سجل الحضور غير موجود" });
+        }
+        const result = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(4107, ${current.user_id})`,
+          );
+          const [lockedCurrent] = await tx
+            .select()
+            .from(attendance)
+            .where(eq(attendance.id, id));
+          if (!lockedCurrent) return { kind: "not_found" as const };
+          if (lockedCurrent.user_id !== current.user_id) {
+            return { kind: "conflict" as const };
+          }
+
+          // Use the same transaction and advisory lock as the cutoff sweep.
+          // If the deadline has passed, persist its auto-close before deciding
+          // whether this edit is allowed.
+          await closeExpiredAttendanceSessionsInTransaction(
+            tx,
+            lockedCurrent.user_id,
+            new Date(),
+          );
+          const records = await tx
+            .select()
+            .from(attendance)
+            .where(and(
+              eq(attendance.user_id, lockedCurrent.user_id),
+              eq(attendance.date, lockedCurrent.date),
+            ))
+            .orderBy(asc(attendance.created_at), asc(attendance.id));
+          const sessionCheckIn = [...records]
+            .reverse()
+            .find((record) => record.check_in_time);
+          const changesCheckout = Object.prototype.hasOwnProperty.call(
+            req.body,
+            "check_out_time",
+          );
+
+          if (changesCheckout && sessionCheckIn?.check_in_time) {
+            const checkInTime = new Date(sessionCheckIn.check_in_time).getTime();
+            const autoClose = records.some((record) =>
+              record.notes === "auto_withdrawn_at_cutoff" &&
+              record.check_out_time &&
+              new Date(record.check_out_time).getTime() >= checkInTime,
+            );
+            if (autoClose) {
+              return { kind: "closed" as const };
+            }
+
+            const session = {
+              date: sessionCheckIn.date,
+              shift_snapshot: sessionCheckIn.shift_snapshot,
+            };
+            const cutoff = getAttendanceCutoffInstant(session);
+            const now = new Date();
+            const proposedCheckOut = req.body.check_out_time == null
+              ? null
+              : new Date(req.body.check_out_time);
+            if (
+              (cutoff && now.getTime() >= cutoff.getTime()) ||
+              (proposedCheckOut &&
+                (!Number.isFinite(proposedCheckOut.getTime()) ||
+                  (cutoff &&
+                    proposedCheckOut.getTime() >= cutoff.getTime()) ||
+                  !isCheckoutAllowedForSnapshot(session, proposedCheckOut)))
+            ) {
+              return { kind: "outside_window" as const };
+            }
+          }
+
+          const updates = { ...req.body, updated_at: new Date() };
+          // Keep the system marker authoritative while still allowing HR to
+          // edit unrelated fields on an auto-closed action row.
+          if (
+            lockedCurrent.notes === "auto_withdrawn_at_cutoff" &&
+            Object.prototype.hasOwnProperty.call(updates, "status")
+          ) {
+            delete updates.status;
+          }
+          const [updated] = await tx
+            .update(attendance)
+            .set(updates)
+            .where(eq(attendance.id, id))
+            .returning();
+          return updated
+            ? { kind: "updated" as const, attendance: updated }
+            : { kind: "not_found" as const };
+        });
+
+        if (result.kind === "not_found") {
+          return res.status(404).json({ message: "سجل الحضور غير موجود" });
+        }
+        if (result.kind === "closed") {
+          return res.status(409).json({
+            message: "أُغلقت الجلسة تلقائياً عند وقت فصل اليوم ولا يمكن تعديل وقت الانصراف",
+            code: "ATTENDANCE_CLOSED_AT_CUTOFF",
+          });
+        }
+        if (result.kind === "outside_window") {
+          return res.status(400).json({
+            message: "وقت الانصراف يجب أن يكون ضمن فترة السماح وقبل وقت فصل اليوم",
+            code: "OUTSIDE_ASSIGNED_CHECKOUT_WINDOW",
+          });
+        }
+        if (result.kind === "conflict") {
+          return res.status(409).json({
+            message: "تغيّر مالك سجل الحضور أثناء التعديل، أعد المحاولة",
+            code: "ATTENDANCE_RECORD_CHANGED",
+          });
+        }
+        res.json(result.attendance);
       } catch (error) {
         console.error("Error updating attendance:", error);
         res.status(500).json({ message: "خطأ في تحديث سجل الحضور" });

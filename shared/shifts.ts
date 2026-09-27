@@ -129,6 +129,8 @@ export interface ShiftSnapshot {
   start_time: string; // HH:mm
   end_time: string; // HH:mm
   grace_minutes: number;
+  /** Riyadh wall time on the following calendar day when this attendance day ends. */
+  attendance_cutoff_time?: string;
   base_work_hours: number;
   kind?: ShiftType;
 }
@@ -166,6 +168,17 @@ export function getShiftWindowForSnapshot(
   return { start, end };
 }
 
+/** Cutoff always falls on the calendar day following the attendance date. */
+export function getAttendanceCutoffForSnapshot(
+  snapshot: ShiftSnapshot,
+  dateStr: string,
+): Date {
+  const { y, m, d } = parseDateStr(dateStr);
+  const defaultTime = getSnapshotShiftType(snapshot) === "night" ? "09:00" : "00:00";
+  const { hour, minute } = wallTimeParts(snapshot.attendance_cutoff_time ?? defaultTime);
+  return factoryWallToInstant(y, m, d + 1, hour, minute);
+}
+
 /**
  * Check-in may start before a fixed shift by its configured grace period.
  * The shift window itself is not widened, so paid work still starts at the
@@ -176,15 +189,31 @@ export function isCheckInAllowedForShift(
   snapshot: ShiftSnapshot,
   now: Date,
 ): boolean {
-  const graceMs =
-    getSnapshotShiftType(snapshot) === "flexible"
-      ? 0
-      : Math.max(0, snapshot.grace_minutes) * 60_000;
+  if (getSnapshotShiftType(snapshot) === "flexible") {
+    return now >= window.start && now < window.end;
+  }
+  const graceMs = Math.max(0, snapshot.grace_minutes) * 60_000;
   const nowMs = now.getTime();
   return (
     nowMs >= window.start.getTime() - graceMs &&
-    nowMs < window.end.getTime()
+    nowMs <= window.start.getTime() + graceMs
   );
+}
+
+/** Flexible shifts retain their existing checkout behaviour until day cutoff. */
+export function isCheckOutAllowedForShift(
+  window: ShiftWindow,
+  snapshot: ShiftSnapshot,
+  now: Date,
+  attendanceDate: string,
+): boolean {
+  if (getSnapshotShiftType(snapshot) === "flexible") {
+    return now >= window.start && now < getAttendanceCutoffForSnapshot(snapshot, attendanceDate);
+  }
+  const graceMs = Math.max(0, snapshot.grace_minutes) * 60_000;
+  return now.getTime() >= window.end.getTime() - graceMs &&
+    now.getTime() <= window.end.getTime() + graceMs &&
+    now.getTime() < getAttendanceCutoffForSnapshot(snapshot, attendanceDate).getTime();
 }
 
 export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
@@ -218,13 +247,23 @@ export function resolveAssignmentSnapshot(
 ): ResolvedShift | null {
   const today = factoryNowParts(now);
   const previousDay = factoryNowParts(new Date(now.getTime() - 86400000));
+  const snapshot = current?.shift_snapshot ?? legacyShiftSnapshot(current?.shift);
+  if (snapshot) {
+    const window = getShiftWindowForSnapshot(snapshot, today.dateStr);
+    if (isCheckInAllowedForShift(window, snapshot, now)) {
+      return {
+        attendanceDate: today.dateStr, snapshot, window,
+        assignmentId: current?.id,
+      };
+    }
+  }
   const priorSnapshot = previous?.shift_snapshot ?? legacyShiftSnapshot(previous?.shift);
   if (priorSnapshot) {
     const window = getShiftWindowForSnapshot(priorSnapshot, previousDay.dateStr);
-    if (now >= window.start && now < window.end)
+    if (now >= window.start &&
+        now < getAttendanceCutoffForSnapshot(priorSnapshot, previousDay.dateStr))
       return { attendanceDate: previousDay.dateStr, snapshot: priorSnapshot, window, assignmentId: previous?.id };
   }
-  const snapshot = current?.shift_snapshot ?? legacyShiftSnapshot(current?.shift);
   if (!snapshot) return null;
   return {
     attendanceDate: today.dateStr, snapshot,

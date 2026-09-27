@@ -1,9 +1,54 @@
 import {
   factoryNowParts,
+  getAttendanceCutoffForSnapshot,
   getShiftWindowForSnapshot,
   getSnapshotShiftType,
+  isCheckOutAllowedForShift,
   type ShiftSnapshot,
 } from "@shared/shifts";
+
+/** Cutoff is evaluated at the template's Riyadh wall time on the next day. */
+export function getAttendanceCutoffInstant(
+  session: {
+    date: string | Date;
+    shift_snapshot?: unknown;
+  },
+): Date | null {
+  const snapshot = session.shift_snapshot as
+    | (ShiftSnapshot & { attendance_cutoff_time?: string })
+    | null;
+  if (!snapshot) return null;
+
+  const date = String(session.date).slice(0, 10);
+  try {
+    return getAttendanceCutoffForSnapshot(snapshot, date);
+  } catch {
+    return null;
+  }
+}
+
+export function isAttendanceCutoffReached(
+  session: { date: string | Date; shift_snapshot?: unknown },
+  now: Date,
+): Date | null {
+  const cutoff = getAttendanceCutoffInstant(session);
+  return cutoff && now.getTime() >= cutoff.getTime() ? cutoff : null;
+}
+
+/** Fixed-shift checkout is accepted only within the configured grace window. */
+export function isCheckoutAllowedForSnapshot(
+  session: {
+    date: string | Date;
+    shift_snapshot?: unknown;
+  },
+  checkOutTime: Date,
+): boolean {
+  const snapshot = session.shift_snapshot as ShiftSnapshot | null;
+  if (!snapshot) return true;
+  const date = String(session.date).slice(0, 10);
+  const window = getShiftWindowForSnapshot(snapshot, date);
+  return isCheckOutAllowedForShift(window, snapshot, checkOutTime, date);
+}
 
 /** Old unmatched rows remain historical records, not an active session forever. */
 export function isOpenSessionRelevant(
@@ -21,6 +66,10 @@ export function isOpenSessionRelevant(
     ? new Date(session.check_in_time).getTime()
     : NaN;
   if (!Number.isFinite(checkedInAt) || checkedInAt > now.getTime()) return false;
+  if (session.shift_snapshot) {
+    const cutoff = getAttendanceCutoffInstant(session);
+    if (cutoff) return now < cutoff;
+  }
   if (date === today) return true;
   const yesterday = factoryNowParts(new Date(now.getTime() - 86400000)).dateStr;
   if (date !== yesterday) return false;

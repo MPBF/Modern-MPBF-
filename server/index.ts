@@ -1662,7 +1662,8 @@ function sanitizeResponseForLogging(response: any): any {
           kind varchar(16) NOT NULL DEFAULT 'day',
           start_time varchar(5) NOT NULL,
           end_time varchar(5) NOT NULL,
-          grace_minutes integer NOT NULL DEFAULT 0,
+          attendance_cutoff_time varchar(5) NOT NULL DEFAULT '00:00',
+          grace_minutes integer NOT NULL DEFAULT 30,
           base_work_hours numeric(5,2) NOT NULL DEFAULT '8',
           active boolean NOT NULL DEFAULT true,
           created_by integer REFERENCES users(id) ON DELETE SET NULL,
@@ -1701,10 +1702,35 @@ function sanitizeResponseForLogging(response: any): any {
         END $$;
       `);
       await db.execute(sql`
-        INSERT INTO shift_templates (name_ar, name_en, kind, start_time, end_time, base_work_hours)
-        VALUES ('نهارية', 'Day', 'day', '07:00', '19:00', '8'),
-               ('ليلية', 'Night', 'night', '19:00', '07:00', '8'),
-               ('حرة', 'Flexible', 'flexible', '00:00', '00:00', '8')
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'shift_templates'
+              AND column_name = 'attendance_cutoff_time'
+          ) THEN
+            ALTER TABLE shift_templates
+            ADD COLUMN attendance_cutoff_time varchar(5) NOT NULL DEFAULT '00:00';
+            UPDATE shift_templates SET attendance_cutoff_time = '09:00'
+            WHERE kind = 'night';
+            UPDATE shift_templates SET grace_minutes = 30
+            WHERE name_ar IN ('نهارية', 'ليلية') AND grace_minutes = 0;
+          END IF;
+        END $$;
+      `);
+      await db.execute(sql`
+        ALTER TABLE shift_templates
+        ALTER COLUMN attendance_cutoff_time SET DEFAULT '00:00'
+      `);
+      await db.execute(sql`
+        ALTER TABLE shift_templates
+        ALTER COLUMN grace_minutes SET DEFAULT 30
+      `);
+      await db.execute(sql`
+        INSERT INTO shift_templates (name_ar, name_en, kind, start_time, end_time, attendance_cutoff_time, grace_minutes, base_work_hours)
+        VALUES ('نهارية', 'Day', 'day', '07:00', '19:00', '00:00', 30, '8'),
+               ('ليلية', 'Night', 'night', '19:00', '07:00', '09:00', 30, '8'),
+               ('حرة', 'Flexible', 'flexible', '00:00', '00:00', '00:00', 30, '8')
         ON CONFLICT (name_ar) DO UPDATE SET
           name_en = excluded.name_en,
           kind = excluded.kind,
@@ -1723,6 +1749,7 @@ function sanitizeResponseForLogging(response: any): any {
           shift_template_id = t.id,
           shift_snapshot = jsonb_build_object('template_id', t.id, 'name_ar', t.name_ar,
             'name_en', t.name_en, 'kind', t.kind, 'start_time', t.start_time, 'end_time', t.end_time,
+            'attendance_cutoff_time', t.attendance_cutoff_time,
             'grace_minutes', t.grace_minutes, 'base_work_hours', t.base_work_hours)
         FROM shift_templates t
         WHERE a.shift_snapshot IS NULL

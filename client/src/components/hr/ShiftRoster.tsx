@@ -41,6 +41,7 @@ interface ShiftTemplate {
   kind: "day" | "night" | "flexible";
   start_time: string;
   end_time: string;
+  attendance_cutoff_time: string;
   grace_minutes: number;
   base_work_hours: string | number;
   active: boolean;
@@ -77,6 +78,7 @@ interface TemplateForm {
   kind: "day" | "night" | "flexible";
   start_time: string;
   end_time: string;
+  attendance_cutoff_time: string;
   grace_minutes: number;
   base_work_hours: number;
   active: boolean;
@@ -88,7 +90,8 @@ const newTemplate = (): TemplateForm => ({
   kind: "day",
   start_time: "07:00",
   end_time: "19:00",
-  grace_minutes: 0,
+  attendance_cutoff_time: "00:00",
+  grace_minutes: 30,
   base_work_hours: 8,
   active: true,
 });
@@ -107,6 +110,30 @@ function factoryMonthValue() {
 function timeToMinutes(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   return hour * 60 + minute;
+}
+
+function isValidCutoff(
+  kind: TemplateForm["kind"],
+  startTime: string,
+  endTime: string,
+  cutoffTime: string,
+  graceMinutes: number,
+) {
+  if (kind === "flexible") return true;
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (
+    !timePattern.test(startTime) ||
+    !timePattern.test(endTime) ||
+    !timePattern.test(cutoffTime)
+  ) {
+    return false;
+  }
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  const cutoff = 1440 + timeToMinutes(cutoffTime);
+  const endAfterMidnight = end <= start ? 1440 + end : end;
+  const nextCheckInOpening = 1440 + start - graceMinutes;
+  return cutoff > endAfterMidnight && cutoff <= nextCheckInOpening;
 }
 
 const FIXED_SHIFT_TIMES = {
@@ -237,9 +264,15 @@ export default function ShiftRoster() {
       }
       if (
         !/^\d{2}:\d{2}$/.test(templateForm.start_time) ||
-        !/^\d{2}:\d{2}$/.test(templateForm.end_time)
+        !/^\d{2}:\d{2}$/.test(templateForm.end_time) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(templateForm.attendance_cutoff_time)
       ) {
-        throw new Error(L("وقت الوردية غير صالح", "Shift time is invalid"));
+        throw new Error(
+          L(
+            "وقت الوردية أو فصل اليوم غير صالح",
+            "Shift or day cutoff time is invalid",
+          ),
+        );
       }
       if (!duration) {
         throw new Error(
@@ -258,6 +291,22 @@ export default function ShiftRoster() {
           L(
             "فترة السماح يجب أن تكون بين 0 و180 دقيقة",
             "Grace must be between 0 and 180 minutes",
+          ),
+        );
+      }
+      if (
+        !isValidCutoff(
+          templateForm.kind,
+          templateForm.start_time,
+          templateForm.end_time,
+          templateForm.attendance_cutoff_time,
+          templateForm.grace_minutes,
+        )
+      ) {
+        throw new Error(
+          L(
+            "وقت الفصل يجب أن يكون بعد نهاية الوردية وقبل بداية نافذة دخول الوردية التالية",
+            "The cutoff must be after shift end and no later than the next shift's check-in window",
           ),
         );
       }
@@ -380,6 +429,9 @@ export default function ShiftRoster() {
             kind: template.kind,
             start_time: template.start_time,
             end_time: template.end_time,
+            attendance_cutoff_time:
+              template.attendance_cutoff_time ??
+              (template.kind === "night" ? "09:00" : "00:00"),
             grace_minutes: template.grace_minutes,
             base_work_hours: Number(template.base_work_hours),
             active: template.active,
@@ -445,6 +497,10 @@ export default function ShiftRoster() {
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {template.start_time} — {template.end_time}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {L("فصل اليوم", "Day cutoff")}:{" "}
+                        {template.attendance_cutoff_time}
                       </p>
                     </div>
                     <Badge variant={template.active ? "default" : "secondary"}>
@@ -644,6 +700,8 @@ export default function ShiftRoster() {
                     kind: value,
                     start_time: times.start,
                     end_time: times.end,
+                    attendance_cutoff_time:
+                      value === "night" ? "09:00" : "00:00",
                     base_work_hours: 8,
                   }));
                 }}
@@ -720,6 +778,27 @@ export default function ShiftRoster() {
             </div>
             <div className="space-y-2">
               <Label>
+                {L("وقت فصل يوم الحضور", "Attendance day cutoff")}
+              </Label>
+              <Input
+                type="time"
+                value={templateForm.attendance_cutoff_time}
+                onChange={(event) =>
+                  setTemplateForm((form) => ({
+                    ...form,
+                    attendance_cutoff_time: event.target.value,
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                {L(
+                  "يُغلق اليوم تلقائياً بهذا الوقت إذا لم يُسجّل انصراف.",
+                  "The day closes automatically at this time if no checkout is recorded.",
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>
                 {L("فترة السماح (دقيقة)", "Grace period (minutes)")}
               </Label>
               <Input
@@ -734,6 +813,12 @@ export default function ShiftRoster() {
                   }))
                 }
               />
+              <p className="text-xs text-muted-foreground">
+                {L(
+                  "تُطبق قبل وبعد وقت بداية الوردية ووقت نهايتها للدخول والانصراف.",
+                  "Applied before and after both the scheduled start and end for check-in and checkout.",
+                )}
+              </p>
             </div>
             <div className="space-y-2">
               <Label>{L("الساعات الأساسية", "Base work hours")}</Label>

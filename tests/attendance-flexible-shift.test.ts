@@ -24,13 +24,15 @@ const actionRow = (
     check_in_time: Date | null;
     check_out_time: Date | null;
     date: string;
+    status: string;
+    notes: string | null;
     shift_snapshot: ShiftSnapshot | null;
   }>,
 ) => ({
   id,
   user_id: 1,
   date: values.date ?? "2026-09-01",
-  status: values.check_in_time ? "حاضر" : "مغادر",
+  status: values.status ?? (values.check_in_time ? "حاضر" : "مغادر"),
   check_in_time: values.check_in_time ?? null,
   check_out_time: values.check_out_time ?? null,
   lunch_start_time: null,
@@ -38,10 +40,85 @@ const actionRow = (
   break_start_time: null,
   break_end_time: null,
   total_withdrawn_minutes: 0,
-  shift_snapshot: values.shift_snapshot ?? flexible,
+  notes: values.notes ?? null,
+  shift_snapshot:
+    values.shift_snapshot === undefined ? flexible : values.shift_snapshot,
 });
 
 describe("flexible attendance aggregation", () => {
+  it("does not charge a new month's day shift for the previous night's cutoff", () => {
+    const night: ShiftSnapshot = {
+      ...flexible, kind: "night", name_ar: "ليلية",
+      start_time: "19:00", end_time: "07:00",
+      attendance_cutoff_time: "09:00",
+    };
+    const day: ShiftSnapshot = {
+      ...flexible, kind: "day", name_ar: "نهارية",
+      start_time: "07:00", end_time: "19:00",
+    };
+    const result = computeEmployeeAttendance(
+      [
+        actionRow(1, { date: "2026-09-30", check_in_time: instant("2026-09-30T19:00:00"), shift_snapshot: night }),
+        actionRow(2, { date: "2026-09-30", status: "منسحب", check_out_time: instant("2026-10-01T09:00:00"), notes: "auto_withdrawn_at_cutoff", shift_snapshot: night }),
+      ],
+      new Map([["2026-10", day]]),
+      "2026-10-01", "2026-10-01",
+    );
+    expect(result.days[0]).toMatchObject({
+      status: "غائب", checkIn: null, checkOut: null,
+      earlyLeaveMinutes: 0, workedHours: 0,
+    });
+    expect(result.totals).toMatchObject({
+      absentDays: 1, totalEarlyLeaveMinutes: 0,
+    });
+  });
+  it("counts an auto-withdrawn checkout as one absent day without work or withdrawal pay", () => {
+    const marker = "auto_withdrawn_at_cutoff";
+    const result = computeEmployeeAttendance(
+      [
+        actionRow(1, {
+          check_in_time: instant("2026-09-01T07:00:00"),
+          shift_snapshot: null,
+        }),
+        actionRow(2, {
+          status: "منسحب",
+          check_out_time: instant("2026-09-02T09:00:00"),
+          notes: marker,
+          shift_snapshot: null,
+        }),
+      ],
+      new Map([["2026-9", "day"]]),
+      "2026-09-01",
+      "2026-09-01",
+      0,
+      {
+        withdrawalIntervals: [
+          {
+            start: instant("2026-09-01T12:00:00"),
+            end: instant("2026-09-01T12:30:00"),
+          },
+        ],
+      },
+    );
+
+    expect(result.days[0]).toMatchObject({
+      status: "منسحب",
+      present: false,
+      complete: false,
+      workedHours: 0,
+      overtimeHours: 0,
+      withdrawnMinutes: 0,
+    });
+    expect(result.totals).toMatchObject({
+      absentDays: 1,
+      presentDays: 0,
+      incompleteDays: 0,
+      totalWorkedHours: 0,
+      totalOvertimeHours: 0,
+      totalWithdrawnMinutes: 0,
+    });
+  });
+
   it("splits separate check-in and checkout action rows across calendar days", () => {
     const result = computeEmployeeAttendance(
       [

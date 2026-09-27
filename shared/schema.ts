@@ -1396,7 +1396,10 @@ export const shift_templates = pgTable(
     kind: varchar("kind", { length: 16 }).notNull().default("day"),
     start_time: varchar("start_time", { length: 5 }).notNull(),
     end_time: varchar("end_time", { length: 5 }).notNull(),
-    grace_minutes: integer("grace_minutes").notNull().default(0),
+    attendance_cutoff_time: varchar("attendance_cutoff_time", { length: 5 })
+      .notNull()
+      .default("00:00"),
+    grace_minutes: integer("grace_minutes").notNull().default(30),
     base_work_hours: decimal("base_work_hours", { precision: 5, scale: 2 })
       .notNull()
       .default("8"),

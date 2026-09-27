@@ -26,7 +26,7 @@
 - [Wage computation](wage-computation.md) — monthly net = basic+OT-deductions-penalties+rewards; no-checkout (incomplete) days must be deducted as non-payable or they get full pay (overpayment).
 - [Number display formatting](number-formatting.md) — displayed numbers group thousands via central helpers (formatNumber / formatNumberAr); never group GPS coords/CSS/payloads/percentages, and never re-parse grouped output.
 - [Attendance engine aggregation](attendance-engine-aggregation.md) — self check-in writes many rows per shift-day; coalesce stamps to one record, MAX cumulative withdrawn, compute break once (never per-row sum).
-- [Attendance shift boundary](attendance-shift-boundary.md) — previous-day status carries only for an active 19:00–07:00 night shift; 07:00 starts a fresh day session.
+- [Attendance shift boundary](attendance-shift-boundary.md) — snapshot cutoff determines day rollover; today's check-in window wins during shift handoff; auto-withdrawn days have no paid hours.
 - [Human attendance write boundary](human-attendance-write-boundary.md) — human stamps are server-time, explicit-action only; transitions and withdrawals share one per-user transaction lock.
 - [Legacy→new product prefill guard](legacy-map-prefill.md) — prefilling the reactive customer-product form needs a ref that preserves cutting_length through category select, releases on cylinder/length edit, resets on dialog close.
 - [WhatsApp phone normalization](whatsapp-phone-normalization.md) — Meta sends must convert Saudi local (05.../5...) to intl 966 format or Meta rejects with (#100); keep in lockstep with SMS gateway.

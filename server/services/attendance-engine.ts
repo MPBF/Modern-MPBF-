@@ -26,6 +26,7 @@ export interface RawAttendanceRow {
   break_end_time: Date | string | null;
   total_withdrawn_minutes: number | null;
   date: string;
+  notes?: string | null;
   shift_snapshot?: ShiftSnapshot | null;
 }
 
@@ -195,6 +196,9 @@ export function computeEmployeeAttendance(
     date: String(r.date).slice(0, 10),
     checkIn: toDate(r.check_in_time),
     checkOut: toDate(r.check_out_time),
+    autoWithdrawnAtCutoff:
+      r.status === "منسحب" &&
+      (r.notes ?? "").includes("auto_withdrawn_at_cutoff"),
     lunchStart: toDate(r.lunch_start_time),
     lunchEnd: toDate(r.lunch_end_time),
     breakStart: toDate(r.break_start_time),
@@ -215,6 +219,11 @@ export function computeEmployeeAttendance(
       return {
         snapshot: source?.snapshot ?? null,
         attendanceDate: source?.date ?? null,
+        autoWithdrawnAtCutoff: normalized.some(
+          (row) =>
+            row.autoWithdrawnAtCutoff &&
+            row.checkOut?.getTime() === session.end?.getTime(),
+        ),
         capAt:
           session.end ??
           (source?.date
@@ -411,6 +420,9 @@ export function computeEmployeeAttendance(
       };
     } else {
       for (const row of normalized) {
+        // Fixed-shift action rows carry their check-in's attendance date.
+        // Never import yesterday's cutoff checkout into today's window.
+        if (row.date !== cursor) continue;
         const belongsToSession = row.date === cursor;
         const rowInWindow =
           belongsToSession ||
@@ -514,12 +526,36 @@ export function computeEmployeeAttendance(
       });
     }
 
+    // الإغلاق التلقائي عند فصل اليوم يوثّق حالة الانسحاب، لكنه لا يثبت
+    // ساعات عمل قابلة للدفع. احتسابه كغياب يفرض خصم يوم كامل مرة واحدة.
+    const autoWithdrawnAtCutoff = workSessions.some(
+      (session) =>
+        session.autoWithdrawnAtCutoff &&
+        session.attendanceDate === cursor,
+    );
+    if (autoWithdrawnAtCutoff) {
+      metrics = {
+        ...metrics,
+        present: false,
+        complete: false,
+        lateMinutes: 0,
+        earlyLeaveMinutes: 0,
+        workedHours: 0,
+        overtimeHours: 0,
+      };
+      withdrawnMinutes = 0;
+    }
+
     // خصم دقائق الاستئذان المعتمدة لهذا اليوم من التأخير ثم المغادرة
     // المبكرة ثم الانسحاب (الدقائق المعتمدة لا تُحتسب خصماً).
-    let lateMinutes = metrics.lateMinutes;
-    let earlyLeaveMinutes = metrics.earlyLeaveMinutes;
-    let dayWithdrawn = withdrawnMinutes;
-    let credit = permissionByDate?.get(cursor) ?? 0;
+    let lateMinutes = autoWithdrawnAtCutoff ? 0 : metrics.lateMinutes;
+    let earlyLeaveMinutes = autoWithdrawnAtCutoff
+      ? 0
+      : metrics.earlyLeaveMinutes;
+    let dayWithdrawn = autoWithdrawnAtCutoff ? 0 : withdrawnMinutes;
+    let credit = autoWithdrawnAtCutoff
+      ? 0
+      : permissionByDate?.get(cursor) ?? 0;
     if (credit > 0) {
       const useLate = Math.min(lateMinutes, credit);
       lateMinutes -= useLate;
@@ -532,10 +568,12 @@ export function computeEmployeeAttendance(
     }
 
     // يوم إجازة معتمدة بدون حضور فعلي: يُعلَّم "إجازة" ولا يُحتسب غياباً.
-    const onLeave = !metrics.present && leaveDates.has(cursor);
+    const onLeave =
+      !autoWithdrawnAtCutoff && !metrics.present && leaveDates.has(cursor);
 
     let status: string;
-    if (onLeave) status = "إجازة";
+    if (autoWithdrawnAtCutoff) status = "منسحب";
+    else if (onLeave) status = "إجازة";
     else if (!metrics.present) status = "غائب";
     else if (!metrics.complete) status = "غير مكتمل";
     else status = "حاضر";

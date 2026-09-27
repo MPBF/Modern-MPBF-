@@ -309,8 +309,12 @@ import {
   applyApprovedLeaveToAttendance as applyApprovedLeaveToAttendanceImpl,
   getApprovedPermissionMinutes as getApprovedPermissionMinutesImpl,
 } from "../services/leave-attendance";
+import { updateDailyAttendanceTransaction } from "./attendance-admin";
 import { toNumericSectionIds } from "./section-ids";
-import { filterAttendanceRecordsByWindow, summarizeActionSession } from "./attendance-session";
+import {
+  filterAttendanceRecordsByWindow,
+  summarizeActionSession,
+} from "./attendance-session";
 import * as shiftTemplateStore from "./shift-template-store";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
@@ -912,85 +916,19 @@ export class HrStorage extends MachinesStorage {
   ): Promise<void> {
     return withDatabaseErrorHandling(
       async () => {
-        await db.transaction(async (tx) => {
-          const rows = await tx
-            .select()
-            .from(attendance)
-            .where(
-              and(eq(attendance.user_id, userId), eq(attendance.date, date)),
-            )
-            .orderBy(attendance.created_at);
-
-          if (!rows.length) {
-            // لا توجد سجلات لهذا اليوم — أنشئ سجلاً واحداً بالقيم المعدّلة
-            await tx.insert(attendance).values({
-              user_id: userId,
-              date,
-              status: patch.status ?? "حاضر",
-              check_in_time: patch.check_in_time ?? null,
-              break_start_time: patch.break_start_time ?? null,
-              break_end_time: patch.break_end_time ?? null,
-              check_out_time: patch.check_out_time ?? null,
-              created_by: updatedBy ?? null,
-              updated_by: updatedBy ?? null,
-            } as any);
-            return;
-          }
-
-          const first = rows[0] as any;
-          const last = rows[rows.length - 1] as any;
-          const now = new Date();
-
-          // امسح الحقول المعدّلة من كل السجلات ثم ثبّت القيمة على سجل واحد
-          // (العرض يجمع بـ min/max عبر الصفوف فيجب ألا تبقى قيمة قديمة منافسة)
-          const clearAll: Record<string, any> = {};
-          if ("check_in_time" in patch) clearAll.check_in_time = null;
-          if ("break_start_time" in patch) {
-            clearAll.break_start_time = null;
-            clearAll.lunch_start_time = null;
-          }
-          if ("break_end_time" in patch) {
-            clearAll.break_end_time = null;
-            clearAll.lunch_end_time = null;
-          }
-          if ("check_out_time" in patch) clearAll.check_out_time = null;
-
-          if (Object.keys(clearAll).length > 0) {
-            await tx
-              .update(attendance)
-              .set({ ...clearAll, updated_by: updatedBy ?? null, updated_at: now })
-              .where(
-                and(eq(attendance.user_id, userId), eq(attendance.date, date)),
-              );
-          }
-
-          // القيم الجديدة: بداية اليوم على أول سجل، نهايته على آخر سجل
-          const firstSet: Record<string, any> = {};
-          if ("check_in_time" in patch && patch.check_in_time != null)
-            firstSet.check_in_time = patch.check_in_time;
-          if ("break_start_time" in patch && patch.break_start_time != null)
-            firstSet.break_start_time = patch.break_start_time;
-
-          const lastSet: Record<string, any> = {};
-          if ("break_end_time" in patch && patch.break_end_time != null)
-            lastSet.break_end_time = patch.break_end_time;
-          if ("check_out_time" in patch && patch.check_out_time != null)
-            lastSet.check_out_time = patch.check_out_time;
-          if (patch.status) lastSet.status = patch.status;
-
-          if (Object.keys(firstSet).length > 0) {
-            await tx
-              .update(attendance)
-              .set({ ...firstSet, updated_by: updatedBy ?? null, updated_at: now })
-              .where(eq(attendance.id, first.id));
-          }
-          if (Object.keys(lastSet).length > 0) {
-            await tx
-              .update(attendance)
-              .set({ ...lastSet, updated_by: updatedBy ?? null, updated_at: now })
-              .where(eq(attendance.id, last.id));
-          }
-        });
+        const cutoffEditRejected = await updateDailyAttendanceTransaction(
+          userId,
+          date,
+          patch,
+          updatedBy,
+        );
+        if (cutoffEditRejected) {
+          const error = new Error(
+            "أُغلقت الجلسة تلقائياً عند وقت فصل اليوم ولا يمكن تعديل وقت الانصراف",
+          );
+          error.name = "OrderDomainError";
+          throw error;
+        }
       },
       "updateDailyAttendance",
       `تعديل حضور المستخدم ${userId} ليوم ${date}`,
@@ -1509,6 +1447,7 @@ export class HrStorage extends MachinesStorage {
   ): Promise<EmployeeAttendanceResult> {
     return withDatabaseErrorHandling(
       async () => {
+        await this.closeExpiredAttendanceSessions(userId);
         const fetchFrom = this.addDaysStr(from, -1);
         const fetchTo = this.addDaysStr(to, 1);
         const [rows, withdrawalRows] = await Promise.all([
@@ -1562,6 +1501,7 @@ export class HrStorage extends MachinesStorage {
   ): Promise<any[]> {
     return withDatabaseErrorHandling(
       async () => {
+        await this.closeExpiredAttendanceSessions();
         const fetchFrom = this.addDaysStr(from, -1);
         const fetchTo = this.addDaysStr(to, 1);
 
@@ -1995,9 +1935,13 @@ export class HrStorage extends MachinesStorage {
         const overtimeHours = t.totalOvertimeHours;
         const overtimePay = overtimeHours * rate * overtimeMultiplier;
 
+        // الإغلاق التلقائي الموسوم "auto_withdrawn_at_cutoff" يصنّفه محرك
+        // الحضور غياباً (لا يوم حضور غير مكتمل)، فتُخصم كلفة اليوم هنا مرة
+        // واحدة، دون ساعات مدفوعة أو خصم انسحاب إضافي.
         const absenceDeduction = t.absentDays * BASE_WORK_HOURS * rate;
         // أيام الحضور بدون تسجيل انصراف (غير مكتملة): لا يمكن التحقق من ساعات
         // العمل الفعلية، لذا تُعامل كغير مدفوعة لتجنّب صرف أجر يوم كامل بالخطأ.
+        // لا تشمل هذه الفئة الإغلاقات التلقائية، إذ تُعامل كغياب كامل أعلاه.
         // عند تصحيح وقت الانصراف وإعادة الحساب يُحتسب اليوم بشكل صحيح.
         const incompleteDeduction = t.incompleteDays * BASE_WORK_HOURS * rate;
         const lateDeduction = (t.totalLateMinutes / 60) * rate;

@@ -5,35 +5,24 @@ description: Rules for carrying previous-day attendance into the current day wit
 
 # Attendance shift boundary
 
-**Rule:** Shift definitions are fixed in Riyadh time. Day is 07:00–19:00
-(base 07:00–15:00, overtime afterward). Night is 19:00–07:00 next day
-(base 19:00–03:00, overtime afterward). Flexible work is grouped by each
-calendar day 00:00–24:00 and cross-midnight sessions are split between days.
-For fixed shifts, `grace_minutes` also admits check-in before the scheduled
-start, but paid work remains clipped to the official shift start.
+**Rule:** Each assigned shift snapshot has its own Riyadh attendance-day cutoff
+on the *following* calendar day. For a night shift ending 07:00, a 09:00 cutoff
+means the prior attendance date continues until 08:59:59; from 09:00 the new
+attendance date applies. A shared grace value defines symmetric admission
+windows around the official start (check-in) and end (checkout), without
+extending paid work beyond the official shift window. A missed checkout at
+cutoff is recorded as withdrawn, with zero paid hours and a full-day absence
+deduction. The flexible shift keeps its special time-window behavior.
 
-Previous-day night attendance stays attached to its 19:00 start date. Its open
-session must remain available for checkout the following morning even after
-the daily status view advances to a new calendar date.
+**Why:** The user explicitly distinguished attendance-day separation from the
+official shift end and chose the withdrawn/full-deduction treatment. A
+night-to-day change at a month boundary can put yesterday's 09:00 cutoff
+checkout inside today's 07:00 day window, causing a duplicate payroll penalty
+if actions are grouped by timestamp alone.
 
-Night-shift attendance uses the shift-start date as its business date. A
-checkout at or after 07:00 may close that finished session until (but not
-including) the next 19:00 shift start; it must never affect the next evening
-session. Before 07:00 at a month boundary, use the prior shift-start month's
-assignment exclusively, not the new month's future roster.
-
-**Why:** The user confirmed these fixed schedules and requested a third
-calendar-day flexible shift. They also confirmed that a 30-minute grace on a
-19:00 shift must admit check-in from 18:30. Self-attendance stores actions as separate rows, so a check-in row
-retains a null checkout even after a later checkout row is inserted. Treating
-any such row from the last 24 hours as open caused yesterday's day session to
-block today's 07:00 check-in and could surface yesterday's final status.
-
-**How to apply:** Use the factory's Riyadh date, captured assignment snapshot,
-and formal shift windows rather
-than UTC dates or a rolling 24-hour test. An open-session lookup must also
-check for a later checkout action on the same attendance date. Filter
-action-per-row status by action timestamp: check-ins stay inside `[19:00,
-07:00)`, while late checkouts remain attached to the finished session only
-until the next 19:00 boundary. Flexible reporting pairs each session and
-intersects work, break, and withdrawal intervals with each calendar day.
+**How to apply:** Resolve the current day's check-in window before carrying
+yesterday's shift to its cutoff; group fixed-shift actions by their persisted
+attendance date, not just overlapping wall-time windows. Self-attendance
+stores one row per action, so an open-session lookup must check for a later
+checkout on the *same attendance date*. Keep automatic cutoff closure
+idempotent under the same per-user lock as manual attendance edits.

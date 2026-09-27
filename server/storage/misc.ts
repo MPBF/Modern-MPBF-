@@ -308,6 +308,7 @@ import QRCode from "qrcode";
 
 import { db, pool } from "../db";
 import { isOpenSessionRelevant } from "./attendance-session";
+import { closeExpiredAttendanceSessions } from "../services/attendance-cutoff";
 import {
   computeEmployeeAttendance,
   type EmployeeAttendanceResult,
@@ -339,6 +340,15 @@ import { SystemStorage } from "./system";
 
 export class MiscStorage extends SystemStorage {
 
+  async closeExpiredAttendanceSessions(userId?: number): Promise<number> {
+    return withDatabaseErrorHandling(
+      () => closeExpiredAttendanceSessions(userId),
+      "closeExpiredAttendanceSessions",
+      userId == null
+        ? "إغلاق جلسات الحضور المنتهية"
+        : `إغلاق جلسات الحضور المنتهية للمستخدم ${userId}`,
+    );
+  }
 
   // يبحث عن آخر تسجيل دخول مفتوح داخل نافذة الوردية المحددة. يبقى مسار
   // الـ 24 ساعة للتوافق مع الاستدعاءات القديمة فقط.
@@ -349,6 +359,7 @@ export class MiscStorage extends SystemStorage {
     return withDatabaseErrorHandling(
       async () => {
         const now = new Date();
+        await this.closeExpiredAttendanceSessions(userId);
         const yesterday = factoryNowParts(new Date(now.getTime() - 86400000)).dateStr;
         const conditions = [
           eq(attendance.user_id, userId),
