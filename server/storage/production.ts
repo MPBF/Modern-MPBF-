@@ -420,6 +420,19 @@ export class ProductionStorage extends OrdersStorage {
             await tx.execute(
               sql`SELECT pg_advisory_xact_lock(1003, ${anyRoll.production_order_id})`,
             );
+            const order = await tx.execute(sql`
+              SELECT status, film_completed, is_final_roll_created
+              FROM production_orders
+              WHERE id = ${anyRoll.production_order_id}
+              FOR UPDATE
+            `);
+            const current = order.rows[0] as any;
+            if (!current || current.status === "completed" ||
+                current.film_completed || current.is_final_roll_created) {
+              throw Object.assign(new Error("انتهى إنتاج الفيلم لهذا الأمر"), {
+                name: "OrderDomainError", statusCode: 409,
+              });
+            }
           }
           const [roll] = await tx
             .insert(rolls)
@@ -1511,6 +1524,9 @@ export class ProductionStorage extends OrdersStorage {
           const lookup = await tx.execute(sql`
             SELECT
               po.production_order_number,
+              po.status,
+              po.film_completed,
+              po.is_final_roll_created,
               COALESCE(cp.is_printed, false) AS is_printed,
               i.name AS item_name,
               i.name_ar AS item_name_ar,
@@ -1522,10 +1538,18 @@ export class ProductionStorage extends OrdersStorage {
             LEFT JOIN customer_products cp ON cp.id = po.customer_product_id
             LEFT JOIN items i ON i.id = cp.item_id
             WHERE po.id = ${data.production_order_id}
+            FOR UPDATE OF po
           `);
           const po = (lookup.rows as any[])[0];
 
           if (!po) throw new Error("أمر الإنتاج غير موجود");
+          if (po.status === "completed" ||
+              po.film_completed === true || po.film_completed === "t" ||
+              po.is_final_roll_created === true || po.is_final_roll_created === "t") {
+            throw Object.assign(new Error("انتهى إنتاج الفيلم لهذا الأمر"), {
+              name: "OrderDomainError", statusCode: 409,
+            });
+          }
 
           const nextSeq = parseInt(po.max_seq ?? "0", 10) + 1;
           const rollNumber = `${po.production_order_number}-R${String(nextSeq).padStart(3, "0")}`;
@@ -1742,6 +1766,8 @@ export class ProductionStorage extends OrdersStorage {
     operatorId: number,
     cuttingMachineId?: string,
   ): Promise<any> {
+    const domainError = (message: string, statusCode: number) =>
+      Object.assign(new Error(message), { name: "OrderDomainError", statusCode });
     return withDatabaseErrorHandling(
       async () => {
         // Pre-read the production_order_id so we can acquire the advisory lock
@@ -1750,7 +1776,7 @@ export class ProductionStorage extends OrdersStorage {
           .select({ id: rolls.id, production_order_id: rolls.production_order_id })
           .from(rolls)
           .where(eq(rolls.id, rollId));
-        if (!rollPre) throw new Error(`الرول ${rollId} غير موجود`);
+        if (!rollPre) throw domainError("الرول غير موجود", 404);
 
         // Run the roll update + completion check inside a single transaction
         // guarded by an advisory lock (key 1007 = cutting-completion path).
@@ -1767,10 +1793,49 @@ export class ProductionStorage extends OrdersStorage {
               .select()
               .from(rolls)
               .where(eq(rolls.id, rollId));
-            if (!roll) throw new Error(`الرول ${rollId} غير موجود`);
+            if (!roll) throw domainError("الرول غير موجود", 404);
+            if (roll.production_order_id !== rollPre.production_order_id) {
+              throw domainError("تم نقل الرول إلى أمر إنتاج آخر، أعد المحاولة", 409);
+            }
+            if (roll.cut_completed_at || roll.stage === "done") {
+              throw domainError("تم تقطيع الرول مسبقاً", 409);
+            }
+
+            const orderResult = await tx.execute(sql`
+              SELECT po.status, cp.is_printed, i.name AS item_name,
+                     i.name_ar AS item_name_ar
+              FROM production_orders po
+              JOIN customer_products cp ON cp.id = po.customer_product_id
+              LEFT JOIN items i ON i.id = cp.item_id
+              WHERE po.id = ${roll.production_order_id}
+            `);
+            const orderInfo = orderResult.rows[0] as {
+              status: string;
+              is_printed: boolean | null;
+              item_name: string | null;
+              item_name_ar: string | null;
+            } | undefined;
+            if (!orderInfo) throw domainError("أمر الإنتاج غير موجود", 404);
+            if (!["pending", "active"].includes(orderInfo.status)) {
+              throw domainError("أمر الإنتاج غير نشط", 409);
+            }
+            if (
+              isRollProductName(orderInfo.item_name, orderInfo.item_name_ar) ||
+              !(
+                roll.stage === "printing" ||
+                roll.stage === "cutting" ||
+                (roll.stage === "film" && !orderInfo.is_printed)
+              )
+            ) {
+              throw domainError("الرول ليس جاهزاً للتقطيع", 409);
+            }
 
             const grossWeight = parseFloat(roll.weight_kg?.toString() || "0");
-            const wasteKg = Math.max(0, grossWeight - netWeight);
+            if (!Number.isFinite(netWeight) || netWeight <= 0 ||
+                !Number.isFinite(grossWeight) || netWeight > grossWeight) {
+              throw domainError("الوزن الصافي يجب أن يكون أكبر من صفر ولا يتجاوز وزن الرول", 400);
+            }
+            const wasteKg = grossWeight - netWeight;
 
             const updates: any = {
               stage: "done",
@@ -1784,8 +1849,34 @@ export class ProductionStorage extends OrdersStorage {
             const [updatedRoll] = await tx
               .update(rolls)
               .set(updates)
-              .where(eq(rolls.id, rollId))
+              .where(and(
+                eq(rolls.id, rollId),
+                eq(rolls.production_order_id, rollPre.production_order_id),
+                isNull(rolls.cut_completed_at),
+                inArray(rolls.stage, ["film", "printing", "cutting"]),
+              ))
               .returning();
+            if (!updatedRoll) throw domainError("تم تقطيع الرول مسبقاً أو تغيّرت مرحلته", 409);
+
+            // Lock the order after the roll update. Film creation locks this
+            // same row before inserting, so it cannot add a roll between the
+            // final-film check and the remaining-roll count.
+            const lockedOrder = await tx.execute(sql`
+              SELECT po.status, po.film_completed, po.is_final_roll_created,
+                     CASE WHEN po.final_quantity_kg::numeric > 0
+                       THEN po.final_quantity_kg::numeric
+                       ELSE COALESCE(po.quantity_kg::numeric, 0)
+                     END AS target_kg,
+                     COALESCE((SELECT SUM(r.weight_kg::numeric) FROM rolls r
+                       WHERE r.production_order_id = po.id), 0) AS produced_kg
+              FROM production_orders po
+              WHERE po.id = ${roll.production_order_id}
+              FOR UPDATE
+            `);
+            const currentOrder = lockedOrder.rows[0] as any;
+            if (!currentOrder || !["pending", "active"].includes(currentOrder.status)) {
+              throw domainError("أمر الإنتاج غير نشط", 409);
+            }
 
             // Check remaining rolls inside the locked transaction — consistent read
             const remainingRolls = await tx
@@ -1794,11 +1885,17 @@ export class ProductionStorage extends OrdersStorage {
               .where(
                 and(
                   eq(rolls.production_order_id, roll.production_order_id),
-                  inArray(rolls.stage as any, ["film", "printing"]),
+                  inArray(rolls.stage, ["film", "printing", "cutting"]),
+                  isNull(rolls.cut_completed_at),
                 ),
               );
 
-            const isOrderCompleted = remainingRolls.length === 0;
+            const filmClosed =
+              currentOrder.film_completed === true ||
+              currentOrder.is_final_roll_created === true ||
+              (Number(currentOrder.target_kg) > 0 &&
+                Number(currentOrder.produced_kg) >= Number(currentOrder.target_kg) - 0.001);
+            const isOrderCompleted = filmClosed && remainingRolls.length === 0;
 
             if (isOrderCompleted) {
               await tx
@@ -1994,9 +2091,20 @@ export class ProductionStorage extends OrdersStorage {
         cat.name AS category_name_en,
         cp.size_caption,
         cp.cutting_length_cm,
-        cp.punching
+        cp.punching,
+        roll_counts.total_rolls AS po_total_rolls,
+        roll_counts.completed_rolls AS po_completed_rolls,
+        roll_counts.total_weight AS po_total_weight
       FROM rolls r
       JOIN production_orders po ON r.production_order_id = po.id
+      JOIN LATERAL (
+        SELECT
+          COUNT(*)::int AS total_rolls,
+          COUNT(*) FILTER (WHERE rr.cut_completed_at IS NOT NULL)::int AS completed_rolls,
+          COALESCE(SUM(rr.weight_kg::numeric), 0) AS total_weight
+        FROM rolls rr
+        WHERE rr.production_order_id = po.id
+      ) roll_counts ON true
       JOIN orders o ON po.order_id = o.id
       JOIN customers c ON o.customer_id = c.id
       LEFT JOIN users sr ON sr.id = c.sales_rep_id
@@ -2005,8 +2113,10 @@ export class ProductionStorage extends OrdersStorage {
       LEFT JOIN categories cat ON cp.category_id = cat.id
       WHERE (
               r.stage = 'printing'
+               OR r.stage = 'cutting'
               OR (r.stage = 'film' AND COALESCE(cp.is_printed, false) = false)
             )
+        AND r.cut_completed_at IS NULL
         AND po.status IN ('pending', 'active')
         -- Plastic-roll products never enter the cutting board (null-safe LEFT JOIN)
         AND COALESCE(
@@ -2041,8 +2151,9 @@ export class ProductionStorage extends OrdersStorage {
           cutting_length_cm: row.cutting_length_cm,
           punching: row.punching,
           rolls: [],
-          total_rolls: 0,
-          total_weight: 0,
+          total_rolls: Number(row.po_total_rolls),
+          completed_rolls: Number(row.po_completed_rolls),
+          total_weight: Number(row.po_total_weight),
         });
       }
       const po = grouped.get(poId)!;
@@ -2057,8 +2168,6 @@ export class ProductionStorage extends OrdersStorage {
         printed_at: row.printed_at,
         cut_completed_at: row.cut_completed_at,
       });
-      po.total_rolls++;
-      po.total_weight += parseFloat(row.weight_kg || "0");
     }
     return Array.from(grouped.values());
   }

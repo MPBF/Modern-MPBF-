@@ -15,6 +15,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatNumberAr } from "../../../../shared/number-utils";
+import { isActiveCuttingMachine } from "../../../../shared/cutting-machine";
 import PageLayout from "../../components/layout/PageLayout";
 import {
   BackToOrdersBar,
@@ -85,6 +86,7 @@ interface ProductionOrderWithRolls {
   size_caption?: string;
   rolls: RollDetails[];
   total_rolls: number;
+  completed_rolls: number;
   total_weight: number;
   cutting_length_cm?: number;
   punching?: string;
@@ -95,6 +97,7 @@ interface Machine {
   name: string;
   name_ar: string;
   section_id: string;
+  type: string;
   status: string;
 }
 
@@ -143,10 +146,15 @@ export default function CuttingOperatorDashboard({
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
     null,
   );
-  const [isEditingMachine, setIsEditingMachine] = useState(false);
+  const [isMachineMenuOpen, setIsMachineMenuOpen] = useState(false);
   const pollingInterval = useSmartPolling(45_000);
 
-  const { data: productionOrders = [], isLoading } = useQuery<
+  const {
+    data: productionOrders = [],
+    isLoading,
+    isError: ordersError,
+    refetch: refetchOrders,
+  } = useQuery<
     ProductionOrderWithRolls[]
   >({
     queryKey: ["/api/rolls/active-for-cutting"],
@@ -157,13 +165,13 @@ export default function CuttingOperatorDashboard({
     data: allMachines = [],
     isLoading: machinesLoading,
     isSuccess: machinesReady,
+    isError: machinesError,
+    refetch: refetchMachines,
   } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
   });
 
-  const cuttingMachines = allMachines.filter(
-    (m) => m.section_id === "SEC05" && m.status === "active",
-  );
+  const cuttingMachines = allMachines.filter(isActiveCuttingMachine);
   const {
     selectedMachineId,
     setSelectedMachineId,
@@ -230,7 +238,7 @@ export default function CuttingOperatorDashboard({
   };
 
   const handleCompleteCutting = () => {
-    if (!selectedRoll) return;
+    if (!selectedRoll || completeCuttingMutation.isPending) return;
     if (
       !machinePreferenceReady ||
       !selectedMachineId ||
@@ -247,7 +255,7 @@ export default function CuttingOperatorDashboard({
     const netWeightNum = parseFloat(netWeight);
     const grossWeight = parseFloat(selectedRoll.weight_kg.toString());
 
-    if (isNaN(netWeightNum) || netWeightNum <= 0) {
+    if (!Number.isFinite(netWeightNum) || netWeightNum <= 0) {
       toast({
         title: t("operators.common.error"),
         description: t("operators.cutting.invalidNetWeight"),
@@ -307,6 +315,19 @@ export default function CuttingOperatorDashboard({
   const selectedMachine = cuttingMachines.find(
     (m) => m.id === selectedMachineId,
   );
+  const handleMachineChange = (machineId: string) => {
+    const machine = cuttingMachines.find((item) => item.id === machineId);
+    if (!machine || machineId === selectedMachineId) {
+      setIsMachineMenuOpen(false);
+      return;
+    }
+    setSelectedMachineId(machineId);
+    setIsMachineMenuOpen(false);
+    toast({
+      title: ui("تم تغيير ماكينة التقطيع", "Cutting machine changed"),
+      description: localizedName(machine.name_ar, machine.name, machine.id),
+    });
+  };
 
   const mainContent = (
     <div className="space-y-4 pb-12">
@@ -319,31 +340,37 @@ export default function CuttingOperatorDashboard({
               {ui("ماكينة التقطيع المحددة", "Selected cutting machine")}
             </span>
           </div>
-          {selectedMachine && (
+          {selectedMachine && cuttingMachines.length > 1 && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-xs font-bold text-emerald-700 dark:text-emerald-300"
-              onClick={() => setIsEditingMachine((editing) => !editing)}
+              onClick={() => setIsMachineMenuOpen(true)}
               disabled={!machinePreferenceReady}
+              aria-label={ui("تغيير ماكينة التقطيع", "Change cutting machine")}
             >
-              {isEditingMachine ? ui("تم", "Done") : ui("تغيير", "Change")}
+              {ui("تغيير", "Change")}
             </Button>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           <Select
+            open={isMachineMenuOpen}
+            onOpenChange={setIsMachineMenuOpen}
             value={selectedMachineId}
-            onValueChange={setSelectedMachineId}
+            onValueChange={handleMachineChange}
             disabled={
               machinesLoading ||
               !machinePreferenceReady ||
-              (!!selectedMachineId && !isEditingMachine)
+              cuttingMachines.length === 0
             }
           >
-            <SelectTrigger className="w-full bg-white dark:bg-gray-900 text-xs font-bold h-10 rounded-xl border-emerald-200">
+            <SelectTrigger
+              aria-label={ui("اختيار ماكينة التقطيع", "Select cutting machine")}
+              className="w-full bg-white dark:bg-gray-900 text-xs font-bold h-10 rounded-xl border-emerald-200"
+            >
               <SelectValue
                 placeholder={t("operators.cutting.selectMachinePlaceholder")}
               />
@@ -361,17 +388,35 @@ export default function CuttingOperatorDashboard({
             </SelectContent>
           </Select>
 
-          {selectedMachine && !isEditingMachine && (
+          {selectedMachine && (
             <Badge className="bg-emerald-600 text-white whitespace-nowrap h-10 px-3 text-xs font-bold rounded-xl gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {ui("جاهز", "Ready")}
             </Badge>
           )}
         </div>
+        {machinesError ? (
+          <Button type="button" variant="link" size="sm" onClick={() => refetchMachines()}>
+            {ui("تعذر تحميل الماكينات، إعادة المحاولة", "Could not load machines. Retry")}
+          </Button>
+        ) : machinesReady && cuttingMachines.length === 0 ? (
+          <p className="mt-2 text-xs text-red-700 dark:text-red-300">
+            {ui("لا توجد ماكينة تقطيع نشطة", "No active cutting machine available")}
+          </p>
+        ) : null}
       </div>
 
       {/* قائمة الطلبات الرئيسية أو تفاصيل الطلب المحدد */}
-      {productionOrders.length === 0 ? (
+      {ordersError ? (
+        <Card className="p-8 text-center rounded-2xl border-dashed">
+          <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+            {ui("تعذر تحميل أوامر التقطيع", "Could not load cutting orders")}
+          </p>
+          <Button type="button" variant="outline" onClick={() => refetchOrders()}>
+            {ui("إعادة المحاولة", "Retry")}
+          </Button>
+        </Card>
+      ) : productionOrders.length === 0 ? (
         <Card className="p-8 text-center rounded-2xl border-dashed">
           <Info className="h-10 w-10 text-gray-400 mx-auto mb-3" />
           <h3 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-1">
@@ -396,8 +441,7 @@ export default function CuttingOperatorDashboard({
                 0,
               );
               const completedRolls = group.items.reduce(
-                (sum, o) =>
-                  sum + o.rolls.filter((r) => r.cut_completed_at).length,
+                (sum, o) => sum + o.completed_rolls,
                 0,
               );
               const groupProgress =
@@ -491,9 +535,7 @@ export default function CuttingOperatorDashboard({
 
           <div className="space-y-4">
             {selectedGroup.items.map((order) => {
-              const completedRolls = order.rolls.filter(
-                (r) => r.cut_completed_at,
-              ).length;
+              const completedRolls = order.completed_rolls;
               const progress =
                 order.total_rolls > 0
                   ? (completedRolls / order.total_rolls) * 100
@@ -652,7 +694,7 @@ export default function CuttingOperatorDashboard({
 
                             <Button
                               onClick={() => handleOpenCuttingDialog(roll)}
-                              disabled={!selectedMachineId}
+                              disabled={!machinePreferenceReady || !selectedMachineId || completeCuttingMutation.isPending}
                               className="h-10 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs active:scale-95 transition-all"
                             >
                               <Scissors className="h-4 w-4 ml-1.5" />

@@ -5,6 +5,7 @@ import { storage } from "../storage";
 
 import { insertRollSchema, insertCutSchema, insertProductionSettingsSchema } from "@shared/schema";
 import { isActivePrintingMachine } from "@shared/printing-machine";
+import { isActiveCuttingMachine } from "@shared/cutting-machine";
 import { z } from "zod";
 import { parseIntSafe, parseFloatSafe } from "@shared/validation-utils";
 import { getDataValidator } from "../services/data-validator";
@@ -170,7 +171,9 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
         res.status(201).json(roll);
       } catch (error) {
         console.error("Error creating roll:", error);
-        if (error instanceof z.ZodError) {
+        if (error instanceof Error && error.name === "OrderDomainError") {
+          res.status(409).json({ message: error.message });
+        } else if (error instanceof z.ZodError) {
           console.error("Validation errors:", error.errors);
           res.status(400).json({
             message: "بيانات غير صحيحة",
@@ -544,13 +547,21 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
       try {
         const authReq = req as AuthRequest;
         const rollId = parseRouteParam(req.params.id, "id");
-        const { net_weight, cutting_machine_id } = req.body;
+        const { net_weight } = req.body || {};
 
         const parsedNetWeight = Number(net_weight);
         if (!Number.isFinite(parsedNetWeight) || parsedNetWeight <= 0) {
           return res.status(400).json({
             message: "الوزن الصافي مطلوب ويجب أن يكون أكبر من صفر",
           });
+        }
+        const machineId = z.string().trim().min(1).safeParse(req.body?.cutting_machine_id);
+        if (!machineId.success) {
+          return res.status(400).json({ message: "يجب اختيار ماكينة التقطيع" });
+        }
+        const machine = await storage.getMachineById(machineId.data);
+        if (!machine || !isActiveCuttingMachine(machine)) {
+          return res.status(400).json({ message: "اختر ماكينة تقطيع نشطة من قسم التقطيع" });
         }
 
         const operatorId = authReq.user?.id;
@@ -561,7 +572,7 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
           rollId,
           parsedNetWeight,
           operatorId,
-          cutting_machine_id,
+          machineId.data,
         );
 
         res.json({
@@ -571,10 +582,11 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
             : "تم تقطيع الرول بنجاح",
         });
       } catch (error: any) {
+        if (error?.name === "OrderDomainError") {
+          return res.status(error.statusCode || 409).json({ message: error.message });
+        }
         console.error("Error completing cutting:", error);
-        res.status(500).json({
-          message: "خطأ في إكمال عملية التقطيع",
-        });
+        res.status(500).json({ message: "خطأ في إكمال عملية التقطيع" });
       }
     },
   );

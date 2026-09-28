@@ -306,6 +306,9 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
           roll_number: newRoll.roll_number,
         });
       } catch (error: any) {
+        if (error?.name === "OrderDomainError") {
+          return res.status(error.statusCode || 409).json({ success: false, message: error.message });
+        }
         if (error?.status === 400 && error?.userMessage) {
           return res.status(400).json({
             success: false,
@@ -374,6 +377,9 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
           roll_number: newRoll.roll_number,
         });
       } catch (error: any) {
+        if (error?.name === "OrderDomainError") {
+          return res.status(error.statusCode || 409).json({ success: false, message: error.message });
+        }
         if (error?.status === 400 && error?.userMessage) {
           return res.status(400).json({
             success: false,

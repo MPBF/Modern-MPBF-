@@ -1753,7 +1753,7 @@ export class OrdersStorage extends UsersStorage {
             } else {
               computedStage = "film";
             }
-          } else if (doneRolls === totalRolls) {
+          } else if (doneRolls === totalRolls && filmDone) {
             computedStage = "done";
           } else if (filmRolls === 0 && filmDone) {
             computedStage = "cutting";
@@ -1891,7 +1891,10 @@ export class OrdersStorage extends UsersStorage {
                 ELSE 'film'
               END
             )
-            WHEN s.done_rolls = s.total_rolls THEN 'done'
+            WHEN s.done_rolls = s.total_rolls
+              AND (s.film_completed
+                   OR (s.target_kg > 0 AND s.total_weight >= s.target_kg - 0.001))
+              THEN 'done'
             WHEN s.film_rolls = 0
               AND (s.film_completed
                    OR (s.target_kg > 0 AND s.total_weight >= s.target_kg - 0.001))
@@ -1916,7 +1919,10 @@ export class OrdersStorage extends UsersStorage {
                     ELSE 'film'
                   END
                 )
-                WHEN s.done_rolls = s.total_rolls THEN 'done'
+                WHEN s.done_rolls = s.total_rolls
+                  AND (s.film_completed
+                       OR (s.target_kg > 0 AND s.total_weight >= s.target_kg - 0.001))
+                  THEN 'done'
                 WHEN s.film_rolls = 0
                   AND (s.film_completed
                        OR (s.target_kg > 0 AND s.total_weight >= s.target_kg - 0.001))

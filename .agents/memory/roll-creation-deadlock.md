@@ -15,3 +15,11 @@ A route opened a transaction, did `SELECT ... FOR UPDATE` on the production_orde
 
 ## How to apply
 When one DB operation calls another and both touch the same rows, thread the transaction through — never let the inner op grab a fresh connection while the outer holds a conflicting row lock. Keep advisory-then-row-lock order identical across sibling endpoints.
+
+## Cutting completion versus roll creation
+
+**Rule:** When deciding that the last cut completes an order, first protect the roll with a conditional update bound to its expected order, then lock the production-order row and check both remaining uncut rolls and whether film is done. Roll creation must lock that same order row before inserting or it can add a roll after the completion decision. The existing film-done policy accepts either the final-roll flag or reaching the target weight.
+
+**Why:** A cutting-only advisory lock does not serialize film inserts. Taking the roll-creation advisory lock from cutting instead would invert the manager reassignment path's roll-then-advisory ordering, risking a deadlock. Target weight also matters for older orders without a final-roll flag.
+
+**How to apply:** Preserve roll-before-order ordering for cutting and advisory-before-order for roll creation. If a manager reassigns a roll between the cutting pre-read and update, the update must fail rather than close the former order.

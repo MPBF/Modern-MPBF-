@@ -86,6 +86,8 @@ function resetState(): void {
 
 const LOOKUP_ROW = {
   production_order_number: "PO-001",
+  status: "active",
+  film_completed: true,
   is_printed: false,
   item_name: "test item",
   item_name_ar: "صنف تجريبي",
@@ -368,11 +370,143 @@ describe("completeCutting – exactly-once order completion", () => {
   });
 });
 
+describe("completeCutting – input and replay protection", () => {
+  it("keeps the order open when film production has not been closed", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([FULL_ROLL]);
+    state.txSelectQueue.push([]); // all existing rolls cut, but more film may follow
+    state.txUpdateQueue.push({ rows: [UPDATED_ROLL] });
+    (mockTx.execute as jest.Mock).mockImplementation((sqlObj: any) => {
+      state.txExecuteCalls.push(sqlObj);
+      return JSON.stringify(sqlObj).includes("advisory_xact_lock")
+        ? Promise.resolve([])
+        : Promise.resolve({ rows: [{ ...LOOKUP_ROW, film_completed: false }] });
+    });
+
+    const result = await instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID);
+    expect(result.is_order_completed).toBe(false);
+    expect(mockTx.update).toHaveBeenCalledTimes(1);
+    expect(instance.ensureBatchNumber).not.toHaveBeenCalled();
+  });
+
+  it("finishes a legacy order whose produced weight reached its target without film flags", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([FULL_ROLL], []);
+    state.txUpdateQueue.push({ rows: [UPDATED_ROLL] }, { rows: [] });
+    (mockTx.execute as jest.Mock).mockImplementation((sqlObj: any) => {
+      state.txExecuteCalls.push(sqlObj);
+      return JSON.stringify(sqlObj).includes("advisory_xact_lock")
+        ? Promise.resolve([])
+        : Promise.resolve({
+            rows: [{
+              ...LOOKUP_ROW,
+              film_completed: false,
+              is_final_roll_created: false,
+              target_kg: "12.5",
+              produced_kg: "12.5",
+            }],
+          });
+    });
+
+    const result = await instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID);
+    expect(result.is_order_completed).toBe(true);
+    expect(instance.ensureBatchNumber).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts an unfinished roll already in the cutting stage", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([{ ...FULL_ROLL, stage: "cutting" }]);
+    state.txSelectQueue.push([]);
+    state.txUpdateQueue.push({ rows: [UPDATED_ROLL] }, { rows: [] });
+
+    const result = await instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID);
+    expect(result.is_order_completed).toBe(true);
+  });
+
+  it("rejects a roll moved to a different production order after the pre-read", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([{ ...FULL_ROLL, production_order_id: PO_ID + 1 }]);
+
+    await expect(
+      instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID),
+    ).rejects.toMatchObject({ name: "OrderDomainError", statusCode: 409 });
+    expect(mockTx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a second completion without updating the roll or closing the order again", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([{ ...FULL_ROLL, stage: "done", cut_completed_at: new Date() }]);
+
+    await expect(
+      instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID),
+    ).rejects.toMatchObject({ name: "OrderDomainError", statusCode: 409 });
+    expect(mockTx.update).not.toHaveBeenCalled();
+    expect(instance.ensureBatchNumber).not.toHaveBeenCalled();
+  });
+
+  it("rejects net weight greater than the gross roll weight", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([FULL_ROLL]);
+
+    await expect(
+      instance.completeCutting(ROLL_ID, 13, OPERATOR_ID),
+    ).rejects.toMatchObject({ name: "OrderDomainError", statusCode: 400 });
+    expect(mockTx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unprinted film roll from a product that requires printing", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([{ ...FULL_ROLL, stage: "film" }]);
+    (mockTx.execute as jest.Mock).mockImplementation((sqlObj: any) => {
+      state.txExecuteCalls.push(sqlObj);
+      return JSON.stringify(sqlObj).includes("advisory_xact_lock")
+        ? Promise.resolve([])
+        : Promise.resolve({ rows: [{ ...LOOKUP_ROW, is_printed: true }] });
+    });
+
+    await expect(
+      instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID),
+    ).rejects.toMatchObject({ name: "OrderDomainError", statusCode: 409 });
+    expect(mockTx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a roll if its stage changed before the conditional update", async () => {
+    state.dbSelectQueue.push([{ id: ROLL_ID, production_order_id: PO_ID }]);
+    state.txSelectQueue.push([FULL_ROLL]);
+    state.txUpdateQueue.push({ rows: [] });
+
+    await expect(
+      instance.completeCutting(ROLL_ID, NET_WEIGHT, OPERATOR_ID),
+    ).rejects.toMatchObject({ name: "OrderDomainError", statusCode: 409 });
+    expect(instance.ensureBatchNumber).not.toHaveBeenCalled();
+  });
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. createFinalRoll — atomic roll + PO-flag update
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe("createFinalRoll – transaction atomicity", () => {
+  beforeEach(() => {
+    (mockTx.execute as jest.Mock).mockImplementation((sqlObj: any) => {
+      state.txExecuteCalls.push(sqlObj);
+      return JSON.stringify(sqlObj).includes("advisory_xact_lock")
+        ? Promise.resolve([])
+        : Promise.resolve({ rows: [{ ...LOOKUP_ROW, film_completed: false }] });
+    });
+  });
+
+  it("rejects another roll when film has already been closed", async () => {
+    (mockTx.execute as jest.Mock).mockImplementation((sqlObj: any) =>
+      JSON.stringify(sqlObj).includes("advisory_xact_lock")
+        ? Promise.resolve([])
+        : Promise.resolve({ rows: [{ ...LOOKUP_ROW, film_completed: true }] }),
+    );
+    await expect(instance.createFinalRoll(FINAL_DATA)).rejects.toMatchObject({
+      name: "OrderDomainError", statusCode: 409,
+    });
+    expect(mockTx.insert).not.toHaveBeenCalled();
+  });
   const FINAL_DATA = {
     production_order_id: PO_ID,
     weight_kg: "20",
