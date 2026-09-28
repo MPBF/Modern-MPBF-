@@ -11,6 +11,7 @@
 - [Production stage computation](production-stage-computation.md) — never advance a PO past 'film' on filmRolls===0 alone; inline-printed rolls skip film stage, so gate on film actually being done.
 - [Plastic-roll products skip cutting](roll-products-skip-cutting.md) — name-detected roll items bypass cutting (film→[printing]→done→hall); gate order 'done' on filmDone; pinning created_at avoids cut_completed_at CHECK violation.
 - [Film dashboard visibility](film-dashboard-visibility.md) — film-operator order list must filter `production_stage='film'`; film_completed only set by Final Roll button, so quantity-complete orders otherwise linger.
+- [Film final-roll policy](film-final-roll-policy.md) — operator may close film early via «آخر رول» even below target; a remaining-% UI threshold must not block this.
 - [Roll-create stage trust](roll-create-stage-trust.md) — roll-create routes must force stage='film' & strip client transition fields; only server logic advances to printing (inline-printing bypass risk).
 - [Universal thickness film eligibility](universal-thickness-eligibility.md) — film machine min/max_thickness matches order universal_thickness (computed col), never raw thickness.
 - [Production queue estimates](production-queue-estimates.md) — finish estimate uses configured shift hours, per-order size-appropriate capacity (width buckets), and gates finish date on machine status.
