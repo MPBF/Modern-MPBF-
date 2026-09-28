@@ -41,6 +41,7 @@ interface ShiftTemplate {
   kind: "day" | "night" | "flexible";
   start_time: string;
   end_time: string;
+  overtime_end_time: string | null;
   attendance_cutoff_time: string;
   grace_minutes: number;
   base_work_hours: string | number;
@@ -78,6 +79,7 @@ interface TemplateForm {
   kind: "day" | "night" | "flexible";
   start_time: string;
   end_time: string;
+  overtime_end_time: string | null;
   attendance_cutoff_time: string;
   grace_minutes: number;
   base_work_hours: number;
@@ -89,7 +91,8 @@ const newTemplate = (): TemplateForm => ({
   name_en: "",
   kind: "day",
   start_time: "07:00",
-  end_time: "19:00",
+  end_time: "15:00",
+  overtime_end_time: "19:00",
   attendance_cutoff_time: "00:00",
   grace_minutes: 30,
   base_work_hours: 8,
@@ -116,6 +119,7 @@ function isValidCutoff(
   kind: TemplateForm["kind"],
   startTime: string,
   endTime: string,
+  overtimeEndTime: string | null,
   cutoffTime: string,
   graceMinutes: number,
 ) {
@@ -124,12 +128,13 @@ function isValidCutoff(
   if (
     !timePattern.test(startTime) ||
     !timePattern.test(endTime) ||
+    !timePattern.test(overtimeEndTime ?? "") ||
     !timePattern.test(cutoffTime)
   ) {
     return false;
   }
   const start = timeToMinutes(startTime);
-  const end = timeToMinutes(endTime);
+  const end = timeToMinutes(overtimeEndTime!);
   const cutoff = 1440 + timeToMinutes(cutoffTime);
   const endAfterMidnight = end <= start ? 1440 + end : end;
   const nextCheckInOpening = 1440 + start - graceMinutes;
@@ -137,9 +142,9 @@ function isValidCutoff(
 }
 
 const FIXED_SHIFT_TIMES = {
-  day: { start: "07:00", end: "19:00" },
-  night: { start: "19:00", end: "07:00" },
-  flexible: { start: "00:00", end: "00:00" },
+  day: { start: "07:00", end: "15:00", overtime: "19:00" },
+  night: { start: "19:00", end: "03:00", overtime: "07:00" },
+  flexible: { start: "00:00", end: "00:00", overtime: null },
 } as const;
 
 function isCanonicalTemplate(template: Partial<ShiftTemplate>) {
@@ -148,6 +153,7 @@ function isCanonicalTemplate(template: Partial<ShiftTemplate>) {
   return (
     template.start_time === times.start &&
     template.end_time === times.end &&
+    template.overtime_end_time === times.overtime &&
     Number(template.base_work_hours) === 8
   );
 }
@@ -254,7 +260,7 @@ export default function ShiftRoster() {
       const duration =
         templateForm.kind === "flexible"
           ? 1440
-          : (timeToMinutes(templateForm.end_time) -
+          : (timeToMinutes(templateForm.overtime_end_time!) -
               timeToMinutes(templateForm.start_time) +
               1440) %
             1440;
@@ -265,6 +271,8 @@ export default function ShiftRoster() {
       if (
         !/^\d{2}:\d{2}$/.test(templateForm.start_time) ||
         !/^\d{2}:\d{2}$/.test(templateForm.end_time) ||
+        (templateForm.kind !== "flexible" &&
+          !/^([01]\d|2[0-3]):[0-5]\d$/.test(templateForm.overtime_end_time ?? "")) ||
         !/^([01]\d|2[0-3]):[0-5]\d$/.test(templateForm.attendance_cutoff_time)
       ) {
         throw new Error(
@@ -299,6 +307,7 @@ export default function ShiftRoster() {
           templateForm.kind,
           templateForm.start_time,
           templateForm.end_time,
+          templateForm.overtime_end_time,
           templateForm.attendance_cutoff_time,
           templateForm.grace_minutes,
         )
@@ -429,6 +438,7 @@ export default function ShiftRoster() {
             kind: template.kind,
             start_time: template.start_time,
             end_time: template.end_time,
+            overtime_end_time: template.overtime_end_time,
             attendance_cutoff_time:
               template.attendance_cutoff_time ??
               (template.kind === "night" ? "09:00" : "00:00"),
@@ -496,8 +506,13 @@ export default function ShiftRoster() {
                         {getTemplateName(template, isRTL)}
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {template.start_time} — {template.end_time}
+                        {L("أساسي", "Base")}: {template.start_time} — {template.end_time}
                       </p>
+                      {template.overtime_end_time && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {L("الإضافي حتى", "Overtime until")}: {template.overtime_end_time}
+                        </p>
+                      )}
                       <p className="mt-1 text-xs text-muted-foreground">
                         {L("فصل اليوم", "Day cutoff")}:{" "}
                         {template.attendance_cutoff_time}
@@ -669,6 +684,7 @@ export default function ShiftRoster() {
                         {getTemplateName(selectedTemplate, isRTL)} ·{" "}
                         {selectedTemplate.start_time}–
                         {selectedTemplate.end_time}
+                        {selectedTemplate.overtime_end_time && ` · ${L("إضافي حتى", "OT until")} ${selectedTemplate.overtime_end_time}`}
                       </p>
                     )}
                   </div>
@@ -700,6 +716,7 @@ export default function ShiftRoster() {
                     kind: value,
                     start_time: times.start,
                     end_time: times.end,
+                    overtime_end_time: times.overtime,
                     attendance_cutoff_time:
                       value === "night" ? "09:00" : "00:00",
                     base_work_hours: 8,
@@ -763,7 +780,7 @@ export default function ShiftRoster() {
               />
             </div>
             <div className="space-y-2">
-              <Label>{L("وقت النهاية", "End time")}</Label>
+              <Label>{L("نهاية الدوام الأساسي", "Base shift end")}</Label>
               <Input
                 type="time"
                 value={templateForm.end_time}
@@ -776,6 +793,12 @@ export default function ShiftRoster() {
                 }
               />
             </div>
+            {templateForm.kind !== "flexible" && (
+              <div className="space-y-2">
+                <Label>{L("نهاية الإضافي", "Overtime end")}</Label>
+                <Input type="time" value={templateForm.overtime_end_time ?? ""} disabled />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>
                 {L("وقت فصل يوم الحضور", "Attendance day cutoff")}
@@ -815,8 +838,8 @@ export default function ShiftRoster() {
               />
               <p className="text-xs text-muted-foreground">
                 {L(
-                  "تُطبق قبل وبعد وقت بداية الوردية ووقت نهايتها للدخول والانصراف.",
-                  "Applied before and after both the scheduled start and end for check-in and checkout.",
+                  "يبدأ الانصراف قبل نهاية الدوام الأساسي بفترة السماح، ويستمر حتى نهاية الإضافي وبعدها بفترة السماح.",
+                  "Checkout opens one grace period before base shift end and closes one grace period after overtime end.",
                 )}
               </p>
             </div>

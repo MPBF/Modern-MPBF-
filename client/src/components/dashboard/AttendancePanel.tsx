@@ -36,6 +36,8 @@ interface DailyStatus {
     name_en?: string | null;
     start_time?: string | null;
     end_time?: string | null;
+    overtime_end_time?: string | null;
+    base_work_hours?: number | null;
     attendance_cutoff_time?: string | null;
     grace_minutes?: number | null;
     kind?: "day" | "night" | "flexible" | null;
@@ -268,6 +270,7 @@ export default function AttendancePanel({
       : null;
   const checkoutHelp = useMemo(() => {
     const endTime = assignedShift?.end_time;
+    const overtimeEndTime = assignedShift?.overtime_end_time;
     const grace = assignedShift?.grace_minutes;
     const isFlexible =
       assignedShift?.kind === "flexible" ||
@@ -288,11 +291,17 @@ export default function AttendancePanel({
       .map(Number);
     const clockEndMinutes = hour * 60 + minute;
     const startMinutes = startHour * 60 + startMinute;
+    const baseEndMinutes = overtimeEndTime
+      ? (assignedShift?.kind === "night" || clockEndMinutes <= startMinutes
+          ? clockEndMinutes + 1440 : clockEndMinutes)
+      : startMinutes + Number(assignedShift?.base_work_hours ?? 8) * 60;
+    const [overtimeHour, overtimeMinute] = (overtimeEndTime ?? endTime).split(":").map(Number);
+    const clockOvertimeEndMinutes = overtimeHour * 60 + overtimeMinute;
     const endMinutes =
       assignedShift?.kind === "night" ||
-      (assignedShift?.kind == null && clockEndMinutes <= startMinutes)
-        ? clockEndMinutes + 1440
-        : clockEndMinutes;
+      (assignedShift?.kind == null && clockOvertimeEndMinutes <= startMinutes)
+        ? clockOvertimeEndMinutes + 1440
+        : clockOvertimeEndMinutes;
     const formatWallTime = (minutes: number) => {
       const normalized = (minutes + 1440) % 1440;
       return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(
@@ -307,7 +316,7 @@ export default function AttendancePanel({
       Number.isFinite(cutoffHour) && Number.isFinite(cutoffMinute)
         ? 1440 + cutoffHour * 60 + cutoffMinute
         : endMinutes + grace;
-    const lower = formatWallTime(endMinutes - grace);
+    const lower = formatWallTime(baseEndMinutes - grace);
     const upper = formatWallTime(Math.min(endMinutes + grace, cutoffMinutes));
     return isArabic
       ? `الانصراف متاح ${lower}–${upper}. إذا لم تسجل انصرافك قبل فصل اليوم ${cutoff}، يُغلق اليوم «منسحب» ويُخصم أجره كاملاً.`

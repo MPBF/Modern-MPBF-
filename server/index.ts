@@ -1662,6 +1662,7 @@ function sanitizeResponseForLogging(response: any): any {
           kind varchar(16) NOT NULL DEFAULT 'day',
           start_time varchar(5) NOT NULL,
           end_time varchar(5) NOT NULL,
+          overtime_end_time varchar(5),
           attendance_cutoff_time varchar(5) NOT NULL DEFAULT '00:00',
           grace_minutes integer NOT NULL DEFAULT 30,
           base_work_hours numeric(5,2) NOT NULL DEFAULT '8',
@@ -1727,10 +1728,24 @@ function sanitizeResponseForLogging(response: any): any {
         ALTER COLUMN grace_minutes SET DEFAULT 30
       `);
       await db.execute(sql`
-        INSERT INTO shift_templates (name_ar, name_en, kind, start_time, end_time, attendance_cutoff_time, grace_minutes, base_work_hours)
-        VALUES ('نهارية', 'Day', 'day', '07:00', '19:00', '00:00', 30, '8'),
-               ('ليلية', 'Night', 'night', '19:00', '07:00', '09:00', 30, '8'),
-               ('حرة', 'Flexible', 'flexible', '00:00', '00:00', '00:00', 30, '8')
+        ALTER TABLE shift_templates ADD COLUMN IF NOT EXISTS overtime_end_time varchar(5)
+      `);
+      // Convert only the old fixed definitions. Custom times and already
+      // converted templates are not overwritten on subsequent startups.
+      await db.execute(sql`
+        UPDATE shift_templates
+        SET end_time = CASE kind WHEN 'night' THEN '03:00' ELSE '15:00' END,
+            overtime_end_time = CASE kind WHEN 'night' THEN '07:00' ELSE '19:00' END,
+            updated_at = now()
+        WHERE overtime_end_time IS NULL
+          AND ((kind = 'night' AND start_time = '19:00' AND end_time = '07:00')
+            OR (kind = 'day' AND start_time = '07:00' AND end_time = '19:00'))
+      `);
+      await db.execute(sql`
+        INSERT INTO shift_templates (name_ar, name_en, kind, start_time, end_time, overtime_end_time, attendance_cutoff_time, grace_minutes, base_work_hours)
+        VALUES ('نهارية', 'Day', 'day', '07:00', '15:00', '19:00', '00:00', 30, '8'),
+               ('ليلية', 'Night', 'night', '19:00', '03:00', '07:00', '09:00', 30, '8'),
+               ('حرة', 'Flexible', 'flexible', '00:00', '00:00', NULL, '00:00', 30, '8')
         ON CONFLICT (name_ar) DO UPDATE SET
           name_en = excluded.name_en,
           kind = excluded.kind,
@@ -1741,6 +1756,22 @@ function sanitizeResponseForLogging(response: any): any {
       `);
       await db.execute(sql`ALTER TABLE shift_assignments ADD COLUMN IF NOT EXISTS shift_template_id integer REFERENCES shift_templates(id) ON DELETE RESTRICT`);
       await db.execute(sql`ALTER TABLE shift_assignments ADD COLUMN IF NOT EXISTS shift_snapshot jsonb`);
+      await db.execute(sql`
+        UPDATE shift_assignments
+        SET shift_snapshot = shift_snapshot ||
+          jsonb_build_object(
+            'end_time', CASE shift_snapshot->>'kind' WHEN 'night' THEN '03:00' ELSE '15:00' END,
+            'overtime_end_time', CASE shift_snapshot->>'kind' WHEN 'night' THEN '07:00' ELSE '19:00' END
+          ),
+          updated_at = now()
+        WHERE shift_snapshot IS NOT NULL
+          AND (year > EXTRACT(YEAR FROM now() AT TIME ZONE 'Asia/Riyadh')
+            OR (year = EXTRACT(YEAR FROM now() AT TIME ZONE 'Asia/Riyadh')
+              AND month >= EXTRACT(MONTH FROM now() AT TIME ZONE 'Asia/Riyadh')))
+          AND ((shift_snapshot->>'kind' = 'night' AND shift_snapshot->>'start_time' = '19:00' AND shift_snapshot->>'end_time' = '07:00')
+            OR (shift_snapshot->>'kind' = 'day' AND shift_snapshot->>'start_time' = '07:00' AND shift_snapshot->>'end_time' = '19:00'))
+          AND NOT shift_snapshot ? 'overtime_end_time'
+      `);
       await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift_assignment_id integer REFERENCES shift_assignments(id) ON DELETE RESTRICT`);
       await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift_template_id integer REFERENCES shift_templates(id) ON DELETE RESTRICT`);
       await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift_snapshot jsonb`);
@@ -1749,6 +1780,7 @@ function sanitizeResponseForLogging(response: any): any {
           shift_template_id = t.id,
           shift_snapshot = jsonb_build_object('template_id', t.id, 'name_ar', t.name_ar,
             'name_en', t.name_en, 'kind', t.kind, 'start_time', t.start_time, 'end_time', t.end_time,
+            'overtime_end_time', t.overtime_end_time,
             'attendance_cutoff_time', t.attendance_cutoff_time,
             'grace_minutes', t.grace_minutes, 'base_work_hours', t.base_work_hours)
         FROM shift_templates t

@@ -6,16 +6,19 @@ description: Rules for carrying previous-day attendance into the current day wit
 # Attendance shift boundary
 
 **Rule:** Each assigned shift snapshot has its own Riyadh attendance-day cutoff
-on the *following* calendar day. For a night shift ending 07:00, a 09:00 cutoff
-means the prior attendance date continues until 08:59:59; from 09:00 the new
-attendance date applies. A shared grace value defines symmetric admission
-windows around the official start (check-in) and end (checkout), without
-extending paid work beyond the official shift window. A missed checkout at
-cutoff is recorded as withdrawn, with zero paid hours and a full-day absence
-deduction. The flexible shift keeps its special time-window behavior.
+on the *following* calendar day. For a night shift, basic work runs 19:00–03:00,
+optional overtime ends 07:00, and the 09:00 cutoff keeps the prior attendance
+date through 08:59:59. Day work similarly runs 07:00–15:00 with optional
+overtime through 19:00. Checkout is permitted continuously from one grace
+period before basic end until one grace period after overtime end, without
+paying hours past overtime end. A missed checkout at cutoff is withdrawn, with
+zero paid hours and a full-day absence deduction. Flexible shifts retain
+their special window behavior.
 
-**Why:** The user explicitly distinguished attendance-day separation from the
-official shift end and chose the withdrawn/full-deduction treatment. A
+**Why:** The user clarified that the displayed shift end must mean the end of
+eight basic hours (03:00/15:00), not the end of four optional overtime hours
+(07:00/19:00). They distinguished attendance-day separation from both and
+chose the withdrawn/full-deduction treatment. A
 night-to-day change at a month boundary can put yesterday's 09:00 cutoff
 checkout inside today's 07:00 day window, causing a duplicate payroll penalty
 if actions are grouped by timestamp alone.

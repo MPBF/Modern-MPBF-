@@ -1,8 +1,8 @@
 // نموذج الورديات ومحرك حساب الحضور (منطق نقي قابل للمشاركة بين الواجهة والخادم)
 //
-// المصنع يعمل بورديتين مدة كل منها 12 ساعة (8 ساعات أساسية + إضافي فعلي):
-//   - وردية نهارية (day):  07:00 → 19:00 من نفس اليوم
-//   - وردية ليلية (night): 19:00 → 07:00 من اليوم التالي (تعبر منتصف الليل)
+// المصنع يعمل بورديتين: 8 ساعات أساسية ثم حتى 4 ساعات إضافية اختيارية:
+//   - نهارية: 07:00 → 15:00، والإضافي حتى 19:00
+//   - ليلية: 19:00 → 03:00، والإضافي حتى 07:00 من اليوم التالي
 //
 // التوقيت مرجعي إلى توقيت المصنع (آسيا/الرياض = UTC+3 بدون توقيت صيفي)،
 // لذلك نبني نوافذ الورديات كلحظات مطلقة باستخدام هذا الإزاحة الثابتة، ثم
@@ -25,7 +25,7 @@ export interface ShiftDefinition {
   name_en: string;
   /** ساعة البداية بتوقيت المصنع (0-23). */
   startHour: number;
-  /** ساعة النهاية بتوقيت المصنع (0-23). */
+  /** آخر ساعة عمل إضافي بتوقيت المصنع (0-23). */
   endHour: number;
   /** هل تعبر الوردية منتصف الليل (تنتهي في اليوم التالي). */
   crossesMidnight: boolean;
@@ -128,6 +128,8 @@ export interface ShiftSnapshot {
   name_en?: string | null;
   start_time: string; // HH:mm
   end_time: string; // HH:mm
+  /** Last possible scheduled overtime time; older snapshots store this in end_time. */
+  overtime_end_time?: string | null;
   grace_minutes: number;
   /** Riyadh wall time on the following calendar day when this attendance day ends. */
   attendance_cutoff_time?: string;
@@ -155,11 +157,12 @@ export function getShiftWindowForSnapshot(
 ): ShiftWindow {
   const { y, m, d } = parseDateStr(dateStr);
   const startParts = wallTimeParts(snapshot.start_time);
-  const endParts = wallTimeParts(snapshot.end_time);
+  const overtimeEnd = snapshot.overtime_end_time ?? snapshot.end_time;
+  const endParts = wallTimeParts(overtimeEnd);
   const start = factoryWallToInstant(y, m, d, startParts.hour, startParts.minute);
   const nextDay =
     getSnapshotShiftType(snapshot) === "flexible" ||
-    snapshot.end_time < snapshot.start_time;
+    overtimeEnd < snapshot.start_time;
   const endDate = nextDay ? new Date(Date.UTC(y, m - 1, d + 1)) : new Date(Date.UTC(y, m - 1, d));
   const end = factoryWallToInstant(
     endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, endDate.getUTCDate(),
@@ -211,7 +214,17 @@ export function isCheckOutAllowedForShift(
     return now >= window.start && now < getAttendanceCutoffForSnapshot(snapshot, attendanceDate);
   }
   const graceMs = Math.max(0, snapshot.grace_minutes) * 60_000;
-  return now.getTime() >= window.end.getTime() - graceMs &&
+  // For new snapshots end_time is the end of the basic shift. Older saved
+  // snapshots used end_time for the end of overtime; derive their base end.
+  const baseEnd = snapshot.overtime_end_time
+    ? (() => {
+        const { y, m, d } = parseDateStr(attendanceDate);
+        const { hour, minute } = wallTimeParts(snapshot.end_time);
+        const nextDay = snapshot.end_time < snapshot.start_time;
+        return factoryWallToInstant(y, m, d + (nextDay ? 1 : 0), hour, minute);
+      })()
+    : new Date(window.start.getTime() + Number(snapshot.base_work_hours ?? BASE_WORK_HOURS) * 3600000);
+  return now.getTime() >= baseEnd.getTime() - graceMs &&
     now.getTime() <= window.end.getTime() + graceMs &&
     now.getTime() < getAttendanceCutoffForSnapshot(snapshot, attendanceDate).getTime();
 }
@@ -222,7 +235,9 @@ export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
   return {
     name_ar: def.name_ar, name_en: def.name_en,
     start_time: `${String(def.startHour).padStart(2, "0")}:00`,
-    end_time: `${String(def.endHour).padStart(2, "0")}:00`,
+    end_time: shift === "day" ? "15:00" : shift === "night" ? "03:00" : "00:00",
+    overtime_end_time: shift === "flexible"
+      ? null : `${String(def.endHour).padStart(2, "0")}:00`,
     grace_minutes: 0, base_work_hours: BASE_WORK_HOURS, kind: shift,
   };
 }

@@ -1396,6 +1396,7 @@ export const shift_templates = pgTable(
     kind: varchar("kind", { length: 16 }).notNull().default("day"),
     start_time: varchar("start_time", { length: 5 }).notNull(),
     end_time: varchar("end_time", { length: 5 }).notNull(),
+    overtime_end_time: varchar("overtime_end_time", { length: 5 }),
     attendance_cutoff_time: varchar("attendance_cutoff_time", { length: 5 })
       .notNull()
       .default("00:00"),

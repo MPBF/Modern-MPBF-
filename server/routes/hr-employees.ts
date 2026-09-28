@@ -14,15 +14,16 @@ import { db } from "../db";
 import { sql } from "drizzle-orm";
 
 const FIXED_SHIFT_SCHEDULES = {
-  day: { start: "07:00", end: "19:00" },
-  night: { start: "19:00", end: "07:00" },
-  flexible: { start: "00:00", end: "00:00" },
+  day: { start: "07:00", end: "15:00", overtime: "19:00" },
+  night: { start: "19:00", end: "03:00", overtime: "07:00" },
+  flexible: { start: "00:00", end: "00:00", overtime: null },
 } as const;
 
 function isCanonicalShiftTemplate(template: {
   kind: string;
   start_time: string;
   end_time: string;
+  overtime_end_time?: string | null;
   base_work_hours: string | number;
 }) {
   const schedule =
@@ -33,6 +34,7 @@ function isCanonicalShiftTemplate(template: {
     !!schedule &&
     template.start_time === schedule.start &&
     template.end_time === schedule.end &&
+    template.overtime_end_time === schedule.overtime &&
     Number(template.base_work_hours) === 8
   );
 }
@@ -49,6 +51,7 @@ const shiftTemplateInput = z
     kind: z.enum(["day", "night", "flexible"]),
     start_time: z.string(),
     end_time: z.string(),
+    overtime_end_time: z.string().nullable(),
     attendance_cutoff_time: z.string().optional(),
     grace_minutes: z.coerce.number().int().min(0).max(180),
     base_work_hours: z.preprocess(
@@ -64,17 +67,19 @@ const shiftTemplateInput = z
       (value.kind === "night" ? "09:00" : "00:00");
     if (!time.test(value.start_time)) ctx.addIssue({ code: "custom", path: ["start_time"], message: "وقت البداية يجب أن يكون HH:mm" });
     if (!time.test(value.end_time)) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية يجب أن يكون HH:mm" });
+    if (value.kind !== "flexible" && !time.test(value.overtime_end_time ?? ""))
+      ctx.addIssue({ code: "custom", path: ["overtime_end_time"], message: "نهاية الإضافي يجب أن تكون HH:mm" });
     if (!time.test(attendanceCutoffTime)) ctx.addIssue({ code: "custom", path: ["attendance_cutoff_time"], message: "وقت فصل اليوم يجب أن يكون HH:mm" });
     if (value.kind !== "flexible" && value.start_time === value.end_time) ctx.addIssue({ code: "custom", path: ["end_time"], message: "وقت النهاية لا يساوي البداية" });
     const graceMinutes = value.grace_minutes ?? 0;
     if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 180) ctx.addIssue({ code: "custom", path: ["grace_minutes"], message: "فترة السماح من 0 إلى 180" });
-    if (value.kind !== "flexible" && time.test(attendanceCutoffTime) && time.test(value.start_time) && time.test(value.end_time)) {
+    if (value.kind !== "flexible" && time.test(attendanceCutoffTime) && time.test(value.start_time) && time.test(value.end_time) && time.test(value.overtime_end_time ?? "")) {
       const minutes = (timeValue: string) => {
         const [hour, minute] = timeValue.split(":").map(Number);
         return hour * 60 + minute;
       };
       const start = minutes(value.start_time);
-      const end = minutes(value.end_time);
+      const end = minutes(value.overtime_end_time!);
       const cutoff = 1440 + minutes(attendanceCutoffTime);
       const endAfterMidnight = end <= start ? 1440 + end : end;
       const nextCheckInOpening = 1440 + start - graceMinutes;
@@ -88,7 +93,7 @@ const shiftTemplateInput = z
     }
     const hours = Number(value.base_work_hours);
     const [sh, sm] = value.start_time.split(":").map(Number);
-    const [eh, em] = value.end_time.split(":").map(Number);
+    const [eh, em] = (value.overtime_end_time ?? value.end_time).split(":").map(Number);
     const duration = value.kind === "flexible"
       ? 24
       : ((eh * 60 + em - sh * 60 - sm + 1440) % 1440) / 60;
@@ -600,6 +605,7 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
                 template_id: template.id, name_ar: template.name_ar, name_en: template.name_en,
                 kind: template.kind,
               start_time: template.start_time, end_time: template.end_time,
+              overtime_end_time: template.overtime_end_time,
               attendance_cutoff_time: template.attendance_cutoff_time,
               grace_minutes: template.grace_minutes, base_work_hours: Number(template.base_work_hours),
             } : undefined,
