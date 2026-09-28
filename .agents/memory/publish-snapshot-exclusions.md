@@ -10,3 +10,5 @@ Replit publish snapshots must not include workspace-only caches and tooling stat
 **How to apply:** Keep generated workspace directories and nested `node_modules` explicitly excluded in the root `.gitignore`. When a build succeeds but image creation fails for size, compare workspace usage against these exclusions before changing application bundles.
 
 The development workflow still needs the root `node_modules` directory because it runs `tsx` from the package scripts. If dependencies are removed for a publish-size cleanup, reinstall them before restarting or using the preview.
+
+A broken `/tmp/pulse-*` symlink warning during image creation is not, by itself, the cause of a failed publish: successful builds have shown the same warning. Compare failed and successful build tails before changing workspace runtime state.
