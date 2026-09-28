@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Label } from "../../components/ui/label";
 import {
@@ -39,6 +40,8 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import SectionMultiSelect, {
   type AttendanceSection,
 } from "./SectionMultiSelect";
+import BulkAttendanceDialog, { type BulkTimes } from "./BulkAttendanceDialog";
+import { shiftWallTimeToInstant } from "../../../../shared/attendance-admin-status";
 
 function todayStr() {
   const now = new Date();
@@ -55,6 +58,9 @@ type DailyRow = {
   role_name_ar: string | null;
   section_name: string | null;
   section_name_ar: string | null;
+  shift_kind: string | null;
+  shift_name_ar: string | null;
+  shift_name_en: string | null;
   current_status: string;
   check_in_time: string | null;
   break_start_time: string | null;
@@ -94,23 +100,11 @@ const STATUS_EN: Record<string, string> = {
   "عطلة": "Holiday",
 };
 
-const EDITABLE_STATUSES = [
-  "حاضر",
-  "يعمل",
-  "في الاستراحة",
-  "استراحة غداء",
-  "مغادر",
-  "غائب",
-  "إجازة",
-  "عطلة",
-] as const;
-
 type EditForm = {
   check_in: string;
   break_start: string;
   break_end: string;
   check_out: string;
-  status: string;
 };
 
 const DEFAULT_SECTION_NAMES = [
@@ -147,15 +141,14 @@ function toTimeInput(t: string | null): string {
   if (!t) return "";
   const d = new Date(t);
   if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).format(d);
 }
 
-function timeToISO(date: string, hhmm: string): string | null {
+function timeToISO(date: string, hhmm: string, isNight = false): string | null {
   if (!hhmm) return null;
-  const d = new Date(`${date}T${hhmm}:00`);
-  if (isNaN(d.getTime())) return null;
-  return d.toISOString();
+  return shiftWallTimeToInstant(date, hhmm, isNight ? "night" : "day").toISOString();
 }
 
 export default function DailyAttendance() {
@@ -164,6 +157,9 @@ export default function DailyAttendance() {
   const { toast } = useToast();
   const L = (ar: string, en: string) => (isRTL ? ar : en);
   const [date, setDate] = useState(todayStr());
+  const [shiftFilter, setShiftFilter] = useState("all");
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[] | null>(
     null,
   );
@@ -194,7 +190,6 @@ export default function DailyAttendance() {
     break_start: "",
     break_end: "",
     check_out: "",
-    status: "حاضر",
   });
 
   const openEdit = (r: DailyRow) => {
@@ -203,7 +198,6 @@ export default function DailyAttendance() {
       break_start: toTimeInput(r.break_start_time),
       break_end: toTimeInput(r.break_end_time),
       check_out: toTimeInput(r.check_out_time),
-      status: r.current_status || "حاضر",
     });
     setEditRow(r);
   };
@@ -214,11 +208,10 @@ export default function DailyAttendance() {
       const body = {
         user_id: editRow.user_id,
         date,
-        check_in_time: timeToISO(date, form.check_in),
-        break_start_time: timeToISO(date, form.break_start),
-        break_end_time: timeToISO(date, form.break_end),
-        check_out_time: timeToISO(date, form.check_out),
-        status: form.status || undefined,
+        check_in_time: timeToISO(date, form.check_in, editRow.shift_kind === "night"),
+        break_start_time: timeToISO(date, form.break_start, editRow.shift_kind === "night"),
+        break_end_time: timeToISO(date, form.break_end, editRow.shift_kind === "night"),
+        check_out_time: timeToISO(date, form.check_out, editRow.shift_kind === "night"),
       };
       await apiRequest("/api/hr/attendance/daily", {
         method: "PATCH",
@@ -241,6 +234,37 @@ export default function DailyAttendance() {
         variant: "destructive",
       });
     },
+  });
+
+  const bulkMutation = useMutation({
+    mutationFn: async (times: BulkTimes) => {
+      const response = await apiRequest("/api/hr/attendance/daily/bulk", {
+        method: "PATCH",
+        body: JSON.stringify({ date, user_ids: selectedUserIds, times }),
+      });
+      return response.json() as Promise<{
+        successes: number[];
+        failures: { user_id: number; message: string }[];
+      }>;
+    },
+    onSuccess: ({ successes, failures }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/attendance/daily"] });
+      setSelectedUserIds(failures.map((failure) => failure.user_id));
+      setBulkOpen(false);
+      toast({
+        title: L(`تم تعديل ${successes.length} سجل`, `${successes.length} records updated`),
+        description: failures.length
+          ? L(`تعذر تعديل ${failures.length} سجل: `, `${failures.length} failed: `) +
+            failures.map((failure) => `${rows.find((r) => r.user_id === failure.user_id)?.display_name || failure.user_id}: ${failure.message}`).join("؛ ")
+          : undefined,
+        variant: failures.length ? "destructive" : "default",
+      });
+    },
+    onError: (error: Error) => toast({
+      title: L("فشل التعديل الجماعي", "Bulk edit failed"),
+      description: error.message,
+      variant: "destructive",
+    }),
   });
 
   const [notifyingUserId, setNotifyingUserId] = useState<number | null>(null);
@@ -303,8 +327,12 @@ export default function DailyAttendance() {
     refetchInterval: isToday ? 60_000 : false,
   });
 
-  const rows = data?.data ?? [];
+  const rows = (data?.data ?? []).filter((row) =>
+    shiftFilter === "all" || (shiftFilter === "unassigned"
+      ? !row.shift_kind : row.shift_kind === shiftFilter));
   const isLoading = selectedSectionIds === null || attendanceLoading;
+  const selectedVisibleIds = rows.filter((row) => selectedUserIds.includes(row.user_id));
+  const allVisibleSelected = rows.length > 0 && selectedVisibleIds.length === rows.length;
 
   const empName = (r: DailyRow) =>
     (isRTL ? r.display_name_ar : r.display_name) ||
@@ -318,6 +346,7 @@ export default function DailyAttendance() {
     return d.toLocaleTimeString(isRTL ? "ar-SA" : "en-US", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Riyadh",
     });
   };
 
@@ -363,13 +392,25 @@ export default function DailyAttendance() {
               selectedIds={selectedSectionIds || []}
               isLoading={selectedSectionIds === null}
               isRTL={isRTL}
-              onChange={setSelectedSectionIds}
+              onChange={(ids) => { setSelectedSectionIds(ids); setSelectedUserIds([]); }}
             />
+            <Select value={shiftFilter} onValueChange={(value) => { setShiftFilter(value); setSelectedUserIds([]); }}>
+              <SelectTrigger className="w-36" aria-label={L("تصفية حسب الوردية", "Filter by shift")} data-testid="select-daily-attendance-shift">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{L("كل الورديات", "All shifts")}</SelectItem>
+                <SelectItem value="day">{L("نهارية", "Day")}</SelectItem>
+                <SelectItem value="night">{L("ليلية", "Night")}</SelectItem>
+                <SelectItem value="flexible">{L("حرة", "Flexible")}</SelectItem>
+                <SelectItem value="unassigned">{L("غير مجدولة", "Unassigned")}</SelectItem>
+              </SelectContent>
+            </Select>
             <Input
               type="date"
               value={date}
               max={todayStr()}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => { setDate(e.target.value); setSelectedUserIds([]); }}
               className="w-auto"
               data-testid="input-daily-attendance-date"
             />
@@ -405,6 +446,17 @@ export default function DailyAttendance() {
         )}
       </CardHeader>
       <CardContent>
+        {canManage && selectedUserIds.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+            <span>{L(`تم تحديد ${selectedUserIds.length} موظف`, `${selectedUserIds.length} selected`)}</span>
+            <Button size="sm" onClick={() => setBulkOpen(true)}>
+              {L("تعديل الأوقات جماعياً", "Bulk edit times")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedUserIds([])}>
+              {L("إلغاء التحديد", "Clear selection")}
+            </Button>
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-8 w-full" />
@@ -426,12 +478,20 @@ export default function DailyAttendance() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canManage && <TableHead className="w-10">
+                    <Checkbox
+                      aria-label={L("تحديد كل الموظفين الظاهرين", "Select all visible employees")}
+                      checked={allVisibleSelected}
+                      onCheckedChange={(checked) => setSelectedUserIds(checked ? rows.map((row) => row.user_id) : [])}
+                    />
+                  </TableHead>}
                   <TableHead className={isRTL ? "text-right" : "text-left"}>
                     {L("الموظف", "Employee")}
                   </TableHead>
                   <TableHead className={isRTL ? "text-right" : "text-left"}>
                     {L("القسم", "Section")}
                   </TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{L("الوردية", "Shift")}</TableHead>
                   <TableHead className="text-center">
                     {L("وقت الحضور", "Check-in")}
                   </TableHead>
@@ -460,6 +520,14 @@ export default function DailyAttendance() {
                     key={r.user_id}
                     data-testid={`row-daily-attendance-${r.user_id}`}
                   >
+                    {canManage && <TableCell>
+                      <Checkbox
+                        aria-label={L(`تحديد ${empName(r)}`, `Select ${empName(r)}`)}
+                        checked={selectedUserIds.includes(r.user_id)}
+                        onCheckedChange={(checked) => setSelectedUserIds((current) =>
+                          checked ? [...current, r.user_id] : current.filter((id) => id !== r.user_id))}
+                      />
+                    </TableCell>}
                     <TableCell className="font-medium">
                       {empName(r)}
                       <span className="block text-xs text-muted-foreground">
@@ -468,6 +536,12 @@ export default function DailyAttendance() {
                     </TableCell>
                     <TableCell>
                       {(isRTL ? r.section_name_ar : r.section_name) || "—"}
+                    </TableCell>
+                    <TableCell>
+                      {r.shift_kind
+                        ? (isRTL ? r.shift_name_ar : r.shift_name_en) ||
+                          ({ day: L("نهارية", "Day"), night: L("ليلية", "Night"), flexible: L("حرة", "Flexible") } as Record<string, string>)[r.shift_kind] || "—"
+                        : L("غير مجدولة", "Unassigned")}
                     </TableCell>
                     <TableCell className="text-center" dir="ltr">
                       {fmtTime(r.check_in_time)}
@@ -584,35 +658,6 @@ export default function DailyAttendance() {
                 data-testid="input-edit-break-end"
               />
             </div>
-            <div className="col-span-2 space-y-1">
-              <Label>{L("الحالة", "Status")}</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}
-              >
-                <SelectTrigger data-testid="select-edit-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(EDITABLE_STATUSES as readonly string[]).includes(
-                    form.status,
-                  )
-                    ? null
-                    : form.status && (
-                        <SelectItem value={form.status}>
-                          {isRTL
-                            ? form.status
-                            : STATUS_EN[form.status] || form.status}
-                        </SelectItem>
-                      )}
-                  {EDITABLE_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {isRTL ? s : STATUS_EN[s] || s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             {L(
@@ -641,6 +686,14 @@ export default function DailyAttendance() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <BulkAttendanceDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        count={selectedUserIds.length}
+        isRTL={isRTL}
+        isSaving={bulkMutation.isPending}
+        onSave={(times) => bulkMutation.mutate(times)}
+      />
     </Card>
   );
 }

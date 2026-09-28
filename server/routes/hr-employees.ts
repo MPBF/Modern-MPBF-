@@ -11,7 +11,9 @@ import ExcelJS from "exceljs";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { notificationService, addJsonSheet, getAuthUserId } from "./shared";
 import { db } from "../db";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { shift_assignments } from "@shared/schema";
+import { shiftWallTimeToInstant } from "@shared/attendance-admin-status";
 
 const FIXED_SHIFT_SCHEDULES = {
   day: { start: "07:00", end: "15:00", overtime: "19:00" },
@@ -756,21 +758,7 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
           break_start_time: z.string().nullable().optional(),
           break_end_time: z.string().nullable().optional(),
           check_out_time: z.string().nullable().optional(),
-          status: z
-            .enum([
-              "حاضر",
-              "يعمل",
-              "في الاستراحة",
-              "استراحة",
-              "استراحة غداء",
-              "منسحب",
-              "مغادر",
-              "غائب",
-              "إجازة",
-              "عطلة",
-            ])
-            .optional(),
-        });
+        }).strict();
         const parsed = schema.safeParse(req.body);
         if (!parsed.success) {
           return res.status(400).json({ message: "بيانات التعديل غير صحيحة" });
@@ -795,12 +783,9 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
           break_start_time?: Date | null;
           break_end_time?: Date | null;
           check_out_time?: Date | null;
-          status?: string;
         };
         try {
-          patch = {
-            status: body.status,
-          };
+          patch = {};
           const ci = toDate(body.check_in_time, "وقت الحضور");
           const bs = toDate(body.break_start_time, "بداية الاستراحة");
           const be = toDate(body.break_end_time, "نهاية الاستراحة");
@@ -835,8 +820,7 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
           "check_in_time" in patch ||
           "break_start_time" in patch ||
           "break_end_time" in patch ||
-          "check_out_time" in patch ||
-          !!patch.status;
+          "check_out_time" in patch;
         if (!hasChange) {
           return res.status(400).json({ message: "لا توجد تعديلات" });
         }
@@ -851,8 +835,73 @@ export async function registerHrEmployeeRoutes(app: Express, ctx: any) {
         res.json({ success: true });
       } catch (error) {
         console.error("Error updating daily attendance:", error);
+        if (error instanceof Error && error.name === "OrderDomainError")
+          return res.status(400).json({ message: error.message });
         res.status(500).json({ message: "خطأ في تعديل سجل الحضور" });
       }
+    },
+  );
+
+  app.patch(
+    "/api/hr/attendance/daily/bulk",
+    requireAuth,
+    requirePermission("manage_attendance", "manage_hr"),
+    async (req, res) => {
+      const parsed = z.object({
+        user_ids: z.array(z.number().int().positive()).min(1).max(100)
+          .refine((ids) => new Set(ids).size === ids.length),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        times: z.object({
+          check_in_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+          break_start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+          break_end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+          check_out_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+        }).strict(),
+      }).safeParse(req.body);
+      if (!parsed.success || !Object.keys(parsed.data.times).length) {
+        return res.status(400).json({ message: "اختر موظفين ووقتاً واحداً على الأقل للتعديل" });
+      }
+      const { user_ids, date, times } = parsed.data;
+      const [year, month] = date.split("-").map(Number);
+      let assignments: { user_id: number; shift: string; shift_snapshot: unknown }[];
+      try {
+        assignments = await db.select({
+          user_id: shift_assignments.user_id,
+          shift: shift_assignments.shift,
+          shift_snapshot: shift_assignments.shift_snapshot,
+        }).from(shift_assignments).where(and(
+          eq(shift_assignments.year, year),
+          eq(shift_assignments.month, month),
+          inArray(shift_assignments.user_id, user_ids),
+        ));
+      } catch (error) {
+        console.error("Error loading assignments for bulk attendance edit:", error);
+        return res.status(500).json({ message: "تعذر جلب ورديات الموظفين" });
+      }
+      const byUser = new Map(assignments.map((assignment) => [assignment.user_id, assignment]));
+      const successes: number[] = [];
+      const failures: { user_id: number; message: string }[] = [];
+      for (const userId of user_ids) {
+        try {
+          const assignment = byUser.get(userId);
+          const snapshot = assignment?.shift_snapshot as { start_time?: string } | null;
+          const shiftStart = snapshot?.start_time ?? "19:00";
+          const patch = Object.fromEntries(Object.entries(times).map(([key, value]) => {
+            if (value === null) return [key, null];
+            return [key, shiftWallTimeToInstant(date, value, assignment?.shift ?? null, shiftStart)];
+          }));
+          await storage.updateDailyAttendance(
+            userId, date, patch, (req as any).user?.id,
+          );
+          successes.push(userId);
+        } catch (error) {
+          failures.push({
+            user_id: userId,
+            message: error instanceof Error ? error.message : "تعذر تعديل السجل",
+          });
+        }
+      }
+      res.json({ successes, failures });
     },
   );
 

@@ -828,6 +828,16 @@ export class HrStorage extends MachinesStorage {
           .select()
           .from(attendance)
           .where(eq(attendance.date, date));
+        const [year, month] = date.split("-").map(Number);
+        const assignments = await db
+          .select({
+            user_id: shift_assignments.user_id,
+            shift: shift_assignments.shift,
+            shift_snapshot: shift_assignments.shift_snapshot,
+          })
+          .from(shift_assignments)
+          .where(and(eq(shift_assignments.year, year), eq(shift_assignments.month, month)));
+        const assignmentByUser = new Map(assignments.map((a) => [a.user_id, a]));
 
         const rowsByUser = new Map<number, any[]>();
         for (const r of attRows as any[]) {
@@ -851,6 +861,8 @@ export class HrStorage extends MachinesStorage {
 
         return allUsers.map((u) => {
           const rows = rowsByUser.get(u.id) ?? [];
+          const assignment = assignmentByUser.get(u.id);
+          const shiftSnapshot = assignment?.shift_snapshot as { name_ar?: string; name_en?: string } | null;
           const sec =
             u.section_id != null
               ? sectionsMap.get(String(u.section_id))
@@ -864,6 +876,9 @@ export class HrStorage extends MachinesStorage {
             role_name_ar: u.role_name_ar,
             section_name: sec?.name ?? null,
             section_name_ar: sec?.name_ar ?? null,
+            shift_kind: assignment?.shift ?? null,
+            shift_name_ar: shiftSnapshot?.name_ar ?? null,
+            shift_name_en: shiftSnapshot?.name_en ?? null,
             date,
           };
           if (!rows.length) {
