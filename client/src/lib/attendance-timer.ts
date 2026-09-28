@@ -78,16 +78,19 @@ export function calculateWorkedSeconds(
 
   const breakEvents = ordered
     .flatMap((record) => {
-      const start = eventTime(
-        record.lunch_start_time ||
-          (record.status === "في الاستراحة" ? record.created_at : null),
-        record,
-      );
-      const finish = eventTime(
-        record.lunch_end_time ||
-          (record.status === "يعمل" ? record.created_at : null),
-        record,
-      );
+      // Fall back to created_at only for the matching legacy action.
+      // Other rows (including check-in) also have created_at, but they
+      // must not manufacture a break that consumes the entire work session.
+      const start =
+        toTimestamp(record.lunch_start_time) ??
+        (record.status === "في الاستراحة"
+          ? toTimestamp(record.created_at)
+          : null);
+      const finish =
+        toTimestamp(record.lunch_end_time) ??
+        (record.status === "يعمل"
+          ? toTimestamp(record.created_at)
+          : null);
       return [
         ...(start == null ? [] : [{ type: "start" as const, at: start }]),
         ...(finish == null ? [] : [{ type: "end" as const, at: finish }]),
