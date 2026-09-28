@@ -4,11 +4,13 @@ import type { Express } from "express";
 import { storage } from "../storage";
 
 import { insertRollSchema, insertCutSchema, insertProductionSettingsSchema } from "@shared/schema";
+import { isActiveFilmMachine } from "@shared/film-machine";
 import { isActivePrintingMachine } from "@shared/printing-machine";
 import { isActiveCuttingMachine } from "@shared/cutting-machine";
 import { z } from "zod";
 import { parseIntSafe, parseFloatSafe } from "@shared/validation-utils";
 import { getDataValidator } from "../services/data-validator";
+import { hasInvalidOrdinaryFilmOverride } from "../lib/film-roll-policy";
 import { validateRequest } from "../middleware/validation";
 
 import { requireAuth, requirePermission, type AuthRequest } from "../middleware/auth";
@@ -17,6 +19,7 @@ import { getAuthUserId, parseRouteParam, checkOrderNotPaused } from "./shared";
 // Extracted from server/routes/production.ts (registration order preserved;
 // called from registerProductionRoutes). See server/routes/README.md.
 export async function registerProductionFlowRoutes(app: Express, ctx: any) {
+  const { sanitizeRollCreateInput } = ctx;
 
   // ============ PRODUCTION FLOW API ENDPOINTS ============
 
@@ -115,6 +118,17 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
           throw validationError;
         }
 
+        // The generic creation path only creates ordinary film rolls. Closing
+        // film early belongs to /api/rolls/create-final; clients may not
+        // manufacture a later stage or a final roll through this endpoint.
+        if (hasInvalidOrdinaryFilmOverride(req.body)) {
+          return res.status(400).json({ message: "استخدم مسار الرول النهائي لإغلاق الفيلم، ولا يمكن تجاوز مرحلة الفيلم" });
+        }
+        validatedRollData = {
+          ...sanitizeRollCreateInput(validatedRollData),
+          is_last_roll: false,
+        };
+
         // INVARIANT B: Validate roll weight against production order limits
         const productionOrder = await storage.getProductionOrderById(
           validatedRollData.production_order_id,
@@ -148,9 +162,9 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
             field: "film_machine_id",
           });
         }
-        if (filmMachine.status !== "active") {
+        if (!isActiveFilmMachine(filmMachine)) {
           return res.status(400).json({
-            message: "ماكينة الفيلم غير نشطة - لا يمكن إنشاء رولات عليها",
+            message: "اختر ماكينة فيلم نشطة من قسم الفيلم",
             field: "film_machine_id",
           });
         }

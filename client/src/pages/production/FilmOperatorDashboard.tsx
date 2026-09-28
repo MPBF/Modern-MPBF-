@@ -47,8 +47,6 @@ import {
 import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useLocalizedName } from "../../hooks/use-localized-name";
 
-const FINAL_ROLL_MAX_REMAINING_PERCENT = 15;
-
 interface ActiveProductionOrderDetails {
   id: number;
   production_order_number: string;
@@ -155,16 +153,17 @@ export default function FilmOperatorDashboard({
   const ordersPolling = useSmartPolling(45_000);
   const rollsPolling = useSmartPolling(60_000);
 
-  const { data: productionOrders = [], isLoading } = useQuery<
+  const { data: productionOrders = [], isLoading, isError: ordersError, refetch: refetchOrders } = useQuery<
     ActiveProductionOrderDetails[]
   >({
     queryKey: ["/api/production-orders/active-for-operator"],
     refetchInterval: ordersPolling,
   });
 
-  const { data: allRolls = [] } = useQuery<Roll[]>({
-    queryKey: ["/api/rolls", { limit: 500 }],
+  const { data: allRolls = [], isLoading: rollsLoading, isError: rollsError, refetch: refetchRolls } = useQuery<Roll[]>({
+    queryKey: ["/api/film/active-rolls"],
     refetchInterval: rollsPolling,
+    enabled: productionOrders.length > 0,
   });
 
   const handleCreateRoll = (
@@ -255,7 +254,14 @@ export default function FilmOperatorDashboard({
         </TabsList>
 
         <TabsContent value="production" className="space-y-4">
-          {productionOrders.length === 0 ? (
+          {ordersError ? (
+            <Card className="p-8 text-center rounded-2xl border-dashed" role="alert">
+              <p className="text-sm font-semibold">{localize("تعذر تحميل أوامر الفيلم", "Could not load film orders")}</p>
+              <Button type="button" variant="outline" className="mt-4" onClick={() => void refetchOrders()}>
+                {localize("إعادة المحاولة", "Retry")}
+              </Button>
+            </Card>
+          ) : productionOrders.length === 0 ? (
             <Card className="p-8 text-center rounded-2xl border-dashed">
               <Info className="h-10 w-10 text-gray-400 mx-auto mb-3" />
               <h3 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-1">
@@ -375,6 +381,15 @@ export default function FilmOperatorDashboard({
               />
 
               <div className="space-y-4">
+                {rollsError && (
+                  <Card className="p-4" role="alert">
+                    <p>{localize("تعذر تحميل تفاصيل الرولات. أعد المحاولة قبل متابعة العمل.", "Could not load roll details. Retry before continuing.")}</p>
+                    <Button type="button" variant="outline" className="mt-2" onClick={() => void refetchRolls()}>
+                      {localize("إعادة المحاولة", "Retry")}
+                    </Button>
+                  </Card>
+                )}
+                {rollsLoading && <p className="text-sm text-muted-foreground">{localize("جارٍ تحميل الرولات...", "Loading rolls...")}</p>}
                 {selectedGroup.items.map((order: ActiveProductionOrderDetails) => {
                   const requiredQty =
                     Number(order.final_quantity_kg) > 0
@@ -383,9 +398,6 @@ export default function FilmOperatorDashboard({
                   const producedQty = Number(order.total_weight_produced || 0);
                   const remainingQty = Math.max(0, requiredQty - producedQty);
                   const progress = requiredQty > 0 ? (producedQty / requiredQty) * 100 : 0;
-                  const remainingPercent = requiredQty > 0 ? Math.max(0, 100 - progress) : 100;
-                  const canCreateFinalRoll =
-                    requiredQty > 0 && remainingPercent <= FINAL_ROLL_MAX_REMAINING_PERCENT;
                   const isComplete = order.is_final_roll_created;
                   const orderRolls = allRolls
                     .filter((r) => r.production_order_id === order.id)
@@ -627,16 +639,14 @@ export default function FilmOperatorDashboard({
                               {t("operators.common.createNewRoll")}
                             </Button>
 
-                            {order.rolls_count > 0 && canCreateFinalRoll && (
-                              <Button
-                                onClick={() => handleCreateRoll(order, true)}
-                                variant="destructive"
-                                className="h-12 px-4 text-xs font-bold rounded-xl shadow-md active:scale-98"
-                              >
-                                <Flag className="h-4 w-4 ml-1" />
-                                {t("operators.common.finalRoll")}
-                              </Button>
-                            )}
+                            <Button
+                              onClick={() => handleCreateRoll(order, true)}
+                              variant="destructive"
+                              className="h-12 px-4 text-xs font-bold rounded-xl shadow-md active:scale-98"
+                            >
+                              <Flag className="h-4 w-4 ml-1" />
+                              {t("operators.common.finalRoll")}
+                            </Button>
 
                             {order.rolls_count > 0 && (
                               <Button

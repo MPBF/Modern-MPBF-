@@ -5,11 +5,13 @@ import { storage } from "../storage";
 import { db } from "../db";
 
 import { insertRollSchema } from "@shared/schema";
+import { isActiveFilmMachine } from "@shared/film-machine";
 import { isActivePrintingMachine } from "@shared/printing-machine";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { logger } from "../lib/logger";
+import { hasInvalidOrdinaryFilmOverride } from "../lib/film-roll-policy";
 import { requireAuth, requirePermission, type AuthRequest } from "../middleware/auth";
 import { getAuthUserId, parseRouteParam, checkOrderNotPaused } from "./shared";
 
@@ -150,6 +152,37 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
 
   // ============ Film Operator Endpoints ============
 
+  // All rolls belonging to orders currently on the film board; the global
+  // /api/rolls pagination must not silently omit older rolls from these orders.
+  app.get(
+    "/api/film/active-rolls",
+    requireAuth,
+    requirePermission("manage_production", "view_film_dashboard"),
+    async (_req, res) => {
+      try {
+        const result = await db.execute(sql`
+          SELECT r.*, m.name_ar AS film_machine_name,
+                 u.display_name_ar AS created_by_name
+          FROM rolls r
+          JOIN production_orders po ON po.id = r.production_order_id
+          JOIN orders o ON o.id = po.order_id
+          LEFT JOIN machines m ON m.id = r.film_machine_id
+          LEFT JOIN users u ON u.id = r.created_by
+          WHERE po.film_completed = false
+            AND po.is_final_roll_created = false
+            AND po.production_stage = 'film'
+            AND (po.status = 'active'
+              OR (po.status = 'pending' AND o.status = 'in_production'))
+          ORDER BY r.production_order_id, r.roll_seq
+        `);
+        res.json(result.rows);
+      } catch (error) {
+        console.error("Error fetching film rolls:", error);
+        res.status(500).json({ message: "خطأ في جلب رولات الفيلم" });
+      }
+    },
+  );
+
   // Get active production orders for film operator
   app.get(
     "/api/production-orders/active-for-operator",
@@ -209,7 +242,15 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
           });
         }
 
-        const isLastRoll = req.body.is_last_roll || false;
+        if (hasInvalidOrdinaryFilmOverride(req.body)) {
+          return res.status(400).json({
+            message: "استخدم مسار الرول النهائي لإغلاق الفيلم، ولا يمكن تجاوز مرحلة الفيلم",
+          });
+        }
+        const filmMachine = await storage.getMachineById(validatedData.film_machine_id);
+        if (!filmMachine || !isActiveFilmMachine(filmMachine)) {
+          return res.status(400).json({ message: "اختر ماكينة فيلم نشطة من قسم الفيلم" });
+        }
 
         // Inline printing: if the operator marked the roll as printed inline,
         // resolve and validate the pairing server-side (never trust the client),
@@ -224,7 +265,7 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
 
         const rollData = {
           ...sanitizeRollCreateInput(validatedData),
-          is_last_roll: isLastRoll,
+          is_last_roll: false,
           ...inlineFields,
         };
 
@@ -239,8 +280,7 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
             sql`SELECT pg_advisory_xact_lock(1003, ${validatedData.production_order_id})`,
           );
 
-          if (!isLastRoll) {
-            const [check] = (await tx.execute(sql`
+          const [check] = (await tx.execute(sql`
               SELECT
                 po.final_quantity_kg,
                 po.quantity_kg,
@@ -254,7 +294,7 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
               FOR UPDATE
             `)).rows as any[];
 
-            if (check) {
+          if (check) {
               const finalQty = parseFloat(check.final_quantity_kg?.toString() || "0");
               const targetKg =
                 finalQty > 0
@@ -275,7 +315,6 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
                 err.status = 400;
                 throw err;
               }
-            }
           }
 
           // Reuse THIS transaction for the insert so the roll INSERT runs on
@@ -346,6 +385,11 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
         };
 
         const validatedData = insertRollSchema.parse(dataToValidate);
+
+        const filmMachine = await storage.getMachineById(validatedData.film_machine_id);
+        if (!filmMachine || !isActiveFilmMachine(filmMachine)) {
+          return res.status(400).json({ message: "اختر ماكينة فيلم نشطة من قسم الفيلم" });
+        }
 
         // Check if order is paused - block production entry
         const pauseCheck = await checkOrderNotPaused(

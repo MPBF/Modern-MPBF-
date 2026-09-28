@@ -43,6 +43,7 @@ import {
 import { Checkbox } from "../ui/checkbox";
 
 import type { Machine } from "../../../../shared/schema";
+import { isActiveFilmMachine } from "../../../../shared/film-machine";
 
 interface RollCreationModalEnhancedProps {
   isOpen: boolean;
@@ -78,7 +79,7 @@ export default function RollCreationModalEnhanced({
   const dir = i18n.language === "ar" ? "rtl" : "ltr";
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isEditingMachine, setIsEditingMachine] = useState(false);
+  const [machineSelectOpen, setMachineSelectOpen] = useState(false);
   const [lastProductionTime, setLastProductionTime] = useState<number | null>(
     null,
   );
@@ -112,9 +113,7 @@ export default function RollCreationModalEnhanced({
 
   // Filter film machines only (section_id = "SEC03" for film section)
   const filmMachines = useMemo(() => {
-    return machines.filter(
-      (m) => m.section_id === "SEC03" && m.status === "active",
-    );
+    return machines.filter(isActiveFilmMachine);
   }, [machines]);
 
   const {
@@ -134,7 +133,7 @@ export default function RollCreationModalEnhanced({
     form.setValue("film_machine_id", "", {
       shouldValidate: false,
     });
-    setIsEditingMachine(false);
+    setMachineSelectOpen(false);
   }, [form, user?.id]);
 
   // Initialize each roll form with the user's last valid film machine.
@@ -153,7 +152,6 @@ export default function RollCreationModalEnhanced({
       form.setValue("film_machine_id", "", {
         shouldValidate: true,
       });
-      setIsEditingMachine(false);
     }
   }, [filmMachines, form, machinePreferenceReady, preferredMachineId]);
 
@@ -245,6 +243,7 @@ export default function RollCreationModalEnhanced({
         queryKey: ["/api/production-orders/active-for-operator"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/rolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/film/active-rolls"] });
       queryClient.invalidateQueries({ queryKey: ["/api/production-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/production-queues"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
@@ -407,16 +406,15 @@ export default function RollCreationModalEnhanced({
                     {t("modals.rollCreationEnhanced.filmMachine")}
                   </FormLabel>
                   <Select
+                    open={machineSelectOpen}
+                    onOpenChange={setMachineSelectOpen}
                     value={field.value}
                     onValueChange={(value) => {
                       field.onChange(value);
                       savePreferredMachineId(value);
+                      setMachineSelectOpen(false);
                     }}
-                    disabled={
-                      machinesLoading ||
-                      !machinePreferenceReady ||
-                      (!!field.value && !isEditingMachine)
-                    }
+                    disabled={machinesLoading || !machinePreferenceReady}
                   >
                     <FormControl>
                       <SelectTrigger
@@ -443,13 +441,11 @@ export default function RollCreationModalEnhanced({
                       type="button"
                       variant="outline"
                       className="mt-2 whitespace-nowrap"
-                      onClick={() => setIsEditingMachine((editing) => !editing)}
+                      onClick={() => setMachineSelectOpen(true)}
                       disabled={!machinePreferenceReady}
                       data-testid="button-edit-film-machine"
                     >
-                      {isEditingMachine
-                        ? t("operators.common.doneEditing")
-                        : t("operators.common.editMachine")}
+                      {t("operators.common.editMachine")}
                     </Button>
                   )}
                   <FormMessage />

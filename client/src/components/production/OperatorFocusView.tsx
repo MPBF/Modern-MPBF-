@@ -28,6 +28,7 @@ import {
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest } from "../../lib/queryClient";
 import { formatNumberAr } from "../../../../shared/number-utils";
+import { isActiveFilmMachine } from "../../../../shared/film-machine";
 
 const MACHINE_STORAGE_KEY = "operator_focus_machine_id";
 const ORDER_STORAGE_KEY = "operator_focus_order_id";
@@ -41,6 +42,7 @@ interface Machine {
   name?: string | null;
   type: string;
   status: string;
+  section_id: string | null;
 }
 
 interface ActiveOrder {
@@ -112,9 +114,7 @@ export default function OperatorFocusView() {
     select: (data: any) => {
       const rows = Array.isArray(data) ? data : data?.data ?? [];
       return rows.filter(
-        (m: Machine) =>
-          (m.type === "extruder" || m.type === "film") &&
-          m.status !== "retired",
+        (m: Machine) => isActiveFilmMachine(m),
       );
     },
   });

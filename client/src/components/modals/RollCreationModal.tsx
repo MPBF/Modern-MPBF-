@@ -10,6 +10,7 @@ import {
   safeParseFloat,
   formatNumberAr,
 } from "../../../../shared/number-utils";
+import { isActiveFilmMachine } from "../../../../shared/film-machine";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest } from "../../lib/queryClient";
 import { Button } from "../ui/button";
@@ -271,7 +272,7 @@ export default function RollCreationModal({
     if (!filmSection) return [];
     return (machines as any[]).filter(
       (m: any) =>
-        m.section_id === filmSection.id && m.status === "active" && m.id,
+        m.section_id === filmSection.id && isActiveFilmMachine(m) && m.id,
     );
   }, [machines, sections]);
 
