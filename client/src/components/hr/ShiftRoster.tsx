@@ -822,7 +822,7 @@ export default function ShiftRoster() {
             </div>
             <div className="space-y-2">
               <Label>
-                {L("فترة السماح (دقيقة)", "Grace period (minutes)")}
+                {L("فترة السماح المشتركة للدخول والانصراف (دقيقة)", "Shared check-in and checkout grace (minutes)")}
               </Label>
               <Input
                 type="number"
@@ -838,8 +838,8 @@ export default function ShiftRoster() {
               />
               <p className="text-xs text-muted-foreground">
                 {L(
-                  "يبدأ الانصراف قبل نهاية الدوام الأساسي بفترة السماح، ويستمر حتى نهاية الإضافي وبعدها بفترة السماح.",
-                  "Checkout opens one grace period before base shift end and closes one grace period after overtime end.",
+                  "تحدد نافذة الدخول قبل وبعد بداية الوردية؛ ويبدأ الانصراف قبل نهاية الدوام الأساسي بفترة السماح ويستمر حتى نهاية الإضافي وبعدها بفترة السماح.",
+                  "Sets the check-in window before and after shift start; checkout opens one grace period before base shift end and closes one grace period after overtime end.",
                 )}
               </p>
             </div>

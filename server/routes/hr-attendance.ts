@@ -691,8 +691,25 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
             nowTs,
           )
         ) {
+          const snapshot = resolvedAssignment!.snapshot;
+          const isFlexible = getSnapshotShiftType(snapshot) === "flexible";
+          const graceMs = Math.max(0, Number(snapshot.grace_minutes) || 0) * 60_000;
+          const factoryTime = new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Riyadh",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+          });
+          const checkInStart = factoryTime.format(
+            new Date(assignedWindow.start.getTime() - graceMs),
+          );
+          const checkInEnd = factoryTime.format(
+            new Date(assignedWindow.start.getTime() + graceMs),
+          );
           return res.status(400).json({
-            message: `يمكن تسجيل حضور وردية ${resolvedAssignment!.snapshot.name_ar} من ${resolvedAssignment!.snapshot.start_time} إلى ${resolvedAssignment!.snapshot.end_time}`,
+            message: isFlexible
+              ? "لا يمكن تسجيل الحضور خارج نافذة الوردية الحرة"
+              : `يمكن تسجيل حضور وردية ${snapshot.name_ar} فقط من ${checkInStart} إلى ${checkInEnd} (فترة السماح حول بداية الوردية ${snapshot.start_time})`,
             code: "OUTSIDE_ASSIGNED_SHIFT",
           });
         }
