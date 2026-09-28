@@ -11,8 +11,6 @@ import {
   formatNumberAr,
 } from "../../../../shared/number-utils";
 import { useToast } from "../../hooks/use-toast";
-import { useAuth } from "../../hooks/use-auth";
-import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 import { apiRequest, queryClient } from "../../lib/queryClient";
 import { toastMessages } from "../../lib/toastMessages";
 import { Button } from "../ui/button";
@@ -51,6 +49,9 @@ interface RollCreationModalEnhancedProps {
   productionOrderId: number;
   productionOrderData?: any;
   isFinalRoll?: boolean;
+  selectedMachineId: string;
+  onMachineChange: (machineId: string) => void;
+  machinePreferenceReady: boolean;
 }
 
 const rollFormSchema = z.object({
@@ -74,10 +75,12 @@ export default function RollCreationModalEnhanced({
   productionOrderId,
   productionOrderData,
   isFinalRoll = false,
+  selectedMachineId,
+  onMachineChange,
+  machinePreferenceReady,
 }: RollCreationModalEnhancedProps) {
   const { t, i18n } = useTranslation();
   const dir = i18n.language === "ar" ? "rtl" : "ltr";
-  const { user } = useAuth();
   const { toast } = useToast();
   const [machineSelectOpen, setMachineSelectOpen] = useState(false);
   const [lastProductionTime, setLastProductionTime] = useState<number | null>(
@@ -104,7 +107,6 @@ export default function RollCreationModalEnhanced({
   const {
     data: machines = [],
     isLoading: machinesLoading,
-    isSuccess: machinesReady,
   } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
     enabled: isOpen,
@@ -116,53 +118,25 @@ export default function RollCreationModalEnhanced({
     return machines.filter(isActiveFilmMachine);
   }, [machines]);
 
-  const {
-    selectedMachineId: preferredMachineId,
-    setSelectedMachineId: savePreferredMachineId,
-    isReady: machinePreferenceReady,
-  } = useOperatorMachinePreference({
-    stage: "film",
-    userId: user?.id,
-    availableMachineIds: filmMachines.map((machine) => machine.id),
-    machinesReady,
-  });
-
-  // The form has its own machine field, so clear it synchronously with an
-  // authenticated-user change before loading that user's saved preference.
-  useEffect(() => {
-    form.setValue("film_machine_id", "", {
-      shouldValidate: false,
-    });
-    setMachineSelectOpen(false);
-  }, [form, user?.id]);
-
-  // Initialize each roll form with the user's last valid film machine.
+  // Keep the roll form in sync with the selection in the film dashboard.
   useEffect(() => {
     if (!machinePreferenceReady) return;
-
     const currentMachineId = form.getValues("film_machine_id");
-    if (preferredMachineId && currentMachineId !== preferredMachineId) {
-      form.setValue("film_machine_id", preferredMachineId, {
-        shouldValidate: true,
-      });
-    } else if (
-      currentMachineId &&
-      !filmMachines.some((machine) => machine.id === currentMachineId)
-    ) {
-      form.setValue("film_machine_id", "", {
+    if (currentMachineId !== selectedMachineId) {
+      form.setValue("film_machine_id", selectedMachineId, {
         shouldValidate: true,
       });
     }
-  }, [filmMachines, form, machinePreferenceReady, preferredMachineId]);
+  }, [form, machinePreferenceReady, selectedMachineId]);
 
   // Inline printing: the selected film machine is physically combined with an
   // inline printer (inline_printer_id set) AND the order's product is printed.
-  const selectedMachineId = form.watch("film_machine_id");
+  const formMachineId = form.watch("film_machine_id");
   const productIsPrinted = Boolean(productionOrderData?.is_printed);
   const inlinePrintingAvailable = useMemo(() => {
-    const selected = machines.find((m) => m.id === selectedMachineId);
+    const selected = machines.find((m) => m.id === formMachineId);
     return Boolean(selected?.inline_printer_id) && productIsPrinted;
-  }, [machines, selectedMachineId, productIsPrinted]);
+  }, [machines, formMachineId, productIsPrinted]);
 
   // Clear the inline flag whenever it becomes unavailable (e.g. operator
   // switches to a non-inline machine) so we never submit a stale `true`.
@@ -411,7 +385,7 @@ export default function RollCreationModalEnhanced({
                     value={field.value}
                     onValueChange={(value) => {
                       field.onChange(value);
-                      savePreferredMachineId(value);
+                      onMachineChange(value);
                       setMachineSelectOpen(false);
                     }}
                     disabled={machinesLoading || !machinePreferenceReady}
@@ -431,7 +405,9 @@ export default function RollCreationModalEnhanced({
                     <SelectContent>
                       {filmMachines.map((machine) => (
                         <SelectItem key={machine.id} value={machine.id}>
-                          {machine.name_ar || machine.name} - {machine.type}
+                          {(dir === "rtl"
+                            ? machine.name_ar || machine.name || machine.id
+                            : machine.name || machine.id)} - {machine.type}
                         </SelectItem>
                       ))}
                     </SelectContent>

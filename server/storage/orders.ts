@@ -2140,6 +2140,7 @@ export class OrdersStorage extends UsersStorage {
 
   async getProductionHallOrders(): Promise<any[]> {
     const rows = await db.execute(sql`
+      WITH hall AS (
       SELECT
         po.id AS production_order_id,
         po.production_order_number,
@@ -2190,12 +2191,16 @@ export class OrdersStorage extends UsersStorage {
       LEFT JOIN items i ON cp.item_id = i.id
       LEFT JOIN rolls r ON r.production_order_id = po.id
       WHERE EXISTS (SELECT 1 FROM rolls r2 WHERE r2.production_order_id = po.id AND r2.stage = 'done')
-        AND CAST(po.warehouse_received_kg AS NUMERIC) < CAST(po.quantity_kg AS NUMERIC)
         AND po.status IS DISTINCT FROM 'archived'
         AND o.status IS DISTINCT FROM 'archived'
       GROUP BY po.id, po.production_order_number, po.order_id, po.quantity_kg, po.final_quantity_kg,
                po.warehouse_received_kg, po.status, o.order_number, c.name, c.name_ar, i.name, i.name_ar, cp.id, cp.item_id, cp.unit_weight_kg
-      ORDER BY po.id
+      )
+      -- A PO may produce less than the ordered quantity. Show only the
+      -- finished weight that is actually still waiting for receipt.
+      SELECT * FROM hall
+      WHERE total_ready_weight > total_received_weight
+      ORDER BY production_order_id
     `);
     return (rows.rows as any[]).map((row) => ({
       ...row,

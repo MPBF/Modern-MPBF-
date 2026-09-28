@@ -14,11 +14,14 @@ import {
   Gauge,
   Palette,
   Disc,
+  Settings2,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatNumberAr } from "../../../../shared/number-utils";
+import { isActiveFilmMachine } from "../../../../shared/film-machine";
+import type { Machine } from "../../../../shared/schema";
 import PageLayout from "../../components/layout/PageLayout";
 import RollCreationModalEnhanced from "../../components/modals/RollCreationModalEnhanced";
 import BatchLabelDialog from "../../components/production/BatchLabelDialog";
@@ -39,6 +42,13 @@ import {
 } from "../../components/ui/card";
 import { Progress } from "../../components/ui/progress";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -46,6 +56,8 @@ import {
 } from "../../components/ui/tabs";
 import { useSmartPolling } from "../../hooks/use-smart-polling";
 import { useLocalizedName } from "../../hooks/use-localized-name";
+import { useAuth } from "../../hooks/use-auth";
+import { useOperatorMachinePreference } from "../../hooks/use-operator-machine-preference";
 
 interface ActiveProductionOrderDetails {
   id: number;
@@ -114,6 +126,7 @@ export default function FilmOperatorDashboard({
   hideLayout = false,
 }: FilmOperatorDashboardProps) {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const isArabic = i18n.language === "ar";
   const ln = useLocalizedName();
   const localize = (arabic: string, english: string) =>
@@ -150,8 +163,40 @@ export default function FilmOperatorDashboard({
     null,
   );
   const [printingRollId, setPrintingRollId] = useState<number | null>(null);
+  const [isMachineMenuOpen, setIsMachineMenuOpen] = useState(false);
   const ordersPolling = useSmartPolling(45_000);
   const rollsPolling = useSmartPolling(60_000);
+
+  const {
+    data: allMachines = [],
+    isLoading: machinesLoading,
+    isSuccess: machinesReady,
+    isError: machinesError,
+    refetch: refetchMachines,
+  } = useQuery<Machine[]>({
+    queryKey: ["/api/machines"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const filmMachines = useMemo(
+    () => allMachines.filter(isActiveFilmMachine),
+    [allMachines],
+  );
+  const {
+    selectedMachineId,
+    setSelectedMachineId,
+    isReady: machinePreferenceReady,
+  } = useOperatorMachinePreference({
+    stage: "film",
+    userId: user?.id,
+    availableMachineIds: filmMachines.map((machine) => machine.id),
+    machinesReady,
+  });
+  const selectedMachine = filmMachines.find((machine) => machine.id === selectedMachineId);
+  const handleMachineChange = (machineId: string) => {
+    if (!filmMachines.some((machine) => machine.id === machineId)) return;
+    setSelectedMachineId(machineId);
+    setIsMachineMenuOpen(false);
+  };
 
   const { data: productionOrders = [], isLoading, isError: ordersError, refetch: refetchOrders } = useQuery<
     ActiveProductionOrderDetails[]
@@ -234,6 +279,69 @@ export default function FilmOperatorDashboard({
 
   return (
     <div className="space-y-4 pb-12">
+      <div className="rounded-2xl border border-blue-200 bg-blue-50/90 p-3 shadow-xs dark:border-blue-900 dark:bg-blue-950/40">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <Settings2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-xs font-black text-blue-900 dark:text-blue-200">
+              {localize("ماكينة الفيلم المحددة", "Selected film machine")}
+            </span>
+          </div>
+          {selectedMachine && filmMachines.length > 1 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs font-bold text-blue-700 dark:text-blue-300"
+              onClick={() => setIsMachineMenuOpen(true)}
+              aria-label={localize("تغيير ماكينة الفيلم", "Change film machine")}
+            >
+              {localize("تغيير", "Change")}
+            </Button>
+          )}
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <Select
+            open={isMachineMenuOpen}
+            onOpenChange={setIsMachineMenuOpen}
+            value={selectedMachineId}
+            onValueChange={handleMachineChange}
+            disabled={machinesLoading || !machinePreferenceReady || filmMachines.length === 0}
+          >
+            <SelectTrigger
+              aria-label={localize("اختيار ماكينة الفيلم", "Select film machine")}
+              data-testid="select-film-dashboard-machine"
+              className="h-10 min-w-0 flex-1 rounded-xl border-blue-200 bg-white text-xs font-bold dark:bg-gray-900"
+            >
+              <SelectValue placeholder={localize("اختر ماكينة الفيلم", "Select film machine")} />
+            </SelectTrigger>
+            <SelectContent>
+              {filmMachines.map((machine) => (
+                <SelectItem key={machine.id} value={machine.id}>
+                  {isArabic
+                    ? machine.name_ar || machine.name || machine.id
+                    : machine.name || machine.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedMachine && (
+            <Badge className="h-10 shrink-0 gap-1 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {localize("جاهز", "Ready")}
+            </Badge>
+          )}
+        </div>
+        {machinesError ? (
+          <Button type="button" variant="link" size="sm" onClick={() => void refetchMachines()}>
+            {localize("تعذر تحميل الماكينات، إعادة المحاولة", "Could not load machines. Retry")}
+          </Button>
+        ) : machinesReady && filmMachines.length === 0 ? (
+          <p className="mt-2 text-xs text-red-700 dark:text-red-300">
+            {localize("لا توجد ماكينة فيلم نشطة", "No active film machine is available")}
+          </p>
+        ) : null}
+      </div>
       <Tabs defaultValue="production" className="space-y-4">
         {/* شريط التبويب العلوي */}
         <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
@@ -705,6 +813,9 @@ export default function FilmOperatorDashboard({
           productionOrderId={selectedProductionOrder.id}
           productionOrderData={selectedProductionOrder}
           isFinalRoll={isFinalRoll}
+          selectedMachineId={selectedMachineId}
+          onMachineChange={handleMachineChange}
+          machinePreferenceReady={machinePreferenceReady}
         />
       )}
 
