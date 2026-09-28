@@ -1621,19 +1621,29 @@ export class ProductionStorage extends OrdersStorage {
       ? isRollProductName(row.item_name, row.item_name_ar)
       : false;
 
-    let updateData: any = { stage: "printing", ...data };
+    const finishedAt = new Date();
+    let updateData: any = { ...data, stage: "printing", printed_at: finishedAt };
     if (isRollProduct) {
-      const finishedAt = new Date();
       updateData = {
         ...updateData,
         stage: "done",
-        printed_at: finishedAt,
         cut_completed_at: finishedAt,
         cut_weight_total_kg: row?.weight_kg,
       };
     }
 
-    const updated = await this.updateRoll(id, updateData);
+    // The conditional update prevents duplicate submissions from printing a
+    // roll twice, even if two requests passed the route's initial read.
+    const [updated] = await db
+      .update(rolls)
+      .set(updateData)
+      .where(and(eq(rolls.id, id), eq(rolls.stage, "film"), isNull(rolls.printed_at)))
+      .returning();
+    if (!updated) {
+      const error = new Error("الرول ليس جاهزاً للطباعة أو طُبع مسبقاً");
+      error.name = "OrderDomainError";
+      throw error;
+    }
     if (updated?.production_order_id) {
       await this.updateProductionOrderCompletionPercentages(
         updated.production_order_id,
@@ -1646,7 +1656,7 @@ export class ProductionStorage extends OrdersStorage {
   async markRollPrinted(
     id: number,
     userId?: number,
-    printingMachineId?: number,
+    printingMachineId?: string,
   ): Promise<Roll> {
     const updateData: any = {};
     if (userId) updateData.printed_by = userId;
@@ -1871,15 +1881,29 @@ export class ProductionStorage extends OrdersStorage {
         cp.size_caption,
         cp.printing_cylinder,
         cp.front_print_colors,
-        cp.back_print_colors
+        cp.back_print_colors,
+        roll_counts.total_rolls AS po_total_rolls,
+        roll_counts.completed_rolls AS po_completed_rolls,
+        roll_counts.total_weight AS po_total_weight
       FROM rolls r
       JOIN production_orders po ON r.production_order_id = po.id
+      JOIN LATERAL (
+        SELECT
+          COUNT(*)::int AS total_rolls,
+          COUNT(*) FILTER (
+            WHERE rr.printed_at IS NOT NULL OR rr.stage IN ('printing', 'cutting', 'done')
+          )::int AS completed_rolls,
+          COALESCE(SUM(rr.weight_kg::numeric), 0) AS total_weight
+        FROM rolls rr
+        WHERE rr.production_order_id = po.id
+      ) roll_counts ON true
       JOIN orders o ON po.order_id = o.id
       JOIN customers c ON o.customer_id = c.id
       LEFT JOIN users sr ON sr.id = c.sales_rep_id
       JOIN customer_products cp ON po.customer_product_id = cp.id
       LEFT JOIN items i ON cp.item_id = i.id
       WHERE r.stage = 'film'
+        AND r.printed_at IS NULL
         AND COALESCE(cp.is_printed, false) = true
         AND po.status IN ('pending', 'active')
       ORDER BY po.id DESC, r.roll_seq
@@ -1917,8 +1941,9 @@ export class ProductionStorage extends OrdersStorage {
                 .filter((c: string) => c !== "")
             : [],
           rolls: [],
-          total_rolls: 0,
-          total_weight: 0,
+          total_rolls: Number(row.po_total_rolls),
+          completed_rolls: Number(row.po_completed_rolls),
+          total_weight: Number(row.po_total_weight),
         });
       }
       const po = grouped.get(poId)!;
@@ -1932,8 +1957,6 @@ export class ProductionStorage extends OrdersStorage {
         roll_created_at: row.roll_created_at,
         printed_at: row.printed_at,
       });
-      po.total_rolls++;
-      po.total_weight += parseFloat(row.weight_kg || "0");
     }
     return Array.from(grouped.values());
   }

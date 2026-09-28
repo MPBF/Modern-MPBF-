@@ -4,6 +4,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 
 import { insertRollSchema, insertCutSchema, insertProductionSettingsSchema } from "@shared/schema";
+import { isActivePrintingMachine } from "@shared/printing-machine";
 import { z } from "zod";
 import { parseIntSafe, parseFloatSafe } from "@shared/validation-utils";
 import { getDataValidator } from "../services/data-validator";
@@ -204,6 +205,9 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
         if (!existingRoll) {
           return res.status(404).json({ message: "الرول غير موجود" });
         }
+        if (existingRoll.stage !== "film" || existingRoll.printed_at) {
+          return res.status(409).json({ message: "الرول ليس جاهزاً للطباعة أو طُبع مسبقاً" });
+        }
 
         // Check if order is paused - block production entry
         const pauseCheck = await checkOrderNotPaused(
@@ -217,20 +221,15 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
           });
         }
 
-        const { printing_machine_id } = req.body;
-
-        // Validate printing machine if provided
-        if (printing_machine_id) {
-          const machine = await storage.getMachineById(printing_machine_id);
-          if (!machine) {
-            return res
-              .status(400)
-              .json({ message: "ماكينة الطباعة غير موجودة" });
-          }
-          if (machine.status !== "active") {
-            return res.status(400).json({ message: "ماكينة الطباعة غير نشطة" });
-          }
-        }
+        const parsedMachine = z.object({
+          printing_machine_id: z.string().trim().min(1),
+        }).safeParse(req.body);
+        if (!parsedMachine.success)
+          return res.status(400).json({ message: "يجب اختيار ماكينة الطباعة" });
+        const printing_machine_id = parsedMachine.data.printing_machine_id;
+        const machine = await storage.getMachineById(printing_machine_id);
+        if (!machine || !isActivePrintingMachine(machine))
+          return res.status(400).json({ message: "اختر ماكينة طباعة نشطة من قسم الطباعة" });
 
         const roll = await storage.markRollPrinted(
           id,
@@ -240,6 +239,8 @@ export async function registerProductionFlowRoutes(app: Express, ctx: any) {
         res.json(roll);
       } catch (error) {
         console.error("Error marking roll printed:", error);
+        if (error instanceof Error && error.name === "OrderDomainError")
+          return res.status(409).json({ message: error.message });
         res.status(400).json({ message: "خطأ في تسجيل طباعة الرول" });
       }
     },

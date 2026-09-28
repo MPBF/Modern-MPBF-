@@ -5,6 +5,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 
 import { insertRollSchema } from "@shared/schema";
+import { isActivePrintingMachine } from "@shared/printing-machine";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -61,8 +62,27 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
           return res.status(401).json({ message: "غير مصرح" });
         }
 
-        // Mark the roll as printed
-        const updatedRoll = await storage.markRollAsPrinted(rollId, user.id);
+        const roll = await storage.getRollFullDetails(rollId);
+        if (!roll) return res.status(404).json({ message: "الرول غير موجود" });
+        if (roll.stage !== "film" || roll.printed_at)
+          return res.status(409).json({ message: "الرول ليس جاهزاً للطباعة أو طُبع مسبقاً" });
+
+        const pauseCheck = await checkOrderNotPaused(roll.production_order_id);
+        if (pauseCheck.isPaused)
+          return res.status(403).json({ message: pauseCheck.message });
+
+        const parsed = z.object({
+          printing_machine_id: z.string().trim().min(1),
+        }).safeParse(req.body);
+        if (!parsed.success)
+          return res.status(400).json({ message: "يجب اختيار ماكينة الطباعة" });
+        const machine = await storage.getMachineById(parsed.data.printing_machine_id);
+        if (!machine || !isActivePrintingMachine(machine))
+          return res.status(400).json({ message: "اختر ماكينة طباعة نشطة من قسم الطباعة" });
+
+        const updatedRoll = await storage.markRollPrinted(
+          rollId, user.id, parsed.data.printing_machine_id,
+        );
 
         res.json({
           success: true,
@@ -71,9 +91,11 @@ export async function registerProductionOperatorRoutes(app: Express, ctx: any) {
         });
       } catch (error: any) {
         console.error("Error marking roll as printed:", error);
-        res.status(400).json({
+        res.status(error?.name === "OrderDomainError" ? 409 : 400).json({
           success: false,
-          message: "خطأ في تسجيل طباعة الرول",
+          message: error?.name === "OrderDomainError"
+            ? error.message
+            : "خطأ في تسجيل طباعة الرول",
         });
       }
     },

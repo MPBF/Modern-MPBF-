@@ -15,6 +15,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatNumberAr } from "../../../../shared/number-utils";
+import { isActivePrintingMachine } from "../../../../shared/printing-machine";
 import PageLayout from "../../components/layout/PageLayout";
 import {
   BackToOrdersBar,
@@ -70,6 +71,7 @@ interface ProductionOrderWithRolls {
   size_caption?: string;
   rolls: RollDetails[];
   total_rolls: number;
+  completed_rolls: number;
   total_weight: number;
   printing_cylinder?: string;
   plate_drawer_code?: string | null;
@@ -82,6 +84,7 @@ interface Machine {
   name: string;
   name_ar: string;
   section_id: string;
+  type: string;
   status: string;
 }
 
@@ -146,10 +149,15 @@ export default function PrintingOperatorDashboard({
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
     null,
   );
-  const [isEditingMachine, setIsEditingMachine] = useState(false);
+  const [isMachineMenuOpen, setIsMachineMenuOpen] = useState(false);
   const pollingInterval = useSmartPolling(45_000);
 
-  const { data: productionOrders = [], isLoading } = useQuery<
+  const {
+    data: productionOrders = [],
+    isLoading,
+    isError: ordersError,
+    refetch: refetchOrders,
+  } = useQuery<
     ProductionOrderWithRolls[]
   >({
     queryKey: ["/api/rolls/active-for-printing"],
@@ -160,13 +168,13 @@ export default function PrintingOperatorDashboard({
     data: allMachines = [],
     isLoading: machinesLoading,
     isSuccess: machinesReady,
+    isError: machinesError,
+    refetch: refetchMachines,
   } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
   });
 
-  const printingMachines = allMachines.filter(
-    (m) => m.section_id === "SEC04" && m.status === "active",
-  );
+  const printingMachines = allMachines.filter(isActivePrintingMachine);
   const {
     selectedMachineId,
     setSelectedMachineId,
@@ -230,6 +238,9 @@ export default function PrintingOperatorDashboard({
         rollId,
         machineId: selectedMachineId,
       });
+    } catch {
+      // The mutation reports the error in its toast; don't leave an
+      // unhandled rejected promise in the button click handler.
     } finally {
       setProcessingRollIds((prev) => {
         const newSet = new Set(prev);
@@ -276,8 +287,12 @@ export default function PrintingOperatorDashboard({
   );
   const handleMachineChange = (machineId: string) => {
     const machine = printingMachines.find((item) => item.id === machineId);
+    if (!machine || machineId === selectedMachineId) {
+      setIsMachineMenuOpen(false);
+      return;
+    }
     setSelectedMachineId(machineId);
-    setIsEditingMachine(false);
+    setIsMachineMenuOpen(false);
     toast({
       title: ui("تم تغيير ماكينة الطباعة", "Printing machine changed"),
       description: machine
@@ -297,31 +312,37 @@ export default function PrintingOperatorDashboard({
               {ui("ماكينة الطباعة المحددة", "Selected printing machine")}
             </span>
           </div>
-          {selectedMachine && (
+          {selectedMachine && printingMachines.length > 1 && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-xs font-bold text-purple-700 dark:text-purple-300"
-              onClick={() => setIsEditingMachine((editing) => !editing)}
+              onClick={() => setIsMachineMenuOpen(true)}
               disabled={!machinePreferenceReady}
+              aria-label={ui("تغيير ماكينة الطباعة", "Change printing machine")}
             >
-              {isEditingMachine ? ui("تم", "Done") : ui("تغيير", "Change")}
+              {ui("تغيير", "Change")}
             </Button>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           <Select
+            open={isMachineMenuOpen}
+            onOpenChange={setIsMachineMenuOpen}
             value={selectedMachineId}
             onValueChange={handleMachineChange}
             disabled={
               machinesLoading ||
               !machinePreferenceReady ||
-              (!!selectedMachineId && !isEditingMachine)
+              printingMachines.length === 0
             }
           >
-            <SelectTrigger className="w-full bg-white dark:bg-gray-900 text-xs font-bold h-10 rounded-xl border-purple-200">
+            <SelectTrigger
+              aria-label={ui("اختيار ماكينة الطباعة", "Select printing machine")}
+              className="w-full bg-white dark:bg-gray-900 text-xs font-bold h-10 rounded-xl border-purple-200"
+            >
               <SelectValue
                 placeholder={t("operators.printing.selectMachinePlaceholder")}
               />
@@ -339,17 +360,35 @@ export default function PrintingOperatorDashboard({
             </SelectContent>
           </Select>
 
-          {selectedMachine && !isEditingMachine && (
+          {selectedMachine && (
             <Badge className="bg-purple-600 text-white whitespace-nowrap h-10 px-3 text-xs font-bold rounded-xl gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {ui("جاهز", "Ready")}
             </Badge>
           )}
         </div>
+        {machinesError ? (
+          <Button variant="link" size="sm" onClick={() => refetchMachines()}>
+            {ui("تعذر تحميل الماكينات، إعادة المحاولة", "Could not load machines. Retry")}
+          </Button>
+        ) : machinesReady && printingMachines.length === 0 ? (
+          <p className="mt-2 text-xs text-red-700 dark:text-red-300">
+            {ui("لا توجد ماكينة طباعة نشطة في قسم الطباعة", "No active printer in the printing section")}
+          </p>
+        ) : null}
       </div>
 
       {/* قائمة الطلبات الرئيسية أو تفاصيل الطلب المحدد */}
-      {productionOrders.length === 0 ? (
+      {ordersError ? (
+        <Card className="p-8 text-center rounded-2xl border-dashed">
+          <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+            {ui("تعذر تحميل أوامر الطباعة", "Could not load printing orders")}
+          </p>
+          <Button type="button" variant="outline" onClick={() => refetchOrders()}>
+            {ui("إعادة المحاولة", "Retry")}
+          </Button>
+        </Card>
+      ) : productionOrders.length === 0 ? (
         <Card className="p-8 text-center rounded-2xl border-dashed">
           <Info className="h-10 w-10 text-gray-400 mx-auto mb-3" />
           <h3 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-1">
@@ -374,7 +413,7 @@ export default function PrintingOperatorDashboard({
                 0,
               );
               const completedRolls = group.items.reduce(
-                (sum, o) => sum + o.rolls.filter((r) => r.printed_at).length,
+                (sum, o) => sum + o.completed_rolls,
                 0,
               );
               const groupProgress =
@@ -468,9 +507,7 @@ export default function PrintingOperatorDashboard({
 
           <div className="space-y-4">
             {selectedGroup.items.map((order) => {
-              const completedRolls = order.rolls.filter(
-                (r) => r.printed_at,
-              ).length;
+              const completedRolls = order.completed_rolls;
               const progress =
                 order.total_rolls > 0
                   ? (completedRolls / order.total_rolls) * 100
@@ -633,7 +670,7 @@ export default function PrintingOperatorDashboard({
 
                               <Button
                                 onClick={() => handleMoveToPrinting(roll.roll_id)}
-                                disabled={isProcessing || !selectedMachineId}
+                                disabled={isProcessing || !machinePreferenceReady || !selectedMachineId}
                                 className="h-10 px-4 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-xs active:scale-95 transition-all"
                               >
                                 {isProcessing ? (
