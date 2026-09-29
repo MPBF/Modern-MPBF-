@@ -2,7 +2,9 @@ import { describe, expect, it } from "@jest/globals";
 import {
   getShiftWindowForSnapshot,
   isCheckInAllowedForShift,
+  isCheckOutAllowedForShift,
   resolveAssignmentSnapshot,
+  withCurrentTemplateGrace,
   type ShiftSnapshot,
   computeShiftMetrics,
 } from "../shared/shifts";
@@ -23,6 +25,40 @@ const flexible: ShiftSnapshot = {
 };
 
 describe("snapshot shift resolver", () => {
+  it("uses the current template grace for a new check-in without changing the saved roster", () => {
+    const saved = {
+      shift_template_id: 4,
+      shift_snapshot: {
+        ...day,
+        start_time: "07:00",
+        end_time: "15:00",
+        overtime_end_time: "19:00",
+        grace_minutes: 0,
+      },
+    };
+    const effective = withCurrentTemplateGrace(
+      saved,
+      new Map([[4, { grace_minutes: 120 }]]),
+    );
+    expect(saved.shift_snapshot.grace_minutes).toBe(0);
+    expect(effective?.shift_snapshot?.grace_minutes).toBe(120);
+    const resolved = resolveAssignmentSnapshot(
+      effective, null, instant("2026-09-01T05:00:00"),
+    );
+    expect(resolved?.attendanceDate).toBe("2026-09-01");
+    expect(isCheckInAllowedForShift(resolved!.window, resolved!.snapshot, instant("2026-09-01T09:00:00"))).toBe(true);
+    expect(isCheckInAllowedForShift(resolved!.window, resolved!.snapshot, instant("2026-09-01T09:00:01"))).toBe(false);
+    expect(isCheckOutAllowedForShift(resolved!.window, resolved!.snapshot, instant("2026-09-01T13:00:00"), "2026-09-01")).toBe(true);
+    expect(isCheckOutAllowedForShift(resolved!.window, resolved!.snapshot, instant("2026-09-01T21:00:01"), "2026-09-01")).toBe(false);
+  });
+
+  it("does not invent grace for an untemplated assignment or override a configured zero", () => {
+    const saved = { shift: "day" as const, shift_snapshot: { ...day, grace_minutes: 0 } };
+    expect(withCurrentTemplateGrace(saved, new Map([[4, { grace_minutes: 30 }]]))).toBe(saved);
+    const configured = { ...saved, shift_template_id: 4 };
+    expect(withCurrentTemplateGrace(configured, new Map([[4, { grace_minutes: 0 }]]))?.shift_snapshot?.grace_minutes).toBe(0);
+  });
+
   it("uses arbitrary-minute template windows and exclusive end", () => {
     const window = getShiftWindowForSnapshot(day, "2026-09-01");
     expect(window.start).toEqual(instant("2026-09-01T08:30:00"));

@@ -60,7 +60,7 @@
 - [Schema drift migrations](schema-drift-migrations.md) — when drizzle-kit push prompts over existing drift, do not force a broad diff for one reviewed additive change.
 - [Maintenance schedule run idempotency](maintenance-schedule-run-idempotency.md) — periodic checklist runs are date-unique; advance configurable due cycles only on completion, never on start.
 - [Publish snapshot exclusions](publish-snapshot-exclusions.md) — root .gitignore must explicitly exclude Replit/editor caches; global ignore rules may not keep them out of the 8 GiB publish image.
-- [Shift roster consistency](shift-roster-consistency.md) — validate roster revision and active employee set inside the month lock; open-session stamps stay bound by attendance date/snapshot.
+- [Shift roster consistency](shift-roster-consistency.md) — lock roster validation; new attendance uses current template grace, while open-session dates/snapshots stay fixed.
 - [Strict English display fallbacks](strict-english-display-fallbacks.md) — English UI must not fall back to Arabic names/errors, even through generic or mislabeled API fields.
 - [Order status synchronization](order-status-synchronization.md) — parent/production statuses transition atomically; production_stage stays roll-driven; structural child edits require an atomic server operation.
 - [Operator machine selection](operator-machine-selection.md) — worker dashboards save machine choice immediately, close edit mode, and keep “Change” available.

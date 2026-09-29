@@ -25,6 +25,7 @@ import {
   isShiftType,
   resolveShiftAcrossMonthBoundary,
   resolveAssignmentSnapshot,
+  withCurrentTemplateGrace,
 } from "@shared/shifts";
 
 import { requireAuth, requirePermission } from "../middleware/auth";
@@ -85,7 +86,19 @@ async function getResolvedAssignmentForInstant(userId: number, now: Date) {
     storage.getShiftAssignmentForUserMonth(userId, today.year, today.month),
     storage.getShiftAssignmentForUserMonth(userId, yesterday.year, yesterday.month),
   ]);
-  return resolveAssignmentSnapshot(current as any, previous as any, now);
+  const hasTemplate = [current, previous].some(
+    (assignment) => assignment?.shift_template_id ||
+      (assignment?.shift_snapshot as { template_id?: number } | null)?.template_id,
+  );
+  const templates = hasTemplate ? await storage.getShiftTemplates() : [];
+  const graceByTemplate = new Map(
+    templates.map((template) => [template.id, { grace_minutes: template.grace_minutes }]),
+  );
+  return resolveAssignmentSnapshot(
+    withCurrentTemplateGrace(current as any, graceByTemplate),
+    withCurrentTemplateGrace(previous as any, graceByTemplate),
+    now,
+  );
 }
 
 // Extracted from server/routes/hr.ts (registration order preserved; called
@@ -709,6 +722,10 @@ export async function registerHrAttendanceRoutes(app: Express, ctx: any) {
           return res.status(400).json({
             message: isFlexible
               ? "لا يمكن تسجيل الحضور خارج نافذة الوردية الحرة"
+              : graceMs === 0
+                ? snapshot.template_id
+                  ? `فترة السماح لوردية ${snapshot.name_ar} مضبوطة على صفر دقيقة في قالب الوردية. يرجى مراجعة مسؤول الموارد البشرية.`
+                  : `تكليف وردية ${snapshot.name_ar} لا يحتوي على قالب يحدد فترة السماح. يرجى مراجعة مسؤول الموارد البشرية.`
               : `يمكن تسجيل حضور وردية ${snapshot.name_ar} فقط من ${checkInStart} إلى ${checkInEnd} (فترة السماح حول بداية الوردية ${snapshot.start_time})`,
             code: "OUTSIDE_ASSIGNED_SHIFT",
           });

@@ -242,6 +242,32 @@ export function legacyShiftSnapshot(shift: unknown): ShiftSnapshot | null {
   };
 }
 
+/** Use the template's current grace for new actions without mutating the roster snapshot. */
+export function withCurrentTemplateGrace<T extends {
+  shift_snapshot?: ShiftSnapshot | null;
+  shift_template_id?: number | null;
+  shift?: unknown;
+}>(
+  assignment: T | null,
+  templates: ReadonlyMap<number, { grace_minutes: number }>,
+): T | null {
+  if (!assignment) return null;
+  const templateId = assignment.shift_template_id ?? assignment.shift_snapshot?.template_id;
+  const template = templateId ? templates.get(templateId) : undefined;
+  if (!template || !Number.isInteger(template.grace_minutes) ||
+      template.grace_minutes < 0) return assignment;
+  const snapshot = assignment.shift_snapshot ?? legacyShiftSnapshot(assignment.shift);
+  if (!snapshot) return assignment;
+  return {
+    ...assignment,
+    shift_snapshot: {
+      ...snapshot,
+      template_id: templateId,
+      grace_minutes: template.grace_minutes,
+    },
+  };
+}
+
 export function getSnapshotShiftType(snapshot: ShiftSnapshot): ShiftType {
   if (snapshot.kind && isShiftType(snapshot.kind)) return snapshot.kind;
   // Older saved flexible snapshots may not have a kind.

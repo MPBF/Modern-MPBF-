@@ -14,3 +14,16 @@ Attendance checkout, break, and return stamps belong to the server-authoritative
 **Why:** A legitimately late checkout must close and appear in the same historical session rather than being dropped from computed reports.
 
 **How to apply:** Use timestamp-window matching only as a legacy fallback; prefer the persisted attendance date and snapshot for rows created through the open-session flow.
+
+New attendance sessions must take their check-in/checkout grace from the
+currently configured shift template rather than a stale copy in the monthly
+assignment. Capture that effective grace in the new attendance session and
+leave earlier sessions unchanged.
+
+**Why:** The user defines grace in the shift template. A template edit after
+the monthly roster is saved can leave the assignment's copied grace at zero,
+making check-in practically impossible despite a nonzero current setting.
+
+**How to apply:** Refresh only grace for new actions, not the assignment's
+historical schedule or existing attendance rows. Do not invent a default
+duration for legacy assignments without a template.
